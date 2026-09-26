@@ -1,0 +1,14 @@
+# This file is read by game clients 2.2 through 2.6
+latest: 2.7.15622
+message: |
+  Update to the latest TripleA @ https://triplea-game.org/download/
+
+servers:
+  - version: "2.7.15622"
+    inactive: true
+  - version: "2.5.22294"
+    inactive: true
+  - version: "2.0.20057"
+    inactive: true
+  - version: "0.0"
+    inactive: true

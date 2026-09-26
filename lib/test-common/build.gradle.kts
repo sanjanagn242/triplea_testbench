@@ -1,0 +1,10 @@
+plugins {
+    id("triplea-java-library")
+}
+
+description = "Test utility library, generic test utilities useful for TripleA projects"
+
+dependencies {
+    implementation(libs.jackson.datatype.jsr310)
+    implementation(libs.junit.jupiter.api)
+}
