@@ -68,6 +68,7 @@ public class MainFrame {
   public static void show() {
     SwingUtilities.invokeLater(
         () -> {
+          instance.mainJFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
           instance.mainJFrame.requestFocus();
           instance.mainJFrame.toFront();
           instance.mainJFrame.setLocationRelativeTo(null); // center on screen

@@ -1,130 +1,99 @@
 package games.strategy.engine.framework.startup.ui;
 
-import games.strategy.engine.framework.HtmlUtils;
-import games.strategy.engine.framework.I18nEngineFramework;
-import games.strategy.engine.framework.I18nResourceBundle;
 import games.strategy.engine.framework.startup.launcher.ILauncher;
 import games.strategy.engine.framework.startup.ui.panels.main.HeadedServerSetupModel;
-import games.strategy.triplea.UrlConstants;
-import games.strategy.triplea.settings.ClientSetting;
 import java.awt.BorderLayout;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.util.List;
 import java.util.Optional;
 import javax.swing.Action;
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JOptionPane;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.UIManager;
 import org.triplea.swing.JButtonBuilder;
-import org.triplea.swing.SwingComponents;
 import org.triplea.swing.jpanel.GridBagConstraintsAnchor;
 import org.triplea.swing.jpanel.GridBagConstraintsBuilder;
 import org.triplea.swing.jpanel.GridBagConstraintsFill;
-import tools.map.making.ui.MapCreator;
 
-/**
- * This is the main welcome panel with 'play online' button. This panel is just the upper right of
- * the main screen, it does not include the map information nor the 'play' and 'quit' buttons.
- */
-public class MetaSetupPanel extends SetupPanel {
-
-  private static final long serialVersionUID = 3926503672972937677L;
+/** First choice screen for selecting the planning testbench or the regular game engine. */
+public final class MetaSetupPanel extends SetupPanel {
+  private static final long serialVersionUID = 1L;
 
   public MetaSetupPanel(final HeadedServerSetupModel model) {
-    final I18nResourceBundle bundle = I18nEngineFramework.get();
-    final JButton connectToLobby =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.PlayOnline.Lbl"))
+    setLayout(new BorderLayout(0, 20));
+    setBorder(BorderFactory.createEmptyBorder(28, 30, 28, 30));
+
+    final JPanel header = new JPanel(new GridBagLayout());
+    header.add(title("Welcome to TripleA"), rowConstraints(0));
+    header.add(
+        subtitle("Choose a planning experiment or open the standard game setup."),
+        rowConstraints(1));
+    add(header, BorderLayout.NORTH);
+
+    final JButton planningTestbench =
+        new JButtonBuilder("Planning Agent Testbench")
             .biggerFont()
-            .toolTipText(
-                HtmlUtils.getHtml(bundle.getText("startup.SetupPanelModel.btn.PlayOnline.Tltp")))
-            .actionListener(model::login)
+            .toolTipText("Configure and run a planning agent experiment")
+            .actionListener(model::showTestbenchMenu)
             .build();
-    final JButton startLocal =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.StartLocalGame.Lbl"))
-            .toolTipText(
-                HtmlUtils.getHtml(
-                    bundle.getText("startup.SetupPanelModel.btn.StartLocalGame.Tltp")))
-            .actionListener(model::showLocal)
+    final JButton gameEngine =
+        new JButtonBuilder("Use the game engine")
+            .biggerFont()
+            .toolTipText("Open the regular TripleA game setup")
+            .actionListener(model::showGameEngine)
             .build();
 
-    final JButton startPbf =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.PlayByForum.Lbl"))
-            .toolTipText(
-                HtmlUtils.getHtml(bundle.getText("startup.SetupPanelModel.btn.PlayByForum.Tltp")))
-            .actionListener(model::showPbf)
-            .build();
-    final JButton startPbem =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.PlayByEmail.Lbl"))
-            .toolTipText(
-                HtmlUtils.getHtml(bundle.getText("startup.SetupPanelModel.btn.PlayByEmail.Tltp")))
-            .actionListener(model::showPbem)
-            .build();
-    final JButton hostGame =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.HostNetworkGame.Lbl"))
-            .toolTipText(
-                HtmlUtils.getHtml(
-                    bundle.getText("startup.SetupPanelModel.btn.PlayOnline.HostNetworkGame.Tltp")))
-            .actionListener(() -> new Thread(model::showServer).start())
-            .build();
-    final JButton connectToHostedGame =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.ConnectToNetworkedGame.Lbl"))
-            .toolTipText(
-                HtmlUtils.getHtml(
-                    bundle.getText(
-                        "startup.SetupPanelModel.btn.PlayOnline.ConnectToNetworkedGame.Tltp")))
-            .actionListener(() -> new Thread(model::showClient).start())
-            .build();
-    final JButton enginePreferences =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.EnginePreferences.Lbl"))
-            .toolTipText(bundle.getText("startup.SetupPanelModel.btn.EnginePreferences.Tltp"))
-            .actionListener(
-                () -> ClientSetting.showSettingsWindow(JOptionPane.getFrameForComponent(this)))
-            .build();
-    final JButton userGuideButton =
-        new JButtonBuilder(bundle.getText("startup.SetupPanelModel.btn.UserGuideHelp.Lbl"))
-            .actionListener(
-                () ->
-                    SwingComponents.newOpenUrlConfirmationDialog(
-                        JOptionPane.getFrameForComponent(this), UrlConstants.USER_GUIDE))
-            .build();
-    final JButton mapCreator =
-        new JButtonBuilder()
-            .title(bundle.getText("startup.SetupPanelModel.btn.MapCreatorTools.Lbl"))
-            .actionListener(MapCreator::openMapCreatorWindow)
-            .build();
-
-    setLayout(new BorderLayout());
-    final JPanel mainContents = new JPanel();
-    add(mainContents);
-    mainContents.setLayout(new GridBagLayout());
-    addButtonsToPanel(
-        mainContents,
-        new JButton[] {
-          connectToLobby,
-          startLocal,
-          startPbf,
-          startPbem,
-          hostGame,
-          connectToHostedGame,
-          enginePreferences,
-          mapCreator,
-          userGuideButton
-        });
+    final JPanel options = new JPanel(new GridBagLayout());
+    options.add(
+        choiceCard(planningTestbench, "Set agents, maps, rounds, and run controls."),
+        wideRowConstraints(0));
+    options.add(
+        choiceCard(gameEngine, "Play TripleA with the regular game setup."), wideRowConstraints(1));
+    add(options, BorderLayout.CENTER);
   }
 
-  private void addButtonsToPanel(final JPanel panel, final JButton[] buttons) {
-    for (int row = 0; row < buttons.length; row++) {
-      panel.add(buttons[row], buildConstraintForRow(row));
-    }
+  private static JPanel choiceCard(final JButton button, final String description) {
+    final JPanel card = new JPanel(new BorderLayout(0, 8));
+    card.setBorder(
+        BorderFactory.createCompoundBorder(
+            BorderFactory.createEtchedBorder(), BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+    card.add(button, BorderLayout.NORTH);
+    card.add(subtitle(description), BorderLayout.CENTER);
+    return card;
   }
 
-  private GridBagConstraints buildConstraintForRow(final int rowNumber) {
-    return new GridBagConstraintsBuilder(0, rowNumber)
+  static JLabel title(final String text) {
+    final JLabel label = new JLabel(text, SwingConstants.CENTER);
+    label.setFont(UIManager.getFont("Label.font").deriveFont(Font.BOLD, 21f));
+    return label;
+  }
+
+  static JLabel subtitle(final String text) {
+    final JLabel label = new JLabel(text, SwingConstants.CENTER);
+    label.setFont(UIManager.getFont("Label.font").deriveFont(13f));
+    return label;
+  }
+
+  private static GridBagConstraints wideRowConstraints(final int row) {
+    return new GridBagConstraintsBuilder(0, row)
+        .anchor(GridBagConstraintsAnchor.CENTER)
+        .fill(GridBagConstraintsFill.HORIZONTAL)
+        .weightX(1)
+        .insets(new Insets(8, 0, 8, 0))
+        .build();
+  }
+
+  private static GridBagConstraints rowConstraints(final int row) {
+    return new GridBagConstraintsBuilder(0, row)
         .anchor(GridBagConstraintsAnchor.CENTER)
         .fill(GridBagConstraintsFill.NONE)
-        .insets(new Insets(10, 0, 0, 0))
+        .insets(new Insets(12, 0, 0, 0))
         .build();
   }
 
@@ -144,8 +113,7 @@ public class MetaSetupPanel extends SetupPanel {
   }
 
   @Override
-  public void cancel() { // nothing to do
-  }
+  public void cancel() {}
 
   @Override
   public Optional<ILauncher> getLauncher() {
@@ -153,7 +121,5 @@ public class MetaSetupPanel extends SetupPanel {
   }
 
   @Override
-  public void postStartGame() {
-    // nothing to do
-  }
+  public void postStartGame() {}
 }

@@ -112,6 +112,11 @@ public class ZippedMapsExtractor {
    * @return Returns extracted location (if successful, otherwise empty)
    */
   public static Optional<Path> unzipMap(final Path mapZip) {
+    return unzipMap(mapZip, ClientFileSystemHelper.getUserMapsFolder());
+  }
+
+  /** Extracts a map zip into a caller-selected map directory. */
+  public static Optional<Path> unzipMap(final Path mapZip, final Path downloadedMapsFolder) {
     if (!Files.exists(mapZip)) {
       String msg =
           "Unexpected, cannot extract map zip, no file exists at: " + mapZip.toAbsolutePath();
@@ -129,9 +134,10 @@ public class ZippedMapsExtractor {
     try {
       // extraction target is important, it is the folder path we seek to create with
       // extracted map contents.
-      final Path mapsFolder = ClientFileSystemHelper.getUserMapsFolder();
       final Path extractionTarget =
-          mapsFolder.resolve(computeExtractionFolderName(mapZip.getFileName().toString()));
+          downloadedMapsFolder.resolve(
+              computeExtractionFolderName(mapZip.getFileName().toString()));
+      Files.createDirectories(downloadedMapsFolder);
       log.info(
           "Extracting map zip: {} -> {}",
           mapZip.toAbsolutePath(),

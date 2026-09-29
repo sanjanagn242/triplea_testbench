@@ -21,6 +21,7 @@ application {
 }
 
 dependencies {
+    implementation(libs.gson)
     implementation(project(":ai"))
     implementation(project(":domain-data"))
     implementation(project(":game-core"))

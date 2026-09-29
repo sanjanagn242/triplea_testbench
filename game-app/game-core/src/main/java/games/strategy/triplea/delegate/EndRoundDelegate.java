@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -33,6 +34,11 @@ import org.triplea.sound.SoundPath;
 
 /** A delegate used to check for end of game conditions. */
 public class EndRoundDelegate extends BaseTripleADelegate {
+  /** Optional per-game round cap used by the local planning-agent testbench. */
+  public static final String TESTBENCH_ROUND_LIMIT_PROPERTY = "triplea.testbench.roundLimit";
+
+  public static final String TESTBENCH_WINNERS_PROPERTY = "triplea.testbench.winners";
+
   private boolean gameOver = false;
   @Getter private Collection<GamePlayer> winners = new ArrayList<>();
 
@@ -46,6 +52,13 @@ public class EndRoundDelegate extends BaseTripleADelegate {
     }
     String victoryMessage;
     final GameState data = getData();
+    final int testbenchRoundLimit = data.getProperties().get(TESTBENCH_ROUND_LIMIT_PROPERTY, 0);
+    if (testbenchRoundLimit > 0 && data.getSequence().getRound() >= testbenchRoundLimit) {
+      final String limitMessage = "Planning agent testbench round limit reached.";
+      bridge.getHistoryWriter().startEvent(limitMessage);
+      signalGameOver(limitMessage, List.of(), bridge);
+      return;
+    }
     if (Properties.getPacificTheater(getData().getProperties())) {
       final GamePlayer japanese = data.getPlayerList().getPlayerId(Constants.PLAYER_NAME_JAPANESE);
       final PlayerAttachment pa = PlayerAttachment.get(japanese);
@@ -295,6 +308,15 @@ public class EndRoundDelegate extends BaseTripleADelegate {
     if (!gameOver) {
       gameOver = true;
       this.winners = winners;
+      if (getData().getProperties().get(TESTBENCH_ROUND_LIMIT_PROPERTY, 0) > 0) {
+        getData()
+            .getProperties()
+            .set(
+                TESTBENCH_WINNERS_PROPERTY,
+                winners.stream()
+                    .map(GamePlayer::getName)
+                    .collect(java.util.stream.Collectors.joining(", ")));
+      }
       bridge
           .getSoundChannelBroadcaster()
           .playSoundForAll(
@@ -305,8 +327,9 @@ public class EndRoundDelegate extends BaseTripleADelegate {
       // send a message to everyone's screen except the HOST (there is no 'current player' for the
       // end round delegate)
       final String title =
-          "Victory Achieved"
-              + (winners.isEmpty() ? "" : " by " + MyFormatter.defaultNamedToTextList(winners));
+          winners.isEmpty()
+              ? "Game Over"
+              : "Victory Achieved by " + MyFormatter.defaultNamedToTextList(winners);
 
       if (ClientSetting.useWebsocketNetwork.getValue().orElse(false)) {
         Preconditions.checkNotNull(clientNetworkBridge);

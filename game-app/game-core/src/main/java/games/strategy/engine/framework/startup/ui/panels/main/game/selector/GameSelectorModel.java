@@ -55,6 +55,15 @@ public class GameSelectorModel extends Observable implements GameSelector {
   public GameSelectorModel() {}
 
   public boolean loadMap(Path xmlFile) {
+    return loadMap(xmlFile, true);
+  }
+
+  /** Loads an experiment map without changing the user's default map preference. */
+  public boolean loadMapForTestbench(Path xmlFile) {
+    return loadMap(xmlFile, false);
+  }
+
+  private boolean loadMap(Path xmlFile, boolean updateDefaultGame) {
     ensureExists(xmlFile);
     fileName = null;
     GameData gameData = parseAndValidate(xmlFile);
@@ -62,7 +71,9 @@ public class GameSelectorModel extends Observable implements GameSelector {
       gameData = null;
     }
     setGameData(gameData);
-    this.setDefaultGame(xmlFile, gameData);
+    if (updateDefaultGame) {
+      this.setDefaultGame(xmlFile, gameData);
+    }
     return gameData != null;
   }
 
