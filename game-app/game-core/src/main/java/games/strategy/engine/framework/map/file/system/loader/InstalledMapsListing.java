@@ -4,13 +4,16 @@ import games.strategy.engine.ClientFileSystemHelper;
 import games.strategy.engine.framework.ui.DefaultGameChooserEntry;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,7 +40,21 @@ public class InstalledMapsListing {
    * returns the list of available games found.
    */
   public static synchronized InstalledMapsListing parseMapFiles() {
-    return parseMapFiles(ClientFileSystemHelper.getUserMapsFolder());
+    // The planning testbed keeps its maps in the repository. Add that folder first so gameplay
+    // resource lookup finds the same map XML and assets that the testbench configured.
+    final Set<Path> mapFolders = new LinkedHashSet<>();
+    final String additionalMapsFolder =
+        System.getProperty(ClientFileSystemHelper.ADDITIONAL_MAPS_FOLDER_PROPERTY);
+    if (additionalMapsFolder != null && !additionalMapsFolder.isBlank()) {
+      mapFolders.add(Path.of(additionalMapsFolder));
+    }
+    mapFolders.add(ClientFileSystemHelper.getUserMapsFolder());
+    final Collection<InstalledMap> maps = new ArrayList<>();
+    mapFolders.stream()
+        .filter(Files::isDirectory)
+        .map(InstalledMapsListing::readMapYamlsAndGenerateMissingMapYamls)
+        .forEach(maps::addAll);
+    return new InstalledMapsListing(maps);
   }
 
   public static synchronized InstalledMapsListing parseMapFiles(Path folder) {

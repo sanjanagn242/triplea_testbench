@@ -5,10 +5,12 @@ import games.strategy.engine.framework.HtmlUtils;
 import games.strategy.engine.framework.I18nEngineFramework;
 import games.strategy.engine.framework.startup.ui.SetupPanel;
 import games.strategy.engine.framework.startup.ui.panels.main.game.selector.GameSelectorPanel;
+import games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchSetupPanel;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +57,8 @@ public class MainPanel extends JPanel {
                       I18nEngineFramework.get().getText("startup.MainPanel.btn.Play.Tltp.line3"))
                   .toString())
           .build();
+  private final Font defaultPlayButtonFont = playButton.getFont();
+  private final String defaultPlayButtonText = playButton.getText();
   private final JButton cancelButton =
       new JButtonBuilder()
           .title(I18nEngineFramework.get().getText("startup.MainPanel.btn.Cancel.Lbl"))
@@ -144,6 +148,13 @@ public class MainPanel extends JPanel {
 
   /** This method will 'change' screens, swapping out one setup panel for another. */
   public void setSetupPanel(final SetupPanel panel) {
+    if (panel instanceof TestbenchSetupPanel) {
+      playButton.setText("Start Simulations");
+      playButton.setFont(defaultPlayButtonFont.deriveFont(Font.BOLD));
+    } else {
+      playButton.setText(defaultPlayButtonText);
+      playButton.setFont(defaultPlayButtonFont);
+    }
     if (gameSetupPanel != null) {
       gameSetupPanel.setPanelChangedListener(null);
     }

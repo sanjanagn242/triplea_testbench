@@ -1,0 +1,23 @@
+{
+  "map": {
+    "name": "Star Wars: Galactic War",
+    "aliases": ["star wars galactic war"],
+    "downloadUrl": "https://github.com/triplea-maps/star-wars-galactic-war/archive/refs/heads/master.zip"
+  },
+  "games": 2,
+  "roundLimit": 100,
+  "aiMovePauseMs": 100,
+  "aiCombatStepPauseMs": 0,
+  "agents": {
+    "Imperial-Remnant": "Easy (AI)",
+    "New-Republic": "Easy (AI)",
+    "Corporate-Sector-Authority": "Easy (AI)",
+    "Jedi-Order": "Easy (AI)",
+    "Hutt-Cartel": "Easy (AI)",
+    "Corellian-Security-Force": "Easy (AI)",
+    "Black-Sun": "Easy (AI)",
+    "Mandalorians": "Easy (AI)",
+    "Locals": "Easy (AI)"
+  }
+}
+

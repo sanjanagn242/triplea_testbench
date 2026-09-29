@@ -26,6 +26,6 @@ bin/
 build/
 out/
 .serena/
+planning-agent-testbed/logs/*.txt
 
 CLAUDE.local.md
-

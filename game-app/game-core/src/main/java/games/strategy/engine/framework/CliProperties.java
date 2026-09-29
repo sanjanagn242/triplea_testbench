@@ -5,6 +5,7 @@ import org.jetbrains.annotations.NonNls;
 /** A collection of all CLI related constants. */
 public class CliProperties {
   @NonNls public static final String TRIPLEA_GAME = "triplea.game";
+  @NonNls public static final String TRIPLEA_TESTBENCH_CONFIG = "triplea.testbench.config";
   @NonNls public static final String TRIPLEA_SERVER = "triplea.server"; // true/false
   @NonNls public static final String TRIPLEA_CLIENT = "triplea.client"; // true/false
   @NonNls public static final String TRIPLEA_HOST = "triplea.host";

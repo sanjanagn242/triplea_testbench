@@ -3,6 +3,7 @@ package games.strategy.engine.auto.update;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_CLIENT;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_GAME;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_SERVER;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_CONFIG;
 
 import java.awt.Component;
 import org.triplea.java.ThreadRunner;
@@ -34,6 +35,7 @@ public final class UpdateChecks {
     // check
     return !System.getProperty(TRIPLEA_SERVER, "false").equalsIgnoreCase("true")
         && !System.getProperty(TRIPLEA_CLIENT, "false").equalsIgnoreCase("true")
-        && System.getProperty(TRIPLEA_GAME, "").isEmpty();
+        && System.getProperty(TRIPLEA_GAME, "").isEmpty()
+        && System.getProperty(TRIPLEA_TESTBENCH_CONFIG, "").isEmpty();
   }
 }

@@ -12,6 +12,7 @@ import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_LOBBY;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_LOCAL;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBEM;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBF;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_CONFIG;
 import static games.strategy.triplea.Constants.PROPERTY_FALSE;
 import static games.strategy.triplea.Constants.PROPERTY_TRUE;
 
@@ -130,6 +131,7 @@ public final class HeadedGameRunner {
         case TRIPLEA_SERVER:
         case TRIPLEA_CLIENT:
         case TRIPLEA_START:
+        case TRIPLEA_TESTBENCH_CONFIG:
           System.setProperty(nameValuePair[0], nameValuePair[1]);
           break;
         default:
@@ -220,7 +222,6 @@ public final class HeadedGameRunner {
         startGameDirectly(saveGameFileName, startProperty);
       }
       MainFrame.show();
-      gameSelectorModel.loadDefaultGameSameThread();
       openMapDownloadWindowIfDownloadScheduled();
     }
   }

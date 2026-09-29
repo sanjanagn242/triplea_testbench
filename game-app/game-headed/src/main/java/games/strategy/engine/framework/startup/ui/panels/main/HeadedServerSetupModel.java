@@ -9,11 +9,14 @@ import games.strategy.engine.framework.startup.mc.HeadedLaunchAction;
 import games.strategy.engine.framework.startup.mc.HeadedPlayerTypes;
 import games.strategy.engine.framework.startup.mc.ServerModel;
 import games.strategy.engine.framework.startup.ui.ClientSetupPanel;
+import games.strategy.engine.framework.startup.ui.GameEngineSetupPanel;
 import games.strategy.engine.framework.startup.ui.LocalSetupPanel;
 import games.strategy.engine.framework.startup.ui.MetaSetupPanel;
 import games.strategy.engine.framework.startup.ui.ServerSetupPanel;
 import games.strategy.engine.framework.startup.ui.SetupPanel;
 import games.strategy.engine.framework.startup.ui.panels.main.game.selector.GameSelectorModel;
+import games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchModePanel;
+import games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchSetupPanel;
 import games.strategy.engine.framework.startup.ui.posted.game.pbem.PbemSetupPanel;
 import games.strategy.engine.framework.startup.ui.posted.game.pbf.PbfSetupPanel;
 import games.strategy.engine.framework.ui.MainFrame;
@@ -31,6 +34,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.triplea.game.client.HeadedGameRunner;
+import org.triplea.java.ThreadRunner;
 import org.triplea.swing.SwingComponents;
 
 /** This class provides a way to switch between different ISetupPanel displays. */
@@ -48,6 +52,27 @@ public class HeadedServerSetupModel {
 
   public void showLocal() {
     setGameTypePanel(new LocalSetupPanel(gameSelectorModel));
+  }
+
+  public void showTestbench() {
+    final String configFile = System.getProperty("triplea.testbench.config", "");
+    setGameTypePanel(new TestbenchSetupPanel(this, configFile.isBlank() ? null : configFile));
+  }
+
+  public void showTestbenchMenu() {
+    setGameTypePanel(new TestbenchModePanel(this));
+  }
+
+  public void showTestbench(final String configFile) {
+    setGameTypePanel(new TestbenchSetupPanel(this, configFile));
+  }
+
+  public void showGameEngine() {
+    ThreadRunner.runInNewThread(
+        () -> {
+          gameSelectorModel.loadDefaultGameSameThread();
+          SwingUtilities.invokeLater(() -> setGameTypePanel(new GameEngineSetupPanel(this)));
+        });
   }
 
   public void showPbf() {
@@ -114,6 +139,9 @@ public class HeadedServerSetupModel {
   }
 
   private void setGameTypePanel(final SetupPanel panel) {
+    if (ui != null) {
+      ui.setExtendedState(JFrame.MAXIMIZED_BOTH);
+    }
     if (this.panel != null) {
       this.panel.cancel();
     }

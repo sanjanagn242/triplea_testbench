@@ -21,6 +21,7 @@ import org.triplea.util.Services;
 @Slf4j
 public final class ClientFileSystemHelper {
   @NonNls public static final String USER_ROOT_FOLDER_NAME = "triplea";
+  @NonNls public static final String ADDITIONAL_MAPS_FOLDER_PROPERTY = "triplea.additional.maps.folder";
 
   @VisibleForTesting static final String MAPS_FOLDER_NAME = "downloadedMaps";
   private static Path codeSourceLocation;

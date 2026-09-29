@@ -36,6 +36,7 @@ public class LocalLauncher implements ILauncher {
   private final Component parent;
   private final LaunchAction launchAction;
   private final PlayerTypes playerTypes;
+  @Nullable private final Runnable onCompletion;
 
   public LocalLauncher(
       final GameSelector gameSelector,
@@ -44,6 +45,17 @@ public class LocalLauncher implements ILauncher {
       final Component parent,
       final LaunchAction launchAction,
       final PlayerTypes playerTypes) {
+    this(gameSelector, randomSource, playerListing, parent, launchAction, playerTypes, null);
+  }
+
+  public LocalLauncher(
+      final GameSelector gameSelector,
+      final IRandomSource randomSource,
+      final PlayerListing playerListing,
+      final Component parent,
+      final LaunchAction launchAction,
+      final PlayerTypes playerTypes,
+      @Nullable final Runnable onCompletion) {
     this.randomSource = randomSource;
     this.playerListing = playerListing;
     this.gameSelector = gameSelector;
@@ -51,6 +63,7 @@ public class LocalLauncher implements ILauncher {
     this.parent = parent;
     this.launchAction = launchAction;
     this.playerTypes = playerTypes;
+    this.onCompletion = onCompletion;
   }
 
   @Override
@@ -73,6 +86,8 @@ public class LocalLauncher implements ILauncher {
               messengers,
               ClientNetworkBridge.NO_OP_SENDER,
               launchAction);
+      // Testbench games must treat a requested sequence stop as a completed game.
+      game.setStopGameOnDelegateExecutionStop(onCompletion != null);
       game.setRandomSource(randomSource);
       gameData.getGameLoader().startGame(game, gamePlayers, launchAction, null);
       return Optional.of(game);
@@ -95,8 +110,12 @@ public class LocalLauncher implements ILauncher {
       // having an oddball issue with the zip stream being closed while parsing to load default
       // game. might be caused by closing of stream while unloading map resources.
       Interruptibles.sleep(100);
-      gameSelector.onGameEnded();
-      SwingComponents.setFrameFromComponentVisible(parent);
+      if (onCompletion == null) {
+        gameSelector.onGameEnded();
+        SwingComponents.setFrameFromComponentVisible(parent);
+      } else {
+        onCompletion.run();
+      }
     }
   }
 
@@ -106,6 +125,15 @@ public class LocalLauncher implements ILauncher {
       final Collection<? extends PlayerCountrySelection> playerRows,
       final Component parent,
       final LaunchAction launchAction) {
+    return create(gameSelectorModel, playerRows, parent, launchAction, null);
+  }
+
+  public static LocalLauncher create(
+      final GameSelectorModel gameSelectorModel,
+      final Collection<? extends PlayerCountrySelection> playerRows,
+      final Component parent,
+      final LaunchAction launchAction,
+      @Nullable final Runnable onCompletion) {
 
     final Map<String, PlayerTypes.Type> playerTypes =
         playerRows.stream()
@@ -132,6 +160,7 @@ public class LocalLauncher implements ILauncher {
         playerListing,
         parent,
         launchAction,
-        new PlayerTypes(launchAction.getPlayerTypes()));
+        new PlayerTypes(launchAction.getPlayerTypes()),
+        onCompletion);
   }
 }
