@@ -61,7 +61,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private final HeadedServerSetupModel setupModel;
   private final GameSelectorModel gameSelectorModel;
   private final JTextField mapPath = new JTextField(22);
-  private final JLabel mapStatus = new JLabel("Maps are stored in planning-agent-testbed/maps");
+  private final JLabel mapStatus =
+      new JLabel("Each game's maps are stored in planning-agent-testbed/games/<game>/map");
   private final JSpinner gamesCount = new JSpinner(new SpinnerNumberModel(2, 1, 100_000, 1));
   private final JSpinner roundLimit = new JSpinner(new SpinnerNumberModel(100, 1, 100_000, 1));
   private final JSpinner aiMovePauseMs =
@@ -71,6 +72,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private final JPanel factionRows = new JPanel(new GridBagLayout());
   private final Map<String, JComboBox<String>> assignments = new LinkedHashMap<>();
   private final Path initialConfig;
+  private Path activeConfigurationFile;
   private MapReference activeMapReference;
   private boolean experimentRunning;
   private int plannedGames;
@@ -81,16 +83,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
     this.setupModel = setupModel;
     this.gameSelectorModel = setupModel.getGameSelectorModel();
     this.initialConfig = configFile == null ? null : Path.of(configFile);
+    this.activeConfigurationFile = initialConfig;
     buildUi();
     ensureResultsLogExists();
     if (initialConfig != null) {
       readConfiguration(initialConfig);
-    } else if (Files.isRegularFile(
-        TestbenchMapRepository.repositoryRoot()
-            .resolve("planning-agent-testbed/configs/capture-the-flag.json"))) {
-      readConfiguration(
-          TestbenchMapRepository.repositoryRoot()
-              .resolve("planning-agent-testbed/configs/capture-the-flag.json"));
+    } else if (Files.isRegularFile(defaultCaptureTheFlagConfiguration())) {
+      readConfiguration(defaultCaptureTheFlagConfiguration());
     } else {
       findCaptureTheFlagMap()
           .ifPresent(
@@ -222,13 +221,18 @@ public final class TestbenchSetupPanel extends SetupPanel {
   }
 
   private void chooseMap() {
-    final JFileChooser chooser = new JFileChooser(TestbenchMapRepository.mapsDirectory().toFile());
+    final JFileChooser chooser =
+        new JFileChooser(
+            TestbenchMapRepository.mapsDirectory(activeConfigurationFile, currentMapName())
+                .toFile());
     chooser.setFileFilter(new FileNameExtensionFilter("TripleA game XML (*.xml)", "xml"));
     if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
       final Path selected = chooser.getSelectedFile().toPath();
       mapPath.setText(selected.toAbsolutePath().toString());
       mapStatus.setText("Map selected: " + selected.getFileName());
       mapStatus.setToolTipText(selected.toAbsolutePath().toString());
+      TestbenchMapRepository.configurationFileForMapXml(selected)
+          .ifPresent(configurationFile -> activeConfigurationFile = configurationFile);
       activeMapReference = null;
       loadMap(selected);
     }
@@ -295,7 +299,12 @@ public final class TestbenchSetupPanel extends SetupPanel {
   }
 
   private void chooseConfiguration(final boolean save) {
-    final JFileChooser chooser = new JFileChooser();
+    final Path initialDirectory =
+        save
+            ? TestbenchMapRepository.configurationDirectory(
+                activeConfigurationFile, currentMapName())
+            : TestbenchMapRepository.gamesDirectory();
+    final JFileChooser chooser = new JFileChooser(initialDirectory.toFile());
     chooser.setFileFilter(new FileNameExtensionFilter("Testbench JSON (*.json)", "json"));
     if (chooser.showDialog(this, save ? "Save" : "Load") != JFileChooser.APPROVE_OPTION) return;
     final Path path = chooser.getSelectedFile().toPath();
@@ -311,6 +320,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
           || (config.map == null && (config.mapXml == null || config.mapXml.isBlank()))) {
         throw new IllegalArgumentException("JSON must contain a map name or mapXml path.");
       }
+      activeConfigurationFile = path.toAbsolutePath().normalize();
       gamesCount.setValue(Math.max(1, config.games));
       roundLimit.setValue(Math.max(1, config.roundLimit));
       aiMovePauseMs.setValue(clampPause(config.aiMovePauseMs, DEFAULT_AI_MOVE_PAUSE_MS));
@@ -375,6 +385,14 @@ public final class TestbenchSetupPanel extends SetupPanel {
     try {
       final Path destination = path.toString().endsWith(".json") ? path : Path.of(path + ".json");
       final Path absoluteDestination = destination.toAbsolutePath();
+      final Path expectedConfigurationDirectory =
+          TestbenchMapRepository.configurationDirectory(activeConfigurationFile, currentMapName())
+              .toAbsolutePath()
+              .normalize();
+      if (!expectedConfigurationDirectory.equals(absoluteDestination.getParent().normalize())) {
+        throw new IOException(
+            "Save configurations for this map in " + expectedConfigurationDirectory);
+      }
       final String mapXml;
       if (activeMapReference != null) {
         mapXml = null;
@@ -403,8 +421,23 @@ public final class TestbenchSetupPanel extends SetupPanel {
   }
 
   private Optional<Path> findCaptureTheFlagMap() {
-    return InstalledMapsListing.parseMapFiles(TestbenchMapRepository.mapsDirectory())
+    return InstalledMapsListing.parseMapFiles(
+            TestbenchMapRepository.mapsDirectory(
+                defaultCaptureTheFlagConfiguration(), "Capture The Flag"))
         .findGameXmlPathByGameName("Capture The Flag");
+  }
+
+  private Path defaultCaptureTheFlagConfiguration() {
+    return TestbenchMapRepository.repositoryRoot()
+        .resolve("planning-agent-testbed/games/capture-the-flag/config/capture-the-flag.json");
+  }
+
+  private String currentMapName() {
+    if (activeMapReference != null && activeMapReference.name != null) {
+      return activeMapReference.name;
+    }
+    final GameData data = gameSelectorModel.getGameData();
+    return data == null ? "Capture The Flag" : data.getMapName();
   }
 
   private void showError(final String message) {

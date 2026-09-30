@@ -1,7 +1,20 @@
 # Planning Agent Testbed
 
-This directory is the home for the planning agent testbed's reusable experiment configurations
-and notes. The headed client setup UI lives in
+This directory is the home for the planning agent testbed's game maps, experiment configurations,
+and notes. Each game has one map folder and one config folder, so you can keep multiple experiment
+configurations for that map together:
+
+```text
+planning-agent-testbed/games/
+  capture-the-flag/
+    map/       # Downloaded map package folders go here
+    config/    # One or more JSON experiment configurations
+  minimap/
+    map/
+    config/
+```
+
+The headed client setup UI lives in
 `game-app/game-headed/src/main/java/games/strategy/engine/framework/startup/ui/planningagenttestbed`.
 
 ## Start with Capture The Flag
@@ -9,7 +22,7 @@ and notes. The headed client setup UI lives in
 Run this configuration from the repository root:
 
 ```bash
-./gradlew :game-headed:run --args="triplea.testbench.config=$PWD/planning-agent-testbed/configs/capture-the-flag.json"
+./gradlew :game-headed:run --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/capture-the-flag/config/capture-the-flag.json"
 ```
 
 The client first shows **Planning Agent Testbench** and **Use the game engine**. Choose the
@@ -18,16 +31,20 @@ testbench option, then **Run Simulations**, to load the supplied JSON in its edi
 option to continue to the regular TripleA setup.
 
 The configuration gives the map's canonical name, game name, and common aliases. The testbench
-checks `planning-agent-testbed/maps` first. If the map is missing, it looks for a matching entry in
-TripleA's map download listing, downloads it, and extracts it into that repository-local folder.
+checks the selected game's `map` folder first. Place manually downloaded map packages inside it,
+for example `planning-agent-testbed/games/capture-the-flag/map/capture_the_flag/`. If the map is
+missing, it looks for a matching entry in TripleA's map download listing, downloads it, and extracts
+it into that game's repository-local map folder.
 When `downloadUrl` is set in the `map` object, it downloads directly from that ZIP URL without
 contacting the map listing service. The starter Capture The Flag configuration uses this, so it
 does not depend on a local map-listing server. Without a `downloadUrl`, it looks up a matching alias
 in the map listing. The `mapXml` field is also supported for an XML path relative to the JSON file;
 this is useful for maps stored within the repository.
 
-Downloaded map files are kept locally under `planning-agent-testbed/maps` and ignored by Git.
-They are not saved in the per-user `~/Documents/triplea` map folder.
+Downloaded map files are kept under `planning-agent-testbed/games/<game>/map` and ignored by Git.
+They are not saved in the per-user `~/Documents/triplea` map folder. JSON configurations for that
+map belong under `planning-agent-testbed/games/<game>/config`; the UI opens that folder when saving
+and opens the `games` folder when loading configurations.
 
 The `agents` object maps faction names from the map to player type labels available in the client.
 Change those values to compare agents. `roundLimit` ends each game at that round without assigning
