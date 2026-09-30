@@ -2,19 +2,22 @@ package games.strategy.engine.framework.startup.ui.planningagenttestbed;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import games.strategy.engine.chat.Chat;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.framework.GameShutdownRegistry;
+import games.strategy.engine.framework.IGame;
+import games.strategy.engine.framework.LocalPlayers;
 import games.strategy.engine.framework.map.file.system.loader.InstalledMapsListing;
 import games.strategy.engine.framework.startup.launcher.ILauncher;
 import games.strategy.engine.framework.startup.launcher.LocalLauncher;
 import games.strategy.engine.framework.startup.launcher.local.PlayerCountrySelection;
 import games.strategy.engine.framework.startup.mc.HeadedLaunchAction;
-import games.strategy.engine.framework.startup.mc.HeadedPlayerTypes;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
 import games.strategy.engine.framework.startup.ui.SetupPanel;
 import games.strategy.engine.framework.startup.ui.panels.main.HeadedServerSetupModel;
 import games.strategy.engine.framework.startup.ui.panels.main.game.selector.GameSelectorModel;
+import games.strategy.engine.player.Player;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.settings.ClientSetting;
 import java.awt.BorderLayout;
@@ -33,8 +36,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import javax.swing.Action;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
@@ -69,8 +74,10 @@ public final class TestbenchSetupPanel extends SetupPanel {
       new JSpinner(new SpinnerNumberModel(DEFAULT_AI_MOVE_PAUSE_MS, 0, MAX_AI_PAUSE_MS, 10));
   private final JSpinner aiCombatStepPauseMs =
       new JSpinner(new SpinnerNumberModel(DEFAULT_AI_COMBAT_STEP_PAUSE_MS, 0, MAX_AI_PAUSE_MS, 10));
+  private final JCheckBox showObservationWindow = new JCheckBox("Visualize observations", true);
   private final JPanel factionRows = new JPanel(new GridBagLayout());
   private final Map<String, JComboBox<String>> assignments = new LinkedHashMap<>();
+  private final Map<String, JCheckBox> observationAssignments = new LinkedHashMap<>();
   private final Path initialConfig;
   private Path activeConfigurationFile;
   private MapReference activeMapReference;
@@ -78,6 +85,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private int plannedGames;
   private int completedGames;
   private Instant currentGameStartedAt;
+  private final StateObservationWindow stateObservationWindow = new StateObservationWindow();
 
   public TestbenchSetupPanel(final HeadedServerSetupModel setupModel, final String configFile) {
     this.setupModel = setupModel;
@@ -146,6 +154,20 @@ public final class TestbenchSetupPanel extends SetupPanel {
     experiment.add(aiCombatStepPauseMs, constraints(3, row++));
     experiment.add(
         new JLabel("Round cap ends without a winner. Pauses apply at launch."),
+        new GridBagConstraints(
+            0,
+            row++,
+            4,
+            1,
+            1,
+            0,
+            GridBagConstraints.WEST,
+            GridBagConstraints.HORIZONTAL,
+            new Insets(3, 4, 4, 4),
+            0,
+            0));
+    experiment.add(
+        showObservationWindow,
         new GridBagConstraints(
             0,
             row++,
@@ -244,6 +266,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
       mapStatus.setToolTipText(path.toAbsolutePath().toString());
       showError("Could not load a valid TripleA map from " + path);
       assignments.clear();
+      observationAssignments.clear();
       factionRows.removeAll();
       factionRows.revalidate();
       factionRows.repaint();
@@ -255,20 +278,27 @@ public final class TestbenchSetupPanel extends SetupPanel {
     mapStatus.setToolTipText(path.toAbsolutePath().toString());
     final GameData data = gameSelectorModel.getGameData();
     final String[] labels =
-        new PlayerTypes(HeadedPlayerTypes.getPlayerTypes()).getAvailablePlayerLabels();
+        new PlayerTypes(TestbenchAgentRegistry.getPlayerTypes()).getAvailablePlayerLabels();
     final Map<String, String> previous = selectedAssignments();
+    final Map<String, Boolean> previousObservationAssignments = selectedObservationAssignments();
     assignments.clear();
+    observationAssignments.clear();
     factionRows.removeAll();
     int row = 0;
     factionRows.add(new JLabel("Faction"), constraints(0, row));
-    factionRows.add(new JLabel("Agent"), constraints(1, row++));
+    factionRows.add(new JLabel("Agent"), constraints(1, row));
+    factionRows.add(new JLabel("Visualize observation"), constraints(2, row++));
     for (GamePlayer player : data.getPlayerList().getPlayers()) {
       factionRows.add(new JLabel(player.getName()), constraints(0, row));
       final JComboBox<String> agent = new JComboBox<>(labels);
       final String selection = previous.getOrDefault(player.getName(), defaultAgent(player));
       agent.setSelectedItem(selection);
       assignments.put(player.getName(), agent);
-      factionRows.add(agent, constraints(1, row++));
+      factionRows.add(agent, constraints(1, row));
+      final JCheckBox showState =
+          new JCheckBox("", previousObservationAssignments.getOrDefault(player.getName(), true));
+      observationAssignments.put(player.getName(), showState);
+      factionRows.add(showState, constraints(2, row++));
     }
     factionRows.revalidate();
     factionRows.repaint();
@@ -295,6 +325,12 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private Map<String, String> selectedAssignments() {
     final Map<String, String> result = new LinkedHashMap<>();
     assignments.forEach((name, combo) -> result.put(name, (String) combo.getSelectedItem()));
+    return result;
+  }
+
+  private Map<String, Boolean> selectedObservationAssignments() {
+    final Map<String, Boolean> result = new LinkedHashMap<>();
+    observationAssignments.forEach((name, checkbox) -> result.put(name, checkbox.isSelected()));
     return result;
   }
 
@@ -326,6 +362,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
       aiMovePauseMs.setValue(clampPause(config.aiMovePauseMs, DEFAULT_AI_MOVE_PAUSE_MS));
       aiCombatStepPauseMs.setValue(
           clampPause(config.aiCombatStepPauseMs, DEFAULT_AI_COMBAT_STEP_PAUSE_MS));
+      showObservationWindow.setSelected(
+          config.showObservations == null || config.showObservations);
       activeMapReference = config.map;
       mapStatus.setText("Resolving map…");
       ThreadRunner.runInNewThread(
@@ -346,6 +384,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                     mapStatus.setToolTipText(resolvedMap.toAbsolutePath().toString());
                     loadMap(resolvedMap);
                     applyAgentAssignments(config.agents);
+                    applyObservationAssignments(config.observationPlayers);
                   });
             } catch (IOException | RuntimeException e) {
               SwingUtilities.invokeLater(
@@ -373,10 +412,22 @@ public final class TestbenchSetupPanel extends SetupPanel {
               final JComboBox<String> combo = assignments.get(name);
               if (combo != null
                   && java.util.Arrays.asList(
-                          new PlayerTypes(HeadedPlayerTypes.getPlayerTypes())
+                          new PlayerTypes(TestbenchAgentRegistry.getPlayerTypes())
                               .getAvailablePlayerLabels())
                       .contains(agent)) {
                 combo.setSelectedItem(agent);
+              }
+            });
+  }
+
+  private void applyObservationAssignments(final Map<String, Boolean> configuredPlayers) {
+    Optional.ofNullable(configuredPlayers)
+        .orElse(Map.of())
+        .forEach(
+            (name, enabled) -> {
+              final JCheckBox checkbox = observationAssignments.get(name);
+              if (checkbox != null) {
+                checkbox.setSelected(enabled == null || enabled);
               }
             });
   }
@@ -414,7 +465,9 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   (int) roundLimit.getValue(),
                   (int) aiMovePauseMs.getValue(),
                   (int) aiCombatStepPauseMs.getValue(),
-                  selectedAssignments())));
+                  selectedAssignments(),
+                  showObservationWindow.isSelected(),
+                  selectedObservationAssignments())));
     } catch (IOException e) {
       showError("Could not save testbench configuration: " + e.getMessage());
     }
@@ -471,6 +524,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
   @Override
   public Optional<ILauncher> getLauncher() {
     if (!experimentRunning) {
+      refreshSimulationLogs();
       experimentRunning = true;
       plannedGames = (int) gamesCount.getValue();
       completedGames = 0;
@@ -490,6 +544,11 @@ public final class TestbenchSetupPanel extends SetupPanel {
           ClientSetting.aiCombatStepPauseDuration.setValue(previousCombatPause);
         });
     final List<PlayerCountrySelection> players = new ArrayList<>();
+    final boolean showAllObservations = showObservationWindow.isSelected();
+    final Map<String, Boolean> observationsByPlayer = selectedObservationAssignments();
+    final int simulationNumber = completedGames + 1;
+    final List<PlayerTypes.Type> selectedGamePlayerTypes =
+        TestbenchAgentRegistry.getPlayerTypes(Path.of(mapPath.getText()), simulationNumber);
     assignments.forEach(
         (name, combo) ->
             players.add(
@@ -501,7 +560,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
 
                   @Override
                   public PlayerTypes.Type getPlayerType() {
-                    return new PlayerTypes(HeadedPlayerTypes.getPlayerTypes())
+                    return new PlayerTypes(selectedGamePlayerTypes)
                         .fromLabel((String) combo.getSelectedItem());
                   }
 
@@ -517,6 +576,24 @@ public final class TestbenchSetupPanel extends SetupPanel {
             this,
             new HeadedLaunchAction(setupModel.getUi()) {
               @Override
+              public java.util.Collection<PlayerTypes.Type> getPlayerTypes() {
+                return selectedGamePlayerTypes;
+              }
+
+              @Override
+              public void startGame(
+                  final LocalPlayers localPlayers,
+                  final IGame game,
+                  final Set<Player> localGamePlayers,
+                final Chat chat) {
+                super.startGame(localPlayers, game, localGamePlayers, chat);
+                SwingUtilities.invokeLater(
+                    () ->
+                        stateObservationWindow.observe(
+                            game.getData(), showAllObservations, observationsByPlayer));
+              }
+
+              @Override
               public boolean promptGameStop(
                   final String status, final String title, final Path mapLocation) {
                 return true;
@@ -526,6 +603,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
   }
 
   private void onGameCompleted() {
+    stateObservationWindow.stopObserving();
     GameShutdownRegistry.runShutdownActions();
     completedGames++;
     appendGameLog();
@@ -600,6 +678,25 @@ public final class TestbenchSetupPanel extends SetupPanel {
         .resolve("planning-agent-testbed/logs/game-results.txt");
   }
 
+  private static void refreshSimulationLogs() {
+    final Path logsDirectory = resultsLogPath().getParent();
+    try {
+      Files.createDirectories(logsDirectory);
+      try (var existingLogs = Files.newDirectoryStream(logsDirectory, "agent-*.txt")) {
+        for (final Path existingLog : existingLogs) {
+          Files.deleteIfExists(existingLog);
+        }
+      }
+      Files.writeString(
+          resultsLogPath(),
+          "Planning agent testbench results\n\n",
+          StandardOpenOption.CREATE,
+          StandardOpenOption.TRUNCATE_EXISTING);
+    } catch (final IOException e) {
+      System.err.println("Could not refresh planning-agent testbench logs: " + e.getMessage());
+    }
+  }
+
   private record TestbenchConfiguration(
       MapReference map,
       String mapXml,
@@ -607,7 +704,9 @@ public final class TestbenchSetupPanel extends SetupPanel {
       int roundLimit,
       Integer aiMovePauseMs,
       Integer aiCombatStepPauseMs,
-      Map<String, String> agents) {}
+      Map<String, String> agents,
+      Boolean showObservations,
+      Map<String, Boolean> observationPlayers) {}
 
   private record MapReference(
       String name, String gameName, List<String> aliases, String downloadUrl) {}

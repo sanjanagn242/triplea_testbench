@@ -2,22 +2,19 @@
   "map": {
     "name": "Capture The Flag",
     "gameName": "Capture The Flag",
-    "aliases": [
-      "capture_the_flag",
-      "CTF"
-    ],
+    "aliases": ["capture_the_flag", "CTF"],
     "downloadUrl": "https://github.com/triplea-maps/capture_the_flag/archive/refs/heads/master.zip"
   },
-  "games": 2,
+  "games": 1,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "showObservations": true,
   "agents": {
-    "Russians": "Fast (AI)",
-    "Italians": "Hard (AI)",
-    "Germans": "Easy (AI)",
-    "Chinese": "Does Nothing (AI)"
+    "Russians": "Simple Infantry (Python)",
+    "Italians": "Simple Infantry (Python)",
+    "Germans": "Simple Infantry (Python)",
+    "Chinese": "Simple Infantry (Python)"
   },
   "observationPlayers": {
     "Russians": true,

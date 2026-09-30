@@ -1,0 +1,11 @@
+{
+  "agents": [
+    {
+      "id": "simple-infantry",
+      "name": "Simple Infantry (Python)",
+      "language": "Python 3",
+      "entrypoint": "simple-infantry/agent.py",
+      "description": "Buys infantry and advances infantry toward the Capture The Flag objective."
+    }
+  ]
+}

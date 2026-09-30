@@ -53,14 +53,53 @@ the next game until it has run the configured `games` count.
 The testbench skips TripleA's end-of-game "continue playing?" prompt so each completed game can
 advance directly to the next one. Results are appended to `planning-agent-testbed/logs/game-results.txt`
 with the game number, faction-to-agent assignments, winner (or no winner), and elapsed time. The
-log directory is present in the repository; generated text logs are ignored by Git.
+log directory is present in the repository; generated text logs are ignored by Git. Generated logs
+are refreshed at the start of each simulation batch, and each Python faction writes a separate
+`agent-<faction>-game-<number>.txt` file whose first line gives its game number.
 
 Use **Save Configuration…** and **Load Configuration…** in the run setup to save or reuse JSON
 configurations.
 Changes in the window are used in memory when you start the game. They do not modify the loaded
 JSON automatically; choose **Save JSON…** to persist them.
 
+Live JSON observations appear together in one window with a tab for each enabled faction. Set
+`showObservations` to `false` to hide the observation window entirely; use `observationPlayers` to
+hide selected faction tabs while leaving the others visible. The same global and per-faction
+controls are available in the run setup window. Older configurations default to showing all tabs.
+
 `aiMovePauseMs` controls the delay after AI movement and `aiCombatStepPauseMs` controls the delay
 between AI combat steps. Set both to `0` for faster runs, or increase them to watch the game. They
 are applied before the game starts, so the values stay fixed throughout that game. Omitting either
 field uses the engine default (300 ms for moves, 1000 ms for combat steps).
+
+## Planning agents
+
+External agents and their inventory are in `planning-agent-testbed/agents/`. The first agent,
+**Simple Infantry (Python)**, is available in the faction assignment dropdown. The engine starts
+one persistent Python process for each assigned faction. At game start it sends a `game_start`
+message containing the map XML for that faction and its initial JSON state. Before each decision
+phase for that faction, it sends a `turn_request` containing the current observation; the process
+returns one JSON action line. This uses newline-delimited JSON over standard input/output, so an
+agent in another language can implement the same protocol without Python bindings or engine
+dependencies. Python 3 must be installed and available as `python3` when starting the client.
+
+The simple agent reads infantry production rules, costs, movement, target capitals, and impassable
+territories from the supplied XML and observation. It buys infantry, moves toward enemy objectives,
+and asks TripleA to resolve its available battles. Placement currently uses TripleA's built-in
+`WeakAi` behavior without sending a placement request to Python. Proposed moves and purchases are
+still checked by the engine delegates before application. Agents should write only protocol
+responses to standard output; diagnostics belong on standard error.
+
+`PlayerGameXmlProvider` is the boundary for player-specific rules. The current provider supplies
+the common XML unchanged to each faction process, which is appropriate for the current fully
+observable setup. A filtered provider can return a different XML string for each player when the
+map's visibility rules define how rule and property visibility is represented. The JSON observation
+provider is also per-player and can be replaced with a filtered implementation as partial
+observation is introduced.
+
+Two ready-to-load configurations are provided:
+
+- `games/capture-the-flag/config/capture-the-flag-simple-vs-easy.json` runs the Python agent as
+  Russians against the Easy AI as Italians; Germans and Chinese use Does Nothing.
+- `games/capture-the-flag/config/capture-the-flag-four-simple-agents.json` assigns the Python agent
+  to all four factions.
