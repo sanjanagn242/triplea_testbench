@@ -21,12 +21,44 @@ import org.triplea.map.description.file.MapDescriptionYaml;
 /** Locates and downloads maps into the testbed's repository-local map store. */
 final class TestbenchMapRepository {
   private static final String TESTBED_DIRECTORY = "planning-agent-testbed";
-  private static final String MAPS_DIRECTORY = "maps";
+  private static final String GAMES_DIRECTORY = "games";
+  private static final String CONFIG_DIRECTORY = "config";
+  private static final String MAP_DIRECTORY = "map";
 
   private TestbenchMapRepository() {}
 
-  static Path mapsDirectory() {
-    final Path mapsDirectory = repositoryRoot().resolve(TESTBED_DIRECTORY).resolve(MAPS_DIRECTORY);
+  static Path gamesDirectory() {
+    return repositoryRoot().resolve(TESTBED_DIRECTORY).resolve(GAMES_DIRECTORY);
+  }
+
+  static Path configurationDirectory(final Path configurationFile, final String mapName) {
+    final Path configurationDirectory =
+        gameDirectory(configurationFile, mapName).resolve(CONFIG_DIRECTORY);
+    try {
+      return Files.createDirectories(configurationDirectory);
+    } catch (IOException e) {
+      throw new IllegalStateException(
+          "Unable to create testbed configuration directory: " + configurationDirectory, e);
+    }
+  }
+
+  static Optional<Path> configurationFileForMapXml(final Path mapXml) {
+    final Path gamesDirectory = gamesDirectory().toAbsolutePath().normalize();
+    Path current = mapXml.toAbsolutePath().normalize().getParent();
+    while (current != null) {
+      if (MAP_DIRECTORY.equals(current.getFileName().toString())) {
+        final Path gameDirectory = current.getParent();
+        if (gameDirectory != null && gamesDirectory.equals(gameDirectory.getParent())) {
+          return Optional.of(gameDirectory.resolve(CONFIG_DIRECTORY).resolve("experiment.json"));
+        }
+      }
+      current = current.getParent();
+    }
+    return Optional.empty();
+  }
+
+  static Path mapsDirectory(final Path configurationFile, final String mapName) {
+    final Path mapsDirectory = gameDirectory(configurationFile, mapName).resolve(MAP_DIRECTORY);
     try {
       final Path createdMapsDirectory = Files.createDirectories(mapsDirectory);
       System.setProperty(
@@ -37,6 +69,27 @@ final class TestbenchMapRepository {
       throw new IllegalStateException(
           "Unable to create testbed map directory: " + mapsDirectory, e);
     }
+  }
+
+  private static Path gameDirectory(final Path configurationFile, final String mapName) {
+    final Path gamesDirectory = gamesDirectory().toAbsolutePath().normalize();
+    if (configurationFile != null) {
+      final Path configurationDirectory =
+          configurationFile.toAbsolutePath().normalize().getParent();
+      if (configurationDirectory != null
+          && CONFIG_DIRECTORY.equals(configurationDirectory.getFileName().toString())) {
+        final Path configuredGameDirectory = configurationDirectory.getParent();
+        if (gamesDirectory.equals(configuredGameDirectory.getParent())) {
+          return configuredGameDirectory;
+        }
+      }
+    }
+    if (mapName == null || mapName.isBlank()) {
+      throw new IllegalArgumentException("A map name is required to locate its testbed folder.");
+    }
+    final String directoryName =
+        mapName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+    return gamesDirectory.resolve(directoryName);
   }
 
   static Path repositoryRoot() {
@@ -61,13 +114,13 @@ final class TestbenchMapRepository {
       final List<String> aliases,
       final String downloadUrl)
       throws IOException {
-    // Make repository-local map artwork discoverable by the game UI after the map is launched.
-    mapsDirectory();
     final List<String> mapAliases = aliases == null ? List.of() : new ArrayList<>(aliases);
     final String canonicalMapName = firstNonBlank(mapName, mapXml);
     if (canonicalMapName == null) {
       throw new IllegalArgumentException("Configuration must contain a map name or mapXml path.");
     }
+    // Make repository-local map artwork discoverable by the game UI after the map is launched.
+    final Path mapsDirectory = mapsDirectory(configurationFile, canonicalMapName);
     mapAliases.add(canonicalMapName);
 
     final Path configuredFile = resolveConfiguredFile(configurationFile, mapXml);
@@ -75,7 +128,8 @@ final class TestbenchMapRepository {
       return configuredFile;
     }
 
-    final Optional<Path> installedMap = findInstalledMap(canonicalMapName, gameName, mapAliases);
+    final Optional<Path> installedMap =
+        findInstalledMap(mapsDirectory, canonicalMapName, gameName, mapAliases);
     if (installedMap.isPresent()) {
       return installedMap.get();
     }
@@ -97,12 +151,12 @@ final class TestbenchMapRepository {
               + canonicalMapName
               + "' is not in the testbed map folder or the download listing. "
               + "Install it in "
-              + mapsDirectory()
+              + mapsDirectory
               + " or provide downloadUrl in the JSON map entry.");
     }
 
-    downloadMap(resolvedDownloadUrl, canonicalMapName);
-    return findInstalledMap(canonicalMapName, gameName, mapAliases)
+    downloadMap(resolvedDownloadUrl, canonicalMapName, mapsDirectory);
+    return findInstalledMap(mapsDirectory, canonicalMapName, gameName, mapAliases)
         .orElseThrow(
             () ->
                 new IllegalArgumentException(
@@ -137,8 +191,11 @@ final class TestbenchMapRepository {
   }
 
   private static Optional<Path> findInstalledMap(
-      final String mapName, final String gameName, final List<String> aliases) {
-    final InstalledMapsListing listing = InstalledMapsListing.parseMapFiles(mapsDirectory());
+      final Path mapsDirectory,
+      final String mapName,
+      final String gameName,
+      final List<String> aliases) {
+    final InstalledMapsListing listing = InstalledMapsListing.parseMapFiles(mapsDirectory);
     return aliases.stream()
         .map(listing::findInstalledMapByName)
         .flatMap(Optional::stream)
@@ -167,9 +224,8 @@ final class TestbenchMapRepository {
     return Optional.empty();
   }
 
-  private static void downloadMap(final String downloadUrl, final String mapName)
-      throws IOException {
-    final Path mapsDirectory = mapsDirectory();
+  private static void downloadMap(
+      final String downloadUrl, final String mapName, final Path mapsDirectory) throws IOException {
     final Path temporaryDirectory = Files.createTempDirectory("triplea-testbed-map-");
     final String safeFileName = mapName.replaceAll("[^A-Za-z0-9_-]", "_");
     final Path zipFile = temporaryDirectory.resolve(safeFileName + ".zip");
