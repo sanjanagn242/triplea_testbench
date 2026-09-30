@@ -12,10 +12,17 @@
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
+  "showObservations": true,
   "agents": {
     "Russians": "Fast (AI)",
     "Italians": "Hard (AI)",
     "Germans": "Easy (AI)",
     "Chinese": "Does Nothing (AI)"
+  },
+  "observationPlayers": {
+    "Russians": true,
+    "Italians": true,
+    "Germans": true,
+    "Chinese": true
   }
 }
