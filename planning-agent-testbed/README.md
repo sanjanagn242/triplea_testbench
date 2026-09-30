@@ -14,8 +14,35 @@ planning-agent-testbed/games/
     config/
 ```
 
+The maintained technical notes are [the end-to-end testbench flow](docs/TESTBENCH_FLOW.md) and
+[the agent developer guide](docs/AGENT_DEVELOPER_GUIDE.md). Python dependencies are aggregated in
+`planning-agent-testbed/requirements.txt`; each Python agent keeps its own manifest alongside its
+code. The current example is standard-library-only, so installing these manifests adds no packages.
+
 The headed client setup UI lives in
 `game-app/game-headed/src/main/java/games/strategy/engine/framework/startup/ui/planningagenttestbed`.
+
+## Requirements
+
+- **Java Development Kit 25** is required to build and run this repository. A JRE alone is not
+  sufficient. Check the active Java with `java --version`; Gradle should also report Java 25 with
+  `./gradlew --version`. If multiple Java versions are installed, set `JAVA_HOME` and `PATH` to the
+  JDK 25 installation before running Gradle.
+- Use the repository's Gradle wrapper (`./gradlew`). It downloads the configured Gradle 9.7.1
+  distribution and project dependencies as needed; a separate Gradle installation is not required.
+  The first build needs network access to download these dependencies.
+- The external Python agent requires **Python 3.10 or newer**, available as `python3`. If needed,
+  set `TRIPLEA_TESTBENCH_PYTHON` to the interpreter path when launching the client, for example
+  `TRIPLEA_TESTBENCH_PYTHON=/usr/bin/python3 ./gradlew :game-headed:run`.
+- Java dependencies are managed by Gradle build files and the version catalog; there is no Java
+  `requirements.txt`. Python dependencies are listed in this folder's `requirements.txt` and in
+  each Python agent's own manifest. The current agent uses only the Python standard library.
+
+Install any Python agent dependencies with:
+
+```bash
+python3 -m pip install -r planning-agent-testbed/requirements.txt
+```
 
 ## Start with Capture The Flag
 

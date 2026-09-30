@@ -9,6 +9,11 @@ at that faction's decision phases. The agent returns one JSON action per request
 newline-delimited standard input/output. TripleA delegates validate and apply actions returned by
 the agent.
 
+For the protocol, action formats, engine registration steps, and dependency installation commands,
+see [the agent developer guide](../docs/AGENT_DEVELOPER_GUIDE.md). Keep each Python agent's pip
+dependencies in that agent's `requirements.txt`, then include the file from the testbed-level
+`planning-agent-testbed/requirements.txt` so one install command covers all Python agents.
+
 ## Simple Infantry (Python)
 
 `simple-infantry/agent.py` is the first external agent. It reads the player's XML at game start,
