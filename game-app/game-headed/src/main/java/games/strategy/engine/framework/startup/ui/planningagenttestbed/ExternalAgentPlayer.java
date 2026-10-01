@@ -24,7 +24,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,15 +33,12 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.collections.IntegerMap;
 
-/** Bridges the external Python testbench agent to TripleA's validated game delegates. */
+/** Generic process adapter: exchanges protocol messages and applies returned actions via delegates. */
 @Slf4j
-public final class SimplePlanningAgentAi extends WeakAi {
-  public static final String PLAYER_LABEL = "Simple Infantry (Python)";
+public final class ExternalAgentPlayer extends WeakAi {
   private static final Gson GSON = new GsonBuilder().serializeNulls().create();
-  private static final String SCRIPT = "planning-agent-testbed/agents/simple-infantry/agent.py";
   private static final int PROTOCOL_VERSION = 1;
-  private static final String PYTHON_ENV = "TRIPLEA_TESTBENCH_PYTHON";
-  private static final String PYTHON_PROPERTY = "triplea.testbench.python";
+  private final ExternalAgentDefinition definition;
   private final Path commonGameXml;
   private final int simulationNumber;
   private final PlayerGameXmlProvider gameXmlProvider = new FullPlayerGameXmlProvider();
@@ -51,9 +47,13 @@ public final class SimplePlanningAgentAi extends WeakAi {
   private BufferedWriter agentInput;
   private long nextRequestId;
 
-  public SimplePlanningAgentAi(
-      final String playerName, final Path commonGameXml, final int simulationNumber) {
-    super(playerName, PLAYER_LABEL);
+  public ExternalAgentPlayer(
+      final String playerName,
+      final ExternalAgentDefinition definition,
+      final Path commonGameXml,
+      final int simulationNumber) {
+    super(playerName, definition.name());
+    this.definition = definition;
     this.commonGameXml = commonGameXml;
     this.simulationNumber = simulationNumber;
   }
@@ -81,39 +81,35 @@ public final class SimplePlanningAgentAi extends WeakAi {
       return;
     }
     final Decision decision = askAgent("purchase", data, player, false);
-    if (decision == null || decision.purchaseCount() <= 0) {
+    if (decision == null) {
       return;
     }
-    final ProductionRule infantryRule =
+    final IntegerMap<ProductionRule> purchases = new IntegerMap<>();
+    if (decision.purchases() != null) {
+      for (final PurchaseOrder order : decision.purchases()) {
+        if (order == null || order.rule() == null || order.count() <= 0) continue;
         player.getProductionFrontier().getRules().stream()
-            .filter(
-                rule ->
-                    rule.getName().equals(decision.rule())
-                        && rule.getResults().keySet().stream()
-                        .anyMatch(
-                            result ->
-                                result instanceof UnitType unitType
-                                    && unitType.getName().equals(decision.unitType())))
+            .filter(rule -> rule.getName().equals(order.rule()))
             .findFirst()
-            .orElse(null);
-    if (infantryRule == null) {
-      log.warn("{} has no production rule for infantry", player.getName());
-      return;
-    }
-    final int infantryCost =
-        infantryRule.getCosts().getInt(data.getResourceList().getResourceOrThrow("PUs"));
-    if (infantryCost <= 0) {
-      log.warn("Infantry production rule has no positive PUs cost");
-      return;
-    }
-    final int count = Math.min(decision.purchaseCount(), pusToSpend / infantryCost);
-    if (count > 0) {
-      final IntegerMap<ProductionRule> purchases = new IntegerMap<>();
-      purchases.put(infantryRule, count);
-      final String error = purchaseDelegate.purchase(purchases);
-      if (error != null) {
-        log.warn("{} could not buy infantry: {}", player.getName(), error);
+            .ifPresent(rule -> purchases.put(rule, order.count()));
       }
+    } else if (decision.purchaseCount() > 0 && decision.rule() != null) {
+      // Support the original action shape; new agents should send the generic purchases[] list.
+      player.getProductionFrontier().getRules().stream()
+          .filter(
+              rule ->
+                  rule.getName().equals(decision.rule())
+                      && rule.getResults().keySet().stream()
+                          .anyMatch(
+                              result ->
+                                  result instanceof UnitType unitType
+                                      && unitType.getName().equals(decision.unitType())))
+          .findFirst()
+          .ifPresent(rule -> purchases.put(rule, Math.min(decision.purchaseCount(), pusToSpend)));
+    }
+    if (!purchases.isEmpty()) {
+      final String error = purchaseDelegate.purchase(purchases);
+      if (error != null) log.warn("{} purchase was rejected: {}", player.getName(), error);
     }
   }
 
@@ -165,7 +161,7 @@ public final class SimplePlanningAgentAi extends WeakAi {
       final IAbstractPlaceDelegate placeDelegate,
       final GameState data,
       final GamePlayer player) {
-    // Placement is temporarily delegated to TripleA's built-in AI. Do not request a Python action.
+    // Placement is temporarily delegated to TripleA's built-in AI without an external request.
     super.place(placeForBid, placeDelegate, data, player);
   }
 
@@ -274,14 +270,23 @@ public final class SimplePlanningAgentAi extends WeakAi {
   private void startAgentProcess() {
     stopAgentProcess();
     try {
-      final Path root = findRepositoryRoot();
-      final Path script = root.resolve(SCRIPT);
-      if (!Files.isRegularFile(script)) {
-        throw new IOException("External testbench agent script was not found: " + script);
-      }
-      final String pythonCommand = pythonCommand();
-      agentProcess =
-          new ProcessBuilder(pythonCommand, script.toString()).directory(root.toFile()).start();
+      final Path root = TestbenchAgentRegistry.findRepositoryRoot();
+      final Path agentDirectory = definition.agentDirectory();
+      final List<String> command =
+          definition.command().stream()
+              .map(
+                  part ->
+                      part.replace("${repoRoot}", root.toString())
+                          .replace("${agentDir}", agentDirectory.toString())
+                          .replace(
+                              "${entrypoint}",
+                              agentDirectory.resolve(definition.entrypoint()).toString()))
+              .toList();
+      final ProcessBuilder processBuilder =
+          new ProcessBuilder(command)
+              .directory(agentDirectory.toFile())
+              .redirectError(ProcessBuilder.Redirect.INHERIT);
+      agentProcess = processBuilder.start();
       agentInput =
           new BufferedWriter(
               new OutputStreamWriter(
@@ -291,18 +296,9 @@ public final class SimplePlanningAgentAi extends WeakAi {
               new InputStreamReader(
                   agentProcess.getInputStream(), java.nio.charset.StandardCharsets.UTF_8));
     } catch (final IOException e) {
-      log.error(
-          "Could not start external testbench agent using '{}'. Set {} to the Python 3 executable path.",
-          pythonCommand(),
-          PYTHON_ENV,
-          e);
+      log.error("Could not start external agent '{}'", definition.id(), e);
       stopAgentProcess();
     }
-  }
-
-  private static String pythonCommand() {
-    return System.getProperty(
-        PYTHON_PROPERTY, System.getenv().getOrDefault(PYTHON_ENV, "python3"));
   }
 
   private synchronized String exchange(final AgentRequest request) throws IOException {
@@ -333,17 +329,6 @@ public final class SimplePlanningAgentAi extends WeakAi {
     }
   }
 
-  private static Path findRepositoryRoot() {
-    Path directory = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-    while (directory != null) {
-      if (Files.isRegularFile(directory.resolve(SCRIPT))) {
-        return directory;
-      }
-      directory = directory.getParent();
-    }
-    throw new IllegalStateException("Could not locate " + SCRIPT + " from the current directory");
-  }
-
   private record AgentRequest(
       String type,
       int schemaVersion,
@@ -359,12 +344,15 @@ public final class SimplePlanningAgentAi extends WeakAi {
   private record GameStartResponse(boolean ready) {}
 
   private record Decision(
+      List<PurchaseOrder> purchases,
       int purchaseCount,
       String rule,
       String unitType,
       List<MoveOrder> moves,
       String placeAt,
       boolean fightAll) {}
+
+  private record PurchaseOrder(String rule, int count) {}
 
   private record MoveOrder(String from, String to, List<String> unitIds) {}
 }

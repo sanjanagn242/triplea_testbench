@@ -17,7 +17,7 @@ planning-agent-testbed/games/
 The maintained technical notes are [the end-to-end testbench flow](docs/TESTBENCH_FLOW.md) and
 [the agent developer guide](docs/AGENT_DEVELOPER_GUIDE.md). Python dependencies are aggregated in
 `planning-agent-testbed/requirements.txt`; each Python agent keeps its own manifest alongside its
-code. The current example is standard-library-only, so installing these manifests adds no packages.
+code. The Simple Infantry C++ agent has no Python package dependencies.
 
 The headed client setup UI lives in
 `game-app/game-headed/src/main/java/games/strategy/engine/framework/startup/ui/planningagenttestbed`.
@@ -31,12 +31,12 @@ The headed client setup UI lives in
 - Use the repository's Gradle wrapper (`./gradlew`). It downloads the configured Gradle 9.7.1
   distribution and project dependencies as needed; a separate Gradle installation is not required.
   The first build needs network access to download these dependencies.
-- The external Python agent requires **Python 3.10 or newer**, available as `python3`. If needed,
-  set `TRIPLEA_TESTBENCH_PYTHON` to the interpreter path when launching the client, for example
-  `TRIPLEA_TESTBENCH_PYTHON=/usr/bin/python3 ./gradlew :game-headed:run`.
+- The Simple Infantry agent requires **g++ with C++20 support**. If the compiler is not on the
+  headed client's `PATH`, set `TRIPLEA_TESTBENCH_CXX`, for example
+  `TRIPLEA_TESTBENCH_CXX=/usr/bin/g++ ./gradlew :game-headed:run`.
 - Java dependencies are managed by Gradle build files and the version catalog; there is no Java
   `requirements.txt`. Python dependencies are listed in this folder's `requirements.txt` and in
-  each Python agent's own manifest. The current agent uses only the Python standard library.
+  each Python agent's own manifest. Simple Infantry is C++20 and has no Python dependency.
 
 Install any Python agent dependencies with:
 
@@ -73,15 +73,16 @@ They are not saved in the per-user `~/Documents/triplea` map folder. JSON config
 map belong under `planning-agent-testbed/games/<game>/config`; the UI opens that folder when saving
 and opens the `games` folder when loading configurations.
 
-The `agents` object maps faction names from the map to player type labels available in the client.
-Change those values to compare agents. `roundLimit` ends each game at that round without assigning
+The `agents` object maps faction names from the map to stable agent IDs (for example,
+`"Russians": "simple-infantry"`). The run window shows the display name from each agent's manifest.
+Change those IDs to compare agents. `roundLimit` ends each game at that round without assigning
 a winner. When a game ends, the testbench reloads a fresh copy of the map and automatically starts
 the next game until it has run the configured `games` count.
 The testbench skips TripleA's end-of-game "continue playing?" prompt so each completed game can
 advance directly to the next one. Results are appended to `planning-agent-testbed/logs/game-results.txt`
 with the game number, faction-to-agent assignments, winner (or no winner), and elapsed time. The
 log directory is present in the repository; generated text logs are ignored by Git. Generated logs
-are refreshed at the start of each simulation batch, and each Python faction writes a separate
+are refreshed at the start of each simulation batch, and each C++ faction writes a separate
 `agent-<faction>-game-<number>.txt` file whose first line gives its game number.
 
 Use **Save Configuration…** and **Load Configuration…** in the run setup to save or reuse JSON
@@ -101,19 +102,23 @@ field uses the engine default (300 ms for moves, 1000 ms for combat steps).
 
 ## Planning agents
 
-External agents and their inventory are in `planning-agent-testbed/agents/`. The first agent,
-**Simple Infantry (Python)**, is available in the faction assignment dropdown. The engine starts
-one persistent Python process for each assigned faction. At game start it sends a `game_start`
+External agents live in `planning-agent-testbed/agents/<agent-id>/`. Each folder's `agent.json`
+defines its stable ID, display name, language, entrypoint, and launch command. The registry discovers
+these files and routes every choice through the single generic `ExternalAgentPlayer`; adding an
+agent does not require an algorithm-specific Java class or engine label. The first agent,
+**Simple Infantry (C++)**, is available in the faction assignment dropdown. The engine starts one
+persistent process for each assigned faction using the manifest command. At game start it sends a `game_start`
 message containing the map XML for that faction and its initial JSON state. Before each decision
 phase for that faction, it sends a `turn_request` containing the current observation; the process
 returns one JSON action line. This uses newline-delimited JSON over standard input/output, so an
 agent in another language can implement the same protocol without Python bindings or engine
-dependencies. Python 3 must be installed and available as `python3` when starting the client.
+dependencies. A C++20 compiler must be installed when starting the client; its launcher compiles the
+agent source when it changes.
 
 The simple agent reads infantry production rules, costs, movement, target capitals, and impassable
 territories from the supplied XML and observation. It buys infantry, moves toward enemy objectives,
 and asks TripleA to resolve its available battles. Placement currently uses TripleA's built-in
-`WeakAi` behavior without sending a placement request to Python. Proposed moves and purchases are
+`WeakAi` behavior without sending a placement request to the agent. Proposed moves and purchases are
 still checked by the engine delegates before application. Agents should write only protocol
 responses to standard output; diagnostics belong on standard error.
 
@@ -126,7 +131,7 @@ observation is introduced.
 
 Two ready-to-load configurations are provided:
 
-- `games/capture-the-flag/config/capture-the-flag-simple-vs-easy.json` runs the Python agent as
+- `games/capture-the-flag/config/capture-the-flag-simple-vs-easy.json` runs the C++ agent as
   Russians against the Easy AI as Italians; Germans and Chinese use Does Nothing.
-- `games/capture-the-flag/config/capture-the-flag-four-simple-agents.json` assigns the Python agent
+- `games/capture-the-flag/config/capture-the-flag-four-simple-agents.json` assigns the C++ agent
   to all four factions.

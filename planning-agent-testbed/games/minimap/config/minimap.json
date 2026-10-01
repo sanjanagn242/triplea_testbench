@@ -1,7 +1,9 @@
 {
   "map": {
     "name": "Minimap",
-    "aliases": ["minimap"],
+    "aliases": [
+      "minimap"
+    ],
     "downloadUrl": "https://github.com/triplea-maps/minimap/archive/refs/heads/master.zip"
   },
   "games": 2,
@@ -10,6 +12,11 @@
   "aiCombatStepPauseMs": 0,
   "agents": {
     "Russians": "Easy (AI)",
-    "Italians": "Easy (AI)"
+    "Italians": "simple-infantry"
+  },
+  "showObservations": true,
+  "observationPlayers": {
+    "Russians": true,
+    "Italians": true
   }
 }

@@ -410,12 +410,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
         .forEach(
             (name, agent) -> {
               final JComboBox<String> combo = assignments.get(name);
+              final String selection = TestbenchAgentRegistry.selectionForId(agent);
               if (combo != null
                   && java.util.Arrays.asList(
                           new PlayerTypes(TestbenchAgentRegistry.getPlayerTypes())
                               .getAvailablePlayerLabels())
-                      .contains(agent)) {
-                combo.setSelectedItem(agent);
+                      .contains(selection)) {
+                combo.setSelectedItem(selection);
               }
             });
   }
@@ -465,7 +466,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   (int) roundLimit.getValue(),
                   (int) aiMovePauseMs.getValue(),
                   (int) aiCombatStepPauseMs.getValue(),
-                  selectedAssignments(),
+                  selectedAssignments().entrySet().stream()
+                      .collect(
+                          java.util.stream.Collectors.toMap(
+                              Map.Entry::getKey,
+                              entry -> TestbenchAgentRegistry.idForSelection(entry.getValue()),
+                              (first, second) -> first,
+                              LinkedHashMap::new)),
                   showObservationWindow.isSelected(),
                   selectedObservationAssignments())));
     } catch (IOException e) {

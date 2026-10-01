@@ -31,17 +31,19 @@ the experiment UI and external-agent bridge are additions in the main repository
 3. If enabled, `StateObservationWindow` opens one window with a tab per selected faction. Its JSON
    panes refresh on engine state changes. The current provider marks snapshots `FULL` and supplies
    the same full map view to every faction.
-4. `TestbenchAgentRegistry` adds the **Simple Infantry (Python)** player type. The corresponding
-   `SimplePlanningAgentAi` starts a persistent `python3` process for each assigned faction. At game
+4. `TestbenchAgentRegistry` discovers `agent.json` manifests under `agents/` and exposes each
+   manifest as a faction choice. Every choice instantiates the same `ExternalAgentPlayer`; the
+   selected manifest supplies its process launch command. For example, the Simple Infantry
+   manifest starts its persistent C++ process through `run-agent.sh`. At game
    initialization it sends a newline-delimited JSON `game_start` message containing the common map
    XML, initial state, faction, protocol version, request ID, and simulation number. The current
    `FullPlayerGameXmlProvider` gives each faction the common XML unchanged; this is the hook for a
    future per-faction XML visibility filter.
 5. On the assigned faction's decision phases, the Java adapter sends a `turn_request` with the
-   current JSON observation. The Python policy returns one JSON action line. The Java adapter
-   translates purchase and movement responses into TripleA delegate calls. The delegates validate
+   current JSON observation. The external process returns one JSON action line. The generic Java
+   adapter translates purchase and movement responses into TripleA delegate calls. The delegates validate
    the submitted actions. The battle response asks TripleA to fight available battles. The place
-   phase currently makes no Python request and falls back to TripleA's built-in `WeakAi` placement.
+   phase currently makes no agent request and falls back to TripleA's built-in `WeakAi` placement.
 6. The observation snapshot includes game/map/round/step, active player, game properties, player
    resources and technologies, territory ownership/connections/production/objectives, and unit
    ownership, damage, movement, combat stats, and capabilities. It is a fixed v1 DTO rather than an
@@ -54,7 +56,7 @@ the experiment UI and external-agent bridge are additions in the main repository
 2. It appends result, faction assignments, and elapsed time to `game-results.txt`, hides the
    observation window, reloads a fresh copy of the map, and launches the next numbered game. When
    the batch finishes, it returns to the testbench menu.
-3. Each Python faction writes `agent-<faction>-game-<number>.txt`. Its first line is the simulation
+3. Each C++ faction writes `agent-<faction>-game-<number>.txt`. Its first line is the simulation
    number, followed by received phase requests, rounds, actions, and protocol errors.
 
 The related main-repository additions are in:
@@ -63,8 +65,9 @@ The related main-repository additions are in:
   initial mode choices.
 - `.../planningagenttestbed/TestbenchSetupPanel.java` and `TestbenchMapRepository.java`: JSON,
   map resolution, launch setup, observations preferences, repeated games, and logs.
-- `.../planningagenttestbed/TestbenchAgentRegistry.java` and `SimplePlanningAgentAi.java`:
-  selectable agent type and process/action bridge.
+- `.../planningagenttestbed/TestbenchAgentRegistry.java`, `ExternalAgentPlayer.java`, and each
+  `agents/<id>/agent.json`: dynamic player selection plus the shared process/action bridge and
+  per-agent launch metadata.
 - `.../planningagenttestbed/StateObservation.java`, `StateObservationProvider.java`,
   `FullStateObservationProvider.java`, and `StateObservationWindow.java`: observation model,
   generation, and visualization.

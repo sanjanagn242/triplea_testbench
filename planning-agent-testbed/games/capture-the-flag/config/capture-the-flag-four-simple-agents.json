@@ -5,16 +5,16 @@
     "aliases": ["capture_the_flag", "CTF"],
     "downloadUrl": "https://github.com/triplea-maps/capture_the_flag/archive/refs/heads/master.zip"
   },
-  "games": 1,
+  "games": 5,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "showObservations": true,
   "agents": {
-    "Russians": "Simple Infantry (Python)",
-    "Italians": "Simple Infantry (Python)",
-    "Germans": "Simple Infantry (Python)",
-    "Chinese": "Simple Infantry (Python)"
+    "Russians": "simple-infantry",
+    "Italians": "simple-infantry",
+    "Germans": "simple-infantry",
+    "Chinese": "simple-infantry"
   },
   "observationPlayers": {
     "Russians": true,
