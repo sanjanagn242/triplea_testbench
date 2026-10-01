@@ -13,7 +13,7 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "Simple Infantry (Python)",
+    "Russians": "simple-infantry",
     "Italians": "Easy (AI)",
     "Germans": "Does Nothing (AI)",
     "Chinese": "Does Nothing (AI)"

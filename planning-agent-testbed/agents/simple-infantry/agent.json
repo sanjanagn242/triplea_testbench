@@ -1,0 +1,8 @@
+{
+  "id": "simple-infantry",
+  "name": "Simple Infantry (C++)",
+  "language": "C++20",
+  "entrypoint": "agent.cpp",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Buys infantry and advances infantry toward the Capture The Flag objective."
+}

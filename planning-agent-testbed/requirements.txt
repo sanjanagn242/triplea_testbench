@@ -1,3 +1,2 @@
-# Python dependencies used by the planning testbed's agents.
-# Python 3.10 or newer is required; the current engine process launcher invokes `python3`.
--r agents/simple-infantry/requirements.txt
+# Python dependencies for agents written in Python.
+# Simple Infantry is implemented in C++20 and has no Python dependencies.
