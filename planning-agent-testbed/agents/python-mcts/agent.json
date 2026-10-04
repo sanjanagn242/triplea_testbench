@@ -1,0 +1,8 @@
+{
+  "id": "python-mcts",
+  "name": "Python MCTS",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Open-loop MCTS over each phase using the triplea_fm forward model (V1 land/air profile)."
+}

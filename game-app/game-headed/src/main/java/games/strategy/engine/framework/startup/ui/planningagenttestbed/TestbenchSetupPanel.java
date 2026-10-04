@@ -75,6 +75,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private final JSpinner aiCombatStepPauseMs =
       new JSpinner(new SpinnerNumberModel(DEFAULT_AI_COMBAT_STEP_PAUSE_MS, 0, MAX_AI_PAUSE_MS, 10));
   private final JCheckBox showObservationWindow = new JCheckBox("Visualize observations", true);
+  private final JCheckBox clearAgentOutputs =
+      new JCheckBox("Clear previous agent outputs (metrics, logs, …) when the run starts", false);
   private final JPanel factionRows = new JPanel(new GridBagLayout());
   private final Map<String, JComboBox<String>> assignments = new LinkedHashMap<>();
   private final Map<String, JCheckBox> observationAssignments = new LinkedHashMap<>();
@@ -178,6 +180,23 @@ public final class TestbenchSetupPanel extends SetupPanel {
             GridBagConstraints.WEST,
             GridBagConstraints.HORIZONTAL,
             new Insets(3, 4, 4, 4),
+            0,
+            0));
+    clearAgentOutputs.setToolTipText(
+        "Empties the outputDirectories listed in each assigned agent's agent.json, once, before"
+            + " the first game of the run.");
+    experiment.add(
+        clearAgentOutputs,
+        new GridBagConstraints(
+            0,
+            row++,
+            4,
+            1,
+            1,
+            0,
+            GridBagConstraints.WEST,
+            GridBagConstraints.HORIZONTAL,
+            new Insets(0, 4, 4, 4),
             0,
             0));
     content.add(
@@ -364,6 +383,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
           clampPause(config.aiCombatStepPauseMs, DEFAULT_AI_COMBAT_STEP_PAUSE_MS));
       showObservationWindow.setSelected(
           config.showObservations == null || config.showObservations);
+      clearAgentOutputs.setSelected(Boolean.TRUE.equals(config.clearAgentOutputs));
       activeMapReference = config.map;
       mapStatus.setText("Resolving map…");
       ThreadRunner.runInNewThread(
@@ -474,7 +494,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
                               (first, second) -> first,
                               LinkedHashMap::new)),
                   showObservationWindow.isSelected(),
-                  selectedObservationAssignments())));
+                  selectedObservationAssignments(),
+                  clearAgentOutputs.isSelected())));
     } catch (IOException e) {
       showError("Could not save testbench configuration: " + e.getMessage());
     }
@@ -532,6 +553,9 @@ public final class TestbenchSetupPanel extends SetupPanel {
   public Optional<ILauncher> getLauncher() {
     if (!experimentRunning) {
       refreshSimulationLogs();
+      if (clearAgentOutputs.isSelected()) {
+        clearAssignedAgentOutputs();
+      }
       experimentRunning = true;
       plannedGames = (int) gamesCount.getValue();
       completedGames = 0;
@@ -704,6 +728,31 @@ public final class TestbenchSetupPanel extends SetupPanel {
     }
   }
 
+  /** Empties the declared output folders of every external agent assigned in this run. */
+  private void clearAssignedAgentOutputs() {
+    selectedAssignments().values().stream()
+        .distinct()
+        .map(TestbenchAgentRegistry::definitionForSelection)
+        .flatMap(Optional::stream)
+        .flatMap(definition -> definition.resolvedOutputDirectories().stream())
+        .forEach(TestbenchSetupPanel::emptyDirectory);
+  }
+
+  private static void emptyDirectory(final Path directory) {
+    if (!Files.isDirectory(directory)) return;
+    try (var paths = Files.walk(directory)) {
+      for (final Path path :
+          paths
+              .filter(path -> !path.equals(directory))
+              .sorted(java.util.Comparator.reverseOrder())
+              .toList()) {
+        Files.deleteIfExists(path);
+      }
+    } catch (final IOException e) {
+      System.err.println("Could not clear agent outputs in " + directory + ": " + e.getMessage());
+    }
+  }
+
   private record TestbenchConfiguration(
       MapReference map,
       String mapXml,
@@ -713,7 +762,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
       Integer aiCombatStepPauseMs,
       Map<String, String> agents,
       Boolean showObservations,
-      Map<String, Boolean> observationPlayers) {}
+      Map<String, Boolean> observationPlayers,
+      Boolean clearAgentOutputs) {}
 
   private record MapReference(
       String name, String gameName, List<String> aliases, String downloadUrl) {}

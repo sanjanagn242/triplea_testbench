@@ -1,0 +1,22 @@
+{
+  "map": {
+    "name": "Minimap",
+    "aliases": [
+      "minimap"
+    ],
+    "downloadUrl": "https://github.com/triplea-maps/minimap/archive/refs/heads/master.zip"
+  },
+  "games": 100,
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "agents": {
+    "Russians": "Hard (AI)",
+    "Italians": "cpp-mcts"
+  },
+  "showObservations": true,
+  "observationPlayers": {
+    "Russians": true,
+    "Italians": true
+  }
+}

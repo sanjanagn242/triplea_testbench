@@ -1,0 +1,9 @@
+{
+  "id": "tripleMind-mcts",
+  "name": "TripleMind MCTS",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind large-action-space optimized MCTS agent for the TripleA game.",
+  "outputDirectories": ["metrics", "logs", "trees"]
+}

@@ -1,3 +1,8 @@
 {
-  "agents": ["simple-infantry"]
+  "agents": [
+    "simple-infantry", 
+    "python-mcts", 
+    "cpp-mcts", 
+    "tripleMind-mcts"
+  ]
 }

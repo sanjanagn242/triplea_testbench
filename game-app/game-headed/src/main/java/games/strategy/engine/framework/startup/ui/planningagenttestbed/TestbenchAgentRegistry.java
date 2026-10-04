@@ -65,6 +65,13 @@ public final class TestbenchAgentRegistry {
         .orElse(id);
   }
 
+  /** External agent definition for a visible label; empty for built-in TripleA player types. */
+  static Optional<ExternalAgentDefinition> definitionForSelection(final String selection) {
+    return discoverAgents().stream()
+        .filter(definition -> definition.name().equals(selection))
+        .findFirst();
+  }
+
   private static List<ExternalAgentDefinition> discoverAgents() {
     final Path agentRoot = findRepositoryRoot().resolve(AGENT_DIRECTORY);
     if (!Files.isDirectory(agentRoot)) return List.of();
@@ -98,6 +105,7 @@ public final class TestbenchAgentRegistry {
               json.entrypoint,
               List.copyOf(json.command),
               json.description,
+              json.outputDirectories == null ? List.of() : List.copyOf(json.outputDirectories),
               manifest.toAbsolutePath().normalize()));
     } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("Invalid external agent manifest: " + manifest, e);
@@ -124,5 +132,6 @@ public final class TestbenchAgentRegistry {
     String entrypoint;
     List<String> command;
     String description;
+    List<String> outputDirectories;
   }
 }

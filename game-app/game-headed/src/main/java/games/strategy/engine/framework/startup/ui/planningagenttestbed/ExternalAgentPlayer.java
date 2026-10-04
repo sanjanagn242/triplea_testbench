@@ -27,13 +27,17 @@ import java.io.OutputStreamWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.collections.IntegerMap;
 
-/** Generic process adapter: exchanges protocol messages and applies returned actions via delegates. */
+/**
+ * Generic process adapter: exchanges protocol messages and applies returned actions via delegates.
+ */
 @Slf4j
 public final class ExternalAgentPlayer extends WeakAi {
   private static final Gson GSON = new GsonBuilder().serializeNulls().create();
@@ -46,6 +50,10 @@ public final class ExternalAgentPlayer extends WeakAi {
   private BufferedReader agentOutput;
   private BufferedWriter agentInput;
   private long nextRequestId;
+  // Territories the agent explicitly targeted with a raid or a normal attack this move phase;
+  // consulted when the engine asks whether bombers should bomb.
+  private final Set<Territory> declaredRaids = new HashSet<>();
+  private final Set<Territory> declaredAttacks = new HashSet<>();
 
   public ExternalAgentPlayer(
       final String playerName,
@@ -131,14 +139,31 @@ public final class ExternalAgentPlayer extends WeakAi {
       return;
     }
     final Map<String, Territory> territories = new HashMap<>();
-    data.getMap().getTerritories().forEach(territory -> territories.put(territory.getName(), territory));
+    data.getMap()
+        .getTerritories()
+        .forEach(territory -> territories.put(territory.getName(), territory));
     final Map<String, Unit> units = new HashMap<>();
     data.getUnits().getUnits().forEach(unit -> units.put(unit.getId().toString(), unit));
+    declaredRaids.clear();
+    declaredAttacks.clear();
     for (final MoveOrder order : decision.moves()) {
-      final Territory from = territories.get(order.from());
-      final Territory to = territories.get(order.to());
-      if (from == null || to == null || order.unitIds() == null || order.unitIds().isEmpty()) {
+      // An optional full route (start..end) lets agents submit multi-step moves such as blitzes.
+      final List<Territory> path = new ArrayList<>();
+      if (order.route() != null && order.route().size() >= 2) {
+        order.route().forEach(name -> path.add(territories.get(name)));
+      } else {
+        path.add(territories.get(order.from()));
+        path.add(territories.get(order.to()));
+      }
+      if (path.contains(null) || order.unitIds() == null || order.unitIds().isEmpty()) {
         continue;
+      }
+      final Territory from = path.get(0);
+      final Territory to = path.get(path.size() - 1);
+      if ("RAID".equals(order.intent())) {
+        declaredRaids.add(to);
+      } else if ("NORMAL".equals(order.intent())) {
+        declaredAttacks.add(to);
       }
       final List<Unit> moving = new ArrayList<>();
       for (final String id : order.unitIds()) {
@@ -149,8 +174,8 @@ public final class ExternalAgentPlayer extends WeakAi {
       }
       if (!moving.isEmpty()) {
         final Optional<String> error =
-            moveDelegate.performMove(new MoveDescription(moving, new Route(from, to)));
-        error.ifPresent(message -> log.debug("{} move rejected: {}", player.getName(), message));
+            moveDelegate.performMove(new MoveDescription(moving, new Route(path)));
+        error.ifPresent(message -> log.warn("{} move rejected: {}", player.getName(), message));
       }
     }
   }
@@ -161,8 +186,39 @@ public final class ExternalAgentPlayer extends WeakAi {
       final IAbstractPlaceDelegate placeDelegate,
       final GameState data,
       final GamePlayer player) {
-    // Placement is temporarily delegated to TripleA's built-in AI without an external request.
-    super.place(placeForBid, placeDelegate, data, player);
+    if (placeForBid) {
+      super.place(placeForBid, placeDelegate, data, player);
+      return;
+    }
+    final Decision decision = askAgent("place", getGameData(), player, false);
+    if (decision == null || decision.placements() == null) {
+      // Agents that do not return placements[] keep the built-in WeakAi placement.
+      super.place(placeForBid, placeDelegate, data, player);
+      return;
+    }
+    final Map<String, Unit> held = new HashMap<>();
+    player.getUnits().forEach(unit -> held.put(unit.getId().toString(), unit));
+    for (final PlacementOrder order : decision.placements()) {
+      final Territory at = getGameData().getMap().getTerritoryOrNull(order.territory());
+      if (at == null || order.unitIds() == null) continue;
+      final List<Unit> units = new ArrayList<>();
+      for (final String id : order.unitIds()) {
+        final Unit unit = held.remove(id);
+        if (unit != null) units.add(unit);
+      }
+      if (units.isEmpty()) continue;
+      placeDelegate
+          // The default two-argument overload is not callable through the remote proxy.
+          .placeUnits(units, at, IAbstractPlaceDelegate.BidMode.NOT_BID)
+          .ifPresent(error -> log.warn("{} placement rejected: {}", player.getName(), error));
+    }
+  }
+
+  @Override
+  public boolean shouldBomberBomb(final Territory territory) {
+    if (declaredRaids.contains(territory)) return true;
+    if (declaredAttacks.contains(territory)) return false;
+    return super.shouldBomberBomb(territory);
   }
 
   @Override
@@ -182,8 +238,7 @@ public final class ExternalAgentPlayer extends WeakAi {
       }
       listing.forEachBattle(
           (type, territory) -> {
-            final String error =
-                battleDelegate.fightBattle(territory, type.isBombingRun(), type);
+            final String error = battleDelegate.fightBattle(territory, type.isBombingRun(), type);
             if (error != null) {
               log.debug("{} battle request rejected: {}", getGamePlayer().getName(), error);
             }
@@ -216,7 +271,9 @@ public final class ExternalAgentPlayer extends WeakAi {
       final String response = exchange(request);
       if (response == null || response.isBlank()) {
         log.error(
-            "External testbench agent returned no decision during {} for {}", phase, player.getName());
+            "External testbench agent returned no decision during {} for {}",
+            phase,
+            player.getName());
         return null;
       }
       final com.google.gson.JsonObject responseObject =
@@ -350,9 +407,13 @@ public final class ExternalAgentPlayer extends WeakAi {
       String unitType,
       List<MoveOrder> moves,
       String placeAt,
+      List<PlacementOrder> placements,
       boolean fightAll) {}
+
+  private record PlacementOrder(String territory, List<String> unitIds) {}
 
   private record PurchaseOrder(String rule, int count) {}
 
-  private record MoveOrder(String from, String to, List<String> unitIds) {}
+  private record MoveOrder(
+      String from, String to, List<String> unitIds, List<String> route, String intent) {}
 }

@@ -63,9 +63,8 @@ representation for the rest of the game.
 
 At the faction's decision points, the engine sends `type: "turn_request"` with `phase`, `state`,
 `nonCombat`, and the same `playerName`, `gameNumber`, and protocol metadata. Requests are sent only
-for that faction's turn. Current phases include `purchase`, `tech`, `combatMove`, `battle`, and
-`nonCombatMove`. There is no placement request at this time: the engine uses its built-in `WeakAi`
-placement behavior.
+for that faction's turn. Current phases include `purchase`, `tech`, `combatMove`, `battle`,
+`nonCombatMove`, and `place`.
 
 The current `state` object has `observationMode`, `observationPlayer`, `gameName`, `mapName`,
 `round`, `step`, `activePlayer`, `diceSides`, `gameProperties`, `players`, and `territories`.
@@ -86,6 +85,33 @@ Current actions are:
 
 The earlier `purchaseCount`/`rule`/`unitType` shape remains accepted for compatibility, but new
 agents should use `purchases[]` so the action describes production rules generically.
+
+Optional fields, ignored by older agents:
+
+| Field | Where | Adapter behavior |
+| --- | --- | --- |
+| `route` | each entry of `moves[]` | Full path from start to end (for example `["A", "B", "C"]`), so one move can cross several territories, e.g. an armour blitz. Without it the adapter uses the single step `from` → `to`. |
+| `intent` | each entry of `moves[]` | `"RAID"` makes the adapter answer "bomb" when the engine asks whether bombers moving to that territory should bomb; `"NORMAL"` answers "attack". If omitted, the built-in AI decides. |
+| `placements` | response to `place` | `[{"territory": "X", "unitIds": ["..."]}]`, applied in order. Units left unplaced are destroyed at the end of the step, as in the engine. |
+
+The engine now also sends a `place` turn request. If the response has no `placements` field
+(for example the older `placeAt` shape), the adapter keeps the built-in `WeakAi` placement.
+Rejected moves and placements are logged as warnings by the engine.
+
+## Forward model
+
+The testbench provides a forward-model library in `planning-agent-testbed/forward-model`, so agents
+never implement game rules themselves. It is independent of the engine and covers the V1 land/air
+rules. It provides `validate` and `transition` on hypothetical states, explicit seeded or replayed
+dice, candidate generation, a baseline policy, and an observation-to-state bridge.
+
+* Python agents: `import triplea_fm` (put `forward-model/python` on `PYTHONPATH` or `pip install -e` it).
+* C++ agents: `#include <triplea_fm/forward_model.hpp>` and build with
+  `forward-model/cpp/triplea-fm-config --cflags/--libs`.
+
+Both bindings reach the same kernel. See [the library README](../forward-model/README.md).
+`agents/python-mcts` and `agents/cpp-mcts` are complete examples. `tools/arena.py` plays full games
+offline with the library standing in for the engine.
 
 If the policy encounters an error, it may return `{"error": "description"}`. The engine records
 that as an agent communication/protocol error. An empty object is a valid no-action response.
@@ -110,7 +136,9 @@ invalid proposal to be rejected or logged by the engine.
 
 1. Add the agent code and runtime dependencies under `agents/<agent-id>/`.
 2. Add `agents/<agent-id>/agent.json` with its stable ID, display name, language, entry point, and
-   launch command. The registry discovers manifests at startup and creates a selectable entry that
+   launch command. Optionally list `outputDirectories` (paths relative to the agent folder, which is
+   also the process working directory) so a run started with `clearAgentOutputs` empties them first;
+   paths outside the agent folder are ignored. The registry discovers manifests at startup and creates a selectable entry that
    uses the shared `ExternalAgentPlayer`; do not add a Java player class or player label.
 3. Add the ID to `agents/agents.json` for the human-readable inventory.
 4. Assign the stable ID to faction names in a game's JSON profile under

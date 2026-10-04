@@ -100,10 +100,16 @@ between AI combat steps. Set both to `0` for faster runs, or increase them to wa
 are applied before the game starts, so the values stay fixed throughout that game. Omitting either
 field uses the engine default (300 ms for moves, 1000 ms for combat steps).
 
+Set `clearAgentOutputs` to `true` (or tick **Clear previous agent outputs** in the run setup window)
+to empty each assigned agent's declared `outputDirectories` once, before the first game of a run, so
+metrics and logs from earlier runs do not mix with the new one. It defaults to `false`.
+
 ## Planning agents
 
 External agents live in `planning-agent-testbed/agents/<agent-id>/`. Each folder's `agent.json`
-defines its stable ID, display name, language, entrypoint, and launch command. The registry discovers
+defines its stable ID, display name, language, entrypoint, and launch command, plus optional
+`outputDirectories`: folders inside the agent folder that hold its own run outputs (for example
+`["metrics", "logs"]`), which `clearAgentOutputs` empties. The registry discovers
 these files and routes every choice through the single generic `ExternalAgentPlayer`; adding an
 agent does not require an algorithm-specific Java class or engine label. The first agent,
 **Simple Infantry (C++)**, is available in the faction assignment dropdown. The engine starts one

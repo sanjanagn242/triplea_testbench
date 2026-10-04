@@ -33,6 +33,8 @@ dependencies {
     implementation(project(":swing-lib"))
     implementation(project(":websocket-client"))
     testImplementation(project(":test-common"))
+    // Headless ServerGame harness for the opt-in external agent live-engine test.
+    testImplementation(project(":game-headless"))
 }
 
 tasks.named<Jar>("jar") {

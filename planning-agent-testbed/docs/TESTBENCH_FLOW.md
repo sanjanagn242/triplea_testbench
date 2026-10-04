@@ -43,7 +43,9 @@ the experiment UI and external-agent bridge are additions in the main repository
    current JSON observation. The external process returns one JSON action line. The generic Java
    adapter translates purchase and movement responses into TripleA delegate calls. The delegates validate
    the submitted actions. The battle response asks TripleA to fight available battles. The place
-   phase currently makes no agent request and falls back to TripleA's built-in `WeakAi` placement.
+   phase sends a `place` request; a response with `placements[]` is applied through the place
+   delegate, and any other response falls back to TripleA's built-in `WeakAi` placement. Moves may
+   carry a full `route` and an `intent` (`RAID`/`NORMAL`) that answers the engine's bombing query.
 6. The observation snapshot includes game/map/round/step, active player, game properties, player
    resources and technologies, territory ownership/connections/production/objectives, and unit
    ownership, damage, movement, combat stats, and capabilities. It is a fixed v1 DTO rather than an

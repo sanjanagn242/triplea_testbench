@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Compiler/linker flags for C++ code that uses the forward-model library (like pkg-config).
+#   g++ -std=c++20 $(triplea-fm-config --cflags) my_agent.cpp -o my_agent $(triplea-fm-config --libs)
+set -euo pipefail
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+python_config="${TRIPLEA_TESTBENCH_PYTHON_CONFIG:-python3-config}"
+case "${1:-}" in
+  --cflags)
+    echo "-I$here/include $("$python_config" --includes) -DTRIPLEA_FM_PYTHON_DIR=\"$(cd "$here/../python" && pwd)\"" ;;
+  --libs)
+    "$python_config" --embed --ldflags ;;
+  --python-dir)
+    (cd "$here/../python" && pwd) ;;
+  *)
+    echo "usage: $0 --cflags | --libs | --python-dir" >&2; exit 2 ;;
+esac

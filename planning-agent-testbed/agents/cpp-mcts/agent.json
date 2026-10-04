@@ -1,0 +1,8 @@
+{
+  "id": "cpp-mcts",
+  "name": "C++ MCTS",
+  "language": "C++20 (embeds Python for the forward model)",
+  "entrypoint": "src/main.cpp",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Open-loop MCTS written in C++, simulating with the shared triplea_fm forward model through an embedded Python interpreter."
+}

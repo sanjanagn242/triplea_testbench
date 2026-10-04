@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triplea-fm"
+version = "0.1.0"
+description = "Planning-agent testbench forward model for TripleA (profile forward-model-v1, land/air)"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["triplea_fm"]
