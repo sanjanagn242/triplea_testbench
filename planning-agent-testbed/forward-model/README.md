@@ -13,7 +13,7 @@ through a binding, so all agents simulate identical rules, dice and validation.
                         ┌────────────────────── forward-model/ (testbench library) ──────────────────────┐
 Python agent ──import──▶│ python/triplea_fm   kernel: definition, state, rules, kernel, rng, actions      │
                         │                     agent-side: toolkit (candidates), baselines (opponent/eval), │
-                        │                                 testbench (observation ↔ state)                  │
+                        │                                 actionspace (all legal), battlesim, testbench    │
 C++ agent ──#include──▶ │ cpp/include/triplea_fm/forward_model.hpp ──CPython──▶ triplea_fm.flat (plain-data│
                         │                                                         binding API)            │
 future Java/RPC ──────▶ │ (bind to triplea_fm.flat the same way)                                          │
@@ -64,7 +64,8 @@ g++ -std=c++20 $(forward-model/cpp/triplea-fm-config --cflags) agent.cpp -o agen
 `testbench.LiveBridge` (C++: `parse_request` + `state_from_request`), search with `clone` /
 `validate` / `apply`, and encode the chosen actions with the bridge (C++: `encode_response`).
 `agents/python-mcts` and `agents/cpp-mcts` are complete examples. Each contains only its search
-and heuristics.
+and heuristics. `agents/hard-ai-python` is a rule-based example: a port of the engine's Hard AI that
+uses `battlesim` for its battle odds and the kernel for every other simulation.
 
 ## Tests
 

@@ -10,6 +10,7 @@ Environment:
   TRIPLEA_MCTS_SECONDS   base search time per decision (default 2.0)
   TRIPLEA_MCTS_ROLLOUT   rollout horizon in rounds (default 2)
   TRIPLEA_MCTS_SEED      search seed (default 0)
+  TRIPLEA_AGENT_LOG      1 enables logging, anything else disables it (set in run-agent.sh)
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from triplea_fm.baselines import Precomp  # noqa: E402
 PROTOCOL_VERSION = 1
 PHASE_TIME_SHARE = {"purchase": 0.6, "combatMove": 1.5, "nonCombatMove": 0.8, "place": 0.3}
 LOG_DIR = HERE.parent.parent / "logs"
+LOGGING = os.environ.get("TRIPLEA_AGENT_LOG", "0") == "1"  # set in run-agent.sh
 
 
 class Agent:
@@ -47,6 +49,8 @@ class Agent:
         self.log_path = None
 
     def log(self, message: str):
+        if not LOGGING:
+            return
         line = f"{time.strftime('%H:%M:%S')} {message}"
         print(line, file=sys.stderr, flush=True)
         if self.log_path:
@@ -63,9 +67,10 @@ class Agent:
 
     def game_start(self, request: dict) -> dict:
         self.player = request["playerName"]
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        self.log_path = LOG_DIR / f"agent-{self.player}-game-{request.get('gameNumber', 1)}.txt"
-        self.log_path.write_text(f"{request.get('gameNumber', 1)}\n", encoding="utf-8")
+        if LOGGING:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            self.log_path = LOG_DIR / f"agent-{self.player}-game-{request.get('gameNumber', 1)}.txt"
+            self.log_path.write_text(f"{request.get('gameNumber', 1)}\n", encoding="utf-8")
         definition, report = fm.load_definition(request["gameXml"], strict=False)
         if not report.supported:
             for f in report.features:

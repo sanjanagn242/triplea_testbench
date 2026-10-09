@@ -1,0 +1,8 @@
+{
+  "id": "hard-ai-python",
+  "name": "Hard AI (Python)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Port of the engine's Hard AI (ProAi) for the land/air V1 profile; every simulation runs on the triplea_fm forward model."
+}

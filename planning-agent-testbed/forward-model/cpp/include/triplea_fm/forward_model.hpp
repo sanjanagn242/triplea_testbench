@@ -273,6 +273,15 @@ class ForwardModel {
     Py_DECREF(r);
     return out;
   }
+  // Every legal action of the state's decision (exhaustive; see triplea_fm.actionspace). With
+  // distinct_units=false interchangeable units are collapsed; limit < 0 means no limit.
+  std::vector<Action> legal_actions(int state, bool distinct_units = false, int limit = -1) {
+    PyObject* r = call("legal_actions", {num(state), num(distinct_units ? 1 : 0), num(limit)});
+    std::vector<Action> out;
+    for (Py_ssize_t i = 0; i < PyList_Size(r); ++i) out.push_back(to_ints(PyList_GetItem(r, i)));
+    Py_DECREF(r);
+    return out;
+  }
   bool validate(int state, const Action& a) { return as_int(call("validate", {num(state), ints(a)})) == 1; }
   Status apply(int state, const Action& a, int rng) {
     return static_cast<Status>(as_int(call("apply", {num(state), ints(a), num(rng)})));

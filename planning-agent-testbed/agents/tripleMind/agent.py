@@ -15,6 +15,7 @@ Environment:
   TRIPLEA_MCTS_EXP_CONST   UCB1 exploration constant (default 1.414)
   TRIPLEA_MCTS_SEED        search seed (default 0)
   TRIPLEMIND_VIEW          1 (default) shows the live map window, 0 hides it
+  TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
 """
 
 # from __future__ import annotations
@@ -36,11 +37,13 @@ from triplea_fm.testbench import PHASE_KINDS, LiveBridge  # noqa: E402
 from mcts import MCTS, MCTSGameState  # noqa: E402
 
 import map_graph  # noqa: E402
-import action_generators
+import generators  # noqa: E402
+from generators import ag as action_generators  # Cython build when available  # noqa: E402
 
 PROTOCOL_VERSION = 1
 PHASE_TIME_SHARE = {"combatMove": 1.0}
 LOG_DIR = HERE.parent.parent / "logs"
+LOGGING = os.environ.get("TRIPLEA_AGENT_LOG", "0") == "1"  # set in run-agent.sh
 
 
 class TripleMindAgent:
@@ -60,6 +63,8 @@ class TripleMindAgent:
         self.search = None
     
     def log(self, message: str):
+        if not LOGGING:
+            return
         line = f"{message}"
         print(line, file=sys.stderr, flush=True)
         if self.log_path:
@@ -77,9 +82,10 @@ class TripleMindAgent:
 
     def game_start(self, request):
         self.whoAmI = request["playerName"]
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        self.log_path = LOG_DIR / f"agent-{self.whoAmI}-game-{request.get('gameNumber', 1)}.txt"
-        self.log_path.write_text(f"Game {request.get('gameNumber', 1)}\n", encoding="utf-8")
+        if LOGGING:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            self.log_path = LOG_DIR / f"agent-{self.whoAmI}-game-{request.get('gameNumber', 1)}.txt"
+            self.log_path.write_text(f"Game {request.get('gameNumber', 1)}\n", encoding="utf-8")
         # self.log(f"request: {json.dumps(request)}")
         self.build_map(request)
         definition, report = fm.load_definition(request["gameXml"], strict=False)
@@ -102,6 +108,7 @@ class TripleMindAgent:
         self.view = (map_graph.MapView(self.map, self.whoAmI)
                      if os.environ.get("TRIPLEMIND_VIEW", "1") == "1" else None)
         self.log(f"map graph: {self.map}")
+        self.log(f"action generators: {generators.IMPLEMENTATION}")
 
     def get_move(self, request):
         phase = request.get("phase")
@@ -160,9 +167,9 @@ class TripleMindAgent:
         return out
 
 def main():
-    agent = TripleMindAgent(float(os.environ.get("TRIPLEA_MCTS_SECONDS", "2.0")),
+    agent = TripleMindAgent(float(os.environ.get("TRIPLEA_MCTS_SECONDS", "1.0")),
                   int(os.environ.get("TRIPLEA_MCTS_ITERS", "100000")),
-                  int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "10")),
+                  int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "2")),
                   float(os.environ.get("TRIPLEA_MCTS_EXP_CONST", "1.414")),
                   int(os.environ.get("TRIPLEA_MCTS_SEED", "0")))
     for line in sys.stdin:

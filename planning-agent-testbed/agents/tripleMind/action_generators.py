@@ -309,10 +309,10 @@ def _is_static(m, u):
     return bool(ut and (ut.is_infrastructure or ut.is_aa))
 
 
-def _reach_routes(game, player, start, move_range, domain):
+def _reach_routes(game, player, start, move_range, domain, blocked=frozenset()):
     """can_reach_cache_helper as a BFS that also keeps one route per reachable territory: a unit
-    may pass only through territories owned by `player`; the destination itself may be anything.
-    Returns {territory: route of names}."""
+    may pass only through territories owned by `player` and not in `blocked`; the destination
+    itself may be anything. Returns {territory: route of names}."""
     m = game.map
     if move_range <= 0:
         return {}
@@ -328,8 +328,8 @@ def _reach_routes(game, player, start, move_range, domain):
                 continue
             parent[neighbor] = current
             reached.append(neighbor)
-            if game.territories[neighbor].owner != player:
-                continue  # Can't pass through enemy territory
+            if game.territories[neighbor].owner != player or neighbor in blocked:
+                continue  # Can't pass through enemy territory (or a blocked one)
             if dist + 1 < move_range:
                 queue.append((neighbor, dist + 1))
     routes = {}
@@ -437,18 +437,26 @@ def enemy_territories_by_priority(game, player):
     return reachable
 
 
+def combat_blocked(game):
+    """Territories conquered this turn without blitzing: in combat movement, land units cannot
+    move through them (Matches.territoryIsBlitzable, rules.is_blitzable)."""
+    return game.conquered - game.blitzed
+
+
 def get_reachable_units(game, target, player):
     """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target."""
     m = game.map
     reachable = []
     routes = {}
+    blocked = combat_blocked(game)
     for terr in game.owned_by(player):
         for u in terr.units:
             if u.owner != player or _is_static(m, u) or u.moved or u.domain == "sea":
                 continue
             key = (terr.name, u.range, u.domain)
             if key not in routes:
-                routes[key] = _reach_routes(game, player, terr.name, u.range, u.domain)
+                routes[key] = _reach_routes(game, player, terr.name, u.range, u.domain,
+                                            blocked if u.domain == "land" else frozenset())
             if target in routes[key]:
                 reachable.append((u, terr.name, routes[key][target]))
     return reachable

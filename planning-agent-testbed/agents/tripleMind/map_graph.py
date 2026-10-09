@@ -305,6 +305,9 @@ class GameState:
         self.round = state.get("round", 0)
         self.step = state.get("step", "")
         self.active_player = state.get("activePlayer")
+        # Turn history the observation does not carry (empty at the start of a turn).
+        self.conquered = set()  # territories conquered this turn
+        self.blitzed = set()  # ...of which conquered by blitzing through
 
         self.territories = {}
         for t in state["territories"]:
@@ -358,6 +361,8 @@ class GameState:
                      defense=ut.defense, hits=u.hits, uid=u.id,
                      properties={"air": ut.is_air, "sea": ut.domain == 2,
                                  "infrastructure": ut.is_infrastructure}))
+        g.conquered = {d.territory_names[t] for t in sim.conquered}
+        g.blitzed = {d.territory_names[t] for t in sim.blitzed}
         g.current_player = g.players.get(whoAmI)
         return g
 

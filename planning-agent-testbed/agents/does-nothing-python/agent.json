@@ -1,0 +1,8 @@
+{
+  "id": "does-nothing-python",
+  "name": "Python Does Nothing",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Answers every turn request with an empty action."
+}

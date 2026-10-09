@@ -19,6 +19,8 @@ Simulation configuration files store external assignments by stable manifest ID:
 }
 ```
 
+To start a new Python agent, copy `template-python/` and follow its README.
+
 `agents.json` is a human-readable inventory of agent IDs; the per-agent `agent.json` is the
 authoritative launch definition. See [the agent developer guide](../docs/AGENT_DEVELOPER_GUIDE.md)
 for the message protocol, action format, and runtime requirements.

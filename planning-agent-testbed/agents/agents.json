@@ -1,8 +1,10 @@
 {
   "agents": [
-    "simple-infantry", 
-    "python-mcts", 
-    "cpp-mcts", 
-    "tripleMind-mcts"
+    "simple-infantry",
+    "python-mcts",
+    "cpp-mcts",
+    "tripleMind-mcts",
+    "does-nothing-python",
+    "hard-ai-python"
   ]
 }

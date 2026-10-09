@@ -21,7 +21,8 @@ static_info() and view() document the flat integer layouts.
 Functions:
   definitions  load_xml(xml) / start_game() (testbench game_start), messages(), static_info()
   states       initial_state(), state_from_request(), clone(h), free(h), view(h), snapshot_json(h)
-  dynamics     rng_new(seed), rng_free(r), validate(h, a), apply(h, a, r), candidates(h)
+  dynamics     rng_new(seed), rng_free(r), validate(h, a), apply(h, a, r), candidates(h),
+               legal_actions(h, distinct_units, limit)
   protocol     parse_request(line), encode_response(phase, actions)
 """
 
@@ -29,7 +30,7 @@ from __future__ import annotations
 
 import json
 
-from . import kernel, rules, toolkit
+from . import actionspace, kernel, rules, toolkit
 from .actions import (CONTINUE, NORMAL, RAID, RETREAT, EndPhaseAction, MoveAction, PlaceAction,
                       PurchaseAction, RetreatAction, SelectBattleAction, SelectCasualtiesAction)
 from .definition import BATTLE, COMBAT_MOVE, NONCOMBAT_MOVE, PLACE, PURCHASE, load_definition
@@ -197,6 +198,17 @@ def encode(a):
 def candidates(h: int):
     s = _states[h]
     return [encode(a) for a in toolkit.candidates(_d, s)] if s.decision is not None else []
+
+
+def legal_actions(h: int, distinct_units: int = 0, limit: int = -1):
+    """Every legal action of the state's decision (actionspace.legal_actions), at most `limit`
+    of them if limit >= 0. States built with state_from_request() are the agent's observation."""
+    out = []
+    for a in actionspace.legal_actions(_d, _states[h], bool(distinct_units)):
+        if 0 <= limit <= len(out):
+            break
+        out.append(encode(a))
+    return out
 
 
 def validate(h: int, action) -> int:

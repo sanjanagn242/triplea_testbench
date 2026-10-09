@@ -1,28 +1,30 @@
 package games.strategy.engine.framework.startup.ui.planningagenttestbed;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.events.GameDataChangeListener;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.geom.Point2D;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.annotation.Nullable;
+import javax.swing.BorderFactory;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 
-/** Shows selected players' live JSON observations in tabs in one read-only window. */
+/**
+ * Shows selected players' live observations in tabs in one read-only window. Each tab draws the
+ * map from exactly what that player's observation contains, and names the agent playing it.
+ */
 public final class StateObservationWindow {
-  private static final Gson GSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
-
   private final StateObservationProvider provider = new FullStateObservationProvider();
   private final JFrame frame = new JFrame("State Observations");
   private final JTabbedPane playerTabs = new JTabbedPane();
@@ -40,10 +42,18 @@ public final class StateObservationWindow {
     frame.setLocationByPlatform(true);
   }
 
+  /**
+   * Starts showing observations for the enabled players of {@code data}.
+   *
+   * @param agentNames faction name -> label of the agent assigned to it (shown in each tab)
+   * @param gameXml the map's game XML, used only to find the map's centers.txt for node positions
+   */
   public void observe(
       final GameData data,
       final boolean enabled,
-      final Map<String, Boolean> enabledPlayers) {
+      final Map<String, Boolean> enabledPlayers,
+      final Map<String, String> agentNames,
+      @Nullable final Path gameXml) {
     detachListener();
     gameData = data;
     revision.set(0);
@@ -61,12 +71,14 @@ public final class StateObservationWindow {
     }
     playerTabs.removeAll();
     playerPanes.clear();
+    final Map<String, Point2D.Double> centers = ObservationMapPanel.loadCenters(gameXml);
     players.forEach(
         (name, player) -> {
-          final PlayerPane pane = new PlayerPane();
+          final String agent = agentNames.getOrDefault(name, "unassigned");
+          final PlayerPane pane = new PlayerPane(name, agent, centers);
           pane.setObservedPlayer(data, player);
           playerPanes.put(name, pane);
-          playerTabs.addTab(name, pane.panel);
+          playerTabs.addTab(name + " — " + agent, pane.panel);
         });
     if (playerPanes.isEmpty()) {
       hideWindow();
@@ -106,18 +118,22 @@ public final class StateObservationWindow {
 
   private final class PlayerPane {
     private final JPanel panel = new JPanel();
-    private final JTextArea json = new JTextArea();
+    private final ObservationMapPanel map;
     private final JLabel status = new JLabel("Preparing initial state snapshot…");
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private GameData observedData;
     private GamePlayer player;
 
-    private PlayerPane() {
-      json.setEditable(false);
-      json.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 13));
-      json.setText("Preparing initial state snapshot…");
+    private PlayerPane(
+        final String faction, final String agent, final Map<String, Point2D.Double> centers) {
+      map = new ObservationMapPanel(centers);
+      final JLabel header = new JLabel(faction + " · agent: " + agent);
+      header.setFont(header.getFont().deriveFont(Font.BOLD, 15f));
+      header.setBorder(BorderFactory.createEmptyBorder(6, 8, 0, 8));
+      status.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
       panel.setLayout(new BorderLayout(6, 6));
-      panel.add(new JScrollPane(json), BorderLayout.CENTER);
+      panel.add(header, BorderLayout.NORTH);
+      panel.add(map, BorderLayout.CENTER);
       panel.add(status, BorderLayout.SOUTH);
     }
 
@@ -145,21 +161,19 @@ public final class StateObservationWindow {
                 return;
               }
               final StateObservation observation = provider.observe(currentData, currentPlayer);
-              json.setText(GSON.toJson(observation));
-              json.setCaretPosition(0);
+              map.setObservation(observation);
               status.setText(
                   "Revision "
                       + revision.get()
                       + " · FULL observation · refreshed on each engine state change");
             } catch (final RuntimeException exception) {
-              json.setText(
+              status.setText(
                   "Unable to create state snapshot for "
                       + (player == null ? "player" : player.getName())
-                      + ":\n"
+                      + ": "
                       + exception.getClass().getSimpleName()
                       + ": "
                       + exception.getMessage());
-              status.setText("State snapshot error");
             } finally {
               refreshQueued.set(false);
               if (observedData != null && revision.get() != renderedRevision) {

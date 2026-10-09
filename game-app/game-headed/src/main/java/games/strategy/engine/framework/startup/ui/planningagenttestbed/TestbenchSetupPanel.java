@@ -577,6 +577,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
     final List<PlayerCountrySelection> players = new ArrayList<>();
     final boolean showAllObservations = showObservationWindow.isSelected();
     final Map<String, Boolean> observationsByPlayer = selectedObservationAssignments();
+    final Map<String, String> agentLabels = selectedAssignments();
+    final Path observedMapXml = Path.of(mapPath.getText());
     final int simulationNumber = completedGames + 1;
     final List<PlayerTypes.Type> selectedGamePlayerTypes =
         TestbenchAgentRegistry.getPlayerTypes(Path.of(mapPath.getText()), simulationNumber);
@@ -621,7 +623,11 @@ public final class TestbenchSetupPanel extends SetupPanel {
                 SwingUtilities.invokeLater(
                     () ->
                         stateObservationWindow.observe(
-                            game.getData(), showAllObservations, observationsByPlayer));
+                            game.getData(),
+                            showAllObservations,
+                            observationsByPlayer,
+                            agentLabels,
+                            observedMapXml));
               }
 
               @Override

@@ -53,7 +53,18 @@ Randomness is explicit: `SeededRng` (counter-based SplitMix64, cloning = copying
 
 * `triplea_fm.toolkit` — the ActionToolkit (spec §23.3): candidate generators for every decision
   kind, all filtered through `validate_batch` so every candidate is legal, plus
-  `default_casualties`.
+  `default_casualties` / `default_casualty_order` and `unit_routes` (route candidates for any
+  player's units, also in a hypothetical next-turn move phase).
+* `triplea_fm.actionspace` — `legal_actions(d, s, distinct_units=False)`, the exhaustive legal
+  action set of the pending decision (a generator; every action passes `validate`, and nothing
+  legal is missed). Interchangeable units are collapsed by default, so each legal action appears
+  once up to renaming unit ids; `distinct_units=True` enumerates every unit-id subset. From an
+  agent's observation: `LiveBridge.legal_actions(observation, phase)`; C++:
+  `model.legal_actions(state, distinct_units, limit)`. Unlike `toolkit.candidates`, sets can be
+  large (thousands of moves late in a Capture the Flag game).
+* `triplea_fm.battlesim` — `simulate_battle`, the counterpart of TripleA's odds calculator: fights
+  a hypothetical battle (units given as `(type, owner)` pairs) many times under the kernel's
+  battle rules and reports win/draw rates, survivors per run and the run closest to the average.
 * `triplea_fm.testbench` — `LiveBridge` builds a `SimulationState` from a live testbench
   observation (protocol v1) and converts actions back to the testbench JSON format;
   `observation_from_state` does the reverse for offline arenas. Its belief assumptions are listed
@@ -118,5 +129,7 @@ python3 -m unittest discover tests
 Tests cover normalization baselines (CTF and Minimap), refusals, atomicity of rejected actions, determinism and
 serialization round trips, neutral/blitz/air/AA movement rules, battles (simultaneous fire,
 casualty and retreat decisions, capture), capital capture, raids, placement capacities, income,
-victory timing, Minimap's noncombat AA, per-turn raid cap and inert neutral charge, and toolkit
+victory timing, Minimap's noncombat AA, per-turn raid cap and inert neutral charge, the battle
+simulator (including dice-for-dice agreement with a kernel battle), the exhaustive action set
+(soundness and completeness against the toolkit over random games), and toolkit
 soundness over random games.

@@ -8,6 +8,7 @@
 //   TRIPLEA_MCTS_SECONDS   base search time per decision (default 2.0)
 //   TRIPLEA_MCTS_ROLLOUT   rollout horizon in rounds (default 2)
 //   TRIPLEA_MCTS_SEED      search seed (default 0)
+//   TRIPLEA_AGENT_LOG      1 enables logging, anything else disables it (set in run-agent.sh)
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -38,7 +39,8 @@ class Agent {
       : agent_dir_(agent_dir),
         base_seconds_(std::stod(env("TRIPLEA_MCTS_SECONDS", "2.0"))),
         rollout_rounds_(std::stoi(env("TRIPLEA_MCTS_ROLLOUT", "2"))),
-        seed_(std::stoull(env("TRIPLEA_MCTS_SEED", "0"))) {}
+        seed_(std::stoull(env("TRIPLEA_MCTS_SEED", "0"))),
+        logging_(env("TRIPLEA_AGENT_LOG", "0") == "1") {}
 
   std::string handle(const std::string& line) {
     auto req = model_.parse_request(line);  // type, phase, playerName, gameNumber
@@ -49,6 +51,7 @@ class Agent {
   }
 
   void log(const std::string& message) {
+    if (!logging_) return;
     std::time_t now = std::time(nullptr);
     char stamp[16];
     std::strftime(stamp, sizeof stamp, "%H:%M:%S", std::localtime(&now));
@@ -62,16 +65,19 @@ class Agent {
   double base_seconds_;
   int rollout_rounds_;
   uint64_t seed_;
+  bool logging_;
   bool supported_ = false;
   std::unique_ptr<fm::Static> static_;
   std::unique_ptr<agent::PhaseSearch> search_;
   std::filesystem::path log_path_;
 
   std::string game_start(const std::string& player, const std::string& game_number) {
-    std::filesystem::path logs = agent_dir_.parent_path().parent_path() / "logs";
-    std::filesystem::create_directories(logs);
-    log_path_ = logs / ("agent-" + player + "-game-" + game_number + ".txt");
-    std::ofstream(log_path_) << game_number << '\n';
+    if (logging_) {
+      std::filesystem::path logs = agent_dir_.parent_path().parent_path() / "logs";
+      std::filesystem::create_directories(logs);
+      log_path_ = logs / ("agent-" + player + "-game-" + game_number + ".txt");
+      std::ofstream(log_path_) << game_number << '\n';
+    }
     supported_ = model_.start_game() >= 0;
     for (const auto& m : model_.messages()) log((supported_ ? "" : "profile refusal: ") + m);
     if (supported_) {

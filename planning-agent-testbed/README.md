@@ -90,7 +90,11 @@ configurations.
 Changes in the window are used in memory when you start the game. They do not modify the loaded
 JSON automatically; choose **Save JSON…** to persist them.
 
-Live JSON observations appear together in one window with a tab for each enabled faction. Set
+Live observations appear together in one window with a tab for each enabled faction, titled with the
+faction and its assigned agent. Each tab draws the map from exactly what that faction's observation
+contains (owners, units, production, capitals, victory cities, PUs and units to place; hover a
+territory for its full entry). Node positions come from the map's `centers.txt` when present,
+otherwise from a layout of the observation's neighbor graph. Set
 `showObservations` to `false` to hide the observation window entirely; use `observationPlayers` to
 hide selected faction tabs while leaving the others visible. The same global and per-faction
 controls are available in the run setup window. Older configurations default to showing all tabs.

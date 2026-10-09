@@ -7,18 +7,17 @@
       "CTF"
     ]
   },
-  "games": 3,
+  "games": 1,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "Hard (AI)",
+    "Russians": "hard-ai-python",
     "Germans": "tripleMind-mcts"
   },
   "showObservations": true,
   "observationPlayers": {
     "Russians": true,
     "Germans": true
-  },
-  "clearAgentOutputs": true
+  }
 }

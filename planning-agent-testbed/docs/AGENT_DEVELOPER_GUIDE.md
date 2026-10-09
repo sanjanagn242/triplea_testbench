@@ -37,6 +37,12 @@ request line and write exactly one JSON response line for each request. Do not w
 pretty-printed JSON to stdout; log diagnostics to stderr or the agent's own log file. The Java side
 uses the response line as the action object directly, without an outer `response` envelope.
 
+Logging is opt-in for every agent. Each agent's `run-agent.sh` exports `TRIPLEA_AGENT_LOG`
+(`1` enables logging, `0` disables it; an existing value in the environment takes precedence). An
+agent must write nothing to stderr or its log file, and must not create the log file, unless
+`TRIPLEA_AGENT_LOG` is `1`. The only exceptions are crash tracebacks and build output from
+the launcher (for example compiler errors).
+
 Every request includes `schemaVersion` (currently `1`), `requestId`, `playerName`, and
 `gameNumber`.
 
@@ -134,7 +140,8 @@ invalid proposal to be rejected or logged by the engine.
 
 ## Registering and running an agent
 
-1. Add the agent code and runtime dependencies under `agents/<agent-id>/`.
+1. Add the agent code and runtime dependencies under `agents/<agent-id>/`. For a Python agent,
+   copy `agents/template-python/` and follow its README.
 2. Add `agents/<agent-id>/agent.json` with its stable ID, display name, language, entry point, and
    launch command. Optionally list `outputDirectories` (paths relative to the agent folder, which is
    also the process working directory) so a run started with `clearAgentOutputs` empties them first;

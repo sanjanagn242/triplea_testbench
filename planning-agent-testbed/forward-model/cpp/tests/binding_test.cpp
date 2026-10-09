@@ -64,6 +64,13 @@ int main(int argc, char** argv) {
   for (const auto& a : cands) all_valid = all_valid && model.validate(s, a);
   check(all_valid, "every toolkit candidate validates");
 
+  auto legal = model.legal_actions(s);
+  bool legal_valid = !legal.empty();
+  for (const auto& a : legal) legal_valid = legal_valid && model.validate(s, a);
+  check(legal_valid && legal.back() == fm::Action{fm::END_PHASE},
+        "every exhaustive legal action validates, EndPhase last");
+  check(model.legal_actions(s, false, 3).size() == 3, "legal_actions honours the limit");
+
   check(play(model, 7, 600) == play(model, 7, 600), "same seed and choices reproduce the same state");
   check(play(model, 7, 600) != play(model, 8, 600), "different seeds diverge");
 

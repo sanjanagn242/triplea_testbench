@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -494,6 +495,7 @@ class SimpleInfantryAgent {
   }
 
   void log(const std::string& event, const Json::Object& details = {}) const {
+    if (!logging_) return;
     std::ostringstream line;
     line << timestamp() << ' ' << event;
     if (game_number_ > 0) line << " game_number=" << game_number_;
@@ -519,6 +521,11 @@ class SimpleInfantryAgent {
   Json state_;
   int game_number_ = 0;
   std::filesystem::path log_path_;
+  // Set by run-agent.sh; the agent logs only when TRIPLEA_AGENT_LOG is 1.
+  const bool logging_ = [] {
+    const char* value = std::getenv("TRIPLEA_AGENT_LOG");
+    return value && std::string_view(value) == "1";
+  }();
 
   static const Json& required(const Json& object, const std::string& key) {
     const Json* value = object.get(key);
@@ -542,15 +549,17 @@ class SimpleInfantryAgent {
     if (!version || version->as_number(-1) != 1) throw std::runtime_error("unsupported protocol version");
     player_name_ = text(request, "playerName");
     game_number_ = static_cast<int>(required(request, "gameNumber").as_number(1));
-    log_path_ = std::filesystem::current_path() / "planning-agent-testbed" / "logs"
-                / ("agent-" + safe_name(player_name_) + "-game-" + std::to_string(game_number_) + ".txt");
-    std::error_code error;
-    std::filesystem::create_directories(log_path_.parent_path(), error);
-    if (std::filesystem::exists(log_path_)) {
-      log("agent_process_restarted", {{"player", Json(player_name_)}});
-    } else {
-      std::ofstream output(log_path_);
-      output << "Game number: " << game_number_ << '\n';
+    if (logging_) {
+      log_path_ = std::filesystem::current_path() / "planning-agent-testbed" / "logs"
+                  / ("agent-" + safe_name(player_name_) + "-game-" + std::to_string(game_number_) + ".txt");
+      std::error_code error;
+      std::filesystem::create_directories(log_path_.parent_path(), error);
+      if (std::filesystem::exists(log_path_)) {
+        log("agent_process_restarted", {{"player", Json(player_name_)}});
+      } else {
+        std::ofstream output(log_path_);
+        output << "Game number: " << game_number_ << '\n';
+      }
     }
     rules_ = parse_map_rules(text(request, "gameXml"));
     state_ = required(request, "initialState");

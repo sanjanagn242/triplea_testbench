@@ -85,7 +85,8 @@ def purchase_candidates(d: GameDefinition, s: SimulationState, max_types: int = 
 # Moves
 # ---------------------------------------------------------------------------------------------
 
-def _passable_middle(d, s, p, t, combat, group_air, group_blitz) -> bool:
+def _passable_middle(d, s, p, t, combat, group_air, group_blitz, ignore_enemy_units=False,
+                     cleared=frozenset()) -> bool:
     if d.impassable[t]:
         return False
     if group_air:
@@ -93,20 +94,30 @@ def _passable_middle(d, s, p, t, combat, group_air, group_blitz) -> bool:
     if d.is_water[t]:
         return False
     owner = s.owner[t]
-    friendly = owner != NULL_PLAYER and d.is_allied(p, owner)
-    if friendly and not (t in s.conquered and t not in s.blitzed):
-        return not rules.enemy_combat_units(d, s, p, t)
+    friendly = (owner != NULL_PLAYER and d.is_allied(p, owner)) or t in cleared
+    # Conquered/blitzed sets belong to the player whose turn it is.
+    newly_captured = d.steps[s.step].actor == p and t in s.conquered and t not in s.blitzed
+    if friendly and not newly_captured:
+        return ignore_enemy_units or not rules.enemy_combat_units(d, s, p, t)
     if not combat:
         return False
     return group_blitz and rules.is_blitzable(d, s, p, t)
 
 
-def reachable_routes(d: GameDefinition, s: SimulationState, start: int, max_steps: int,
-                     group_air: bool, group_blitz: bool) -> Dict[int, Tuple[int, ...]]:
-    """One shortest plausible route per destination within max_steps (BFS over territories a group
-    of this kind could pass through). Routes are candidates; callers must still validate."""
-    p = s.decision.actor
-    combat = d.steps[s.step].kind == COMBAT_MOVE
+def unit_routes(d: GameDefinition, s: SimulationState, player: int, start: int, max_steps: int,
+                group_air: bool, group_blitz: bool, combat: bool, ignore_enemy_units: bool = False,
+                cleared: Sequence[int] = (), blocked: Sequence[int] = ()) -> Dict[int, Tuple[int, ...]]:
+    """One shortest plausible route per destination within max_steps for `player`'s units of one
+    kind, in the current or a hypothetical (e.g. next-turn) move phase.
+
+    Territories passed through must be passable for the group: air may not cross neutral land or
+    impassable territories; land stays on land, may cross friendly territory without enemy combat
+    units (unless ignore_enemy_units) and, in a combat move, blitzable territory if the group can
+    blitz. `cleared` territories count as friendly (e.g. ones expected to be conquered first) and
+    `blocked` ones may not be passed through. Routes are candidates; callers must still validate.
+    """
+    cleared = frozenset(cleared)
+    blocked = frozenset(blocked)
     parent = {start: None}
     depth = {start: 0}
     q = deque([start])
@@ -114,7 +125,8 @@ def reachable_routes(d: GameDefinition, s: SimulationState, start: int, max_step
         t = q.popleft()
         if depth[t] >= max_steps:
             continue
-        if t != start and not _passable_middle(d, s, p, t, combat, group_air, group_blitz):
+        if t != start and (t in blocked or not _passable_middle(
+                d, s, player, t, combat, group_air, group_blitz, ignore_enemy_units, cleared)):
             continue
         for n in d.neighbors[t]:
             if n in parent:
@@ -131,6 +143,14 @@ def reachable_routes(d: GameDefinition, s: SimulationState, start: int, max_step
             path.append(parent[path[-1]])
         routes[t] = tuple(reversed(path))
     return routes
+
+
+def reachable_routes(d: GameDefinition, s: SimulationState, start: int, max_steps: int,
+                     group_air: bool, group_blitz: bool) -> Dict[int, Tuple[int, ...]]:
+    """One shortest plausible route per destination within max_steps for the deciding player in
+    the current move phase (see unit_routes). Routes are candidates; callers must still validate."""
+    return unit_routes(d, s, s.decision.actor, start, max_steps, group_air, group_blitz,
+                       d.steps[s.step].kind == COMBAT_MOVE)
 
 
 def move_candidates(d: GameDefinition, s: SimulationState, singles: bool = True,
@@ -213,8 +233,15 @@ def unit_power(d: GameDefinition, unit_type_id: int, attacking: bool) -> int:
 def default_casualties(d: GameDefinition, s: SimulationState) -> SelectCasualtiesAction:
     """Default order of loss in the spirit of CasualtyOrderOfLosses: lowest (power, cost) first,
     keeping artillery support where possible; air with less movement left dies first."""
-    dec = s.decision
-    hb = dec.hit_batch
+    hb = s.decision.hit_batch
+    order = default_casualty_order(d, s)
+    return SelectCasualtiesAction(hb.id, tuple(u.id for u in order[:min(hb.hits, len(order))]))
+
+
+def default_casualty_order(d: GameDefinition, s: SimulationState) -> List:
+    """Every unit eligible in the pending CASUALTIES decision, in the default order of loss
+    (first to die first); default_casualties takes the first `hits` of it."""
+    hb = s.decision.hit_batch
     attacking = hb.side == "ATTACKER"
     units = [s.units[u] for u in hb.eligible]
     n_inf = sum(1 for u in units if d.unit_types[u.type].is_artillery_supportable)
@@ -227,9 +254,7 @@ def default_casualties(d: GameDefinition, s: SimulationState) -> SelectCasualtie
         ml = rules.movement_left(d, u) if ut.is_air else 0
         return (power, d.unit_cost(u.type), ml, u.id)
 
-    order = sorted(units, key=key)
-    need = min(hb.hits, len(units))
-    return SelectCasualtiesAction(hb.id, tuple(u.id for u in order[:need]))
+    return sorted(units, key=key)
 
 
 def casualty_candidates(d: GameDefinition, s: SimulationState, limit: int = 4) -> List[object]:

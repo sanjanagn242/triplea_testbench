@@ -18,7 +18,7 @@ from triplea_fm.definition import COMBAT_MOVE
 from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D, PURCHASE_D,
                               RETREAT_D)
 
-import action_generators as ag
+from generators import ag  # compiled Cython generators when built, else action_generators.py
 import map_graph
 from helper import MetricLogger, DebugLogger, save_mcts_tree_png
 
@@ -169,7 +169,7 @@ class MCTS:
         node.children.append(child)
         return child
 
-    def pick_rollout_move(self, actions, topk=3, epsilon=0.10):
+    def pick_rollout_move_adversarial(self, actions, topk=3, epsilon=0.10):
         real = [a for a in actions if not getattr(a, "end_phase", False)]
         real_no_skips = [a for a in actions if (not getattr(a, "end_phase", False)) and getattr(a, "moves", None)]
         endp = [a for a in actions if getattr(a, "end_phase", False)]
@@ -195,13 +195,16 @@ class MCTS:
             return random.choice(ranked[:k])
         return ranked[0]
 
+    def pick_rollout_move_random(self, actions):
+        return random.choice(actions)
+
     # ---- rollout -------------------------------------------------------------------------
 
     def _rollout_combat(self, current_state):
         """Combat move of current_state.current_player, continuing from its excluded set."""
         while True:
             current_state.heuristic_combat_legal_moves()
-            mv = self.pick_rollout_move(current_state.actions, topk=3)
+            mv = self.pick_rollout_move_adversarial(current_state.actions, topk=3)
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])

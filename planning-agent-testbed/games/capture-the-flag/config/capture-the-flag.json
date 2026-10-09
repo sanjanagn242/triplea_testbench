@@ -8,21 +8,22 @@
     ],
     "downloadUrl": "https://github.com/triplea-maps/capture_the_flag/archive/refs/heads/master.zip"
   },
-  "games": 2,
+  "games": 100,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
-  "showObservations": true,
   "agents": {
-    "Russians": "Fast (AI)",
-    "Italians": "Hard (AI)",
-    "Germans": "Easy (AI)",
-    "Chinese": "Does Nothing (AI)"
+    "Russians": "hard-ai-python",
+    "Italians": "does-nothing-python",
+    "Germans": "tripleMind-mcts",
+    "Chinese": "does-nothing-python"
   },
+  "showObservations": true,
   "observationPlayers": {
     "Russians": true,
     "Italians": true,
     "Germans": true,
     "Chinese": true
-  }
+  },
+  "clearAgentOutputs": true
 }

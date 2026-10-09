@@ -1,0 +1,8 @@
+{
+  "id": "template-python",
+  "name": "Python Template",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Starting point for new Python agents. Copy the folder and change this manifest."
+}

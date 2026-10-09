@@ -496,6 +496,193 @@ class ToolkitTests(unittest.TestCase):
         self.assertEqual([v.ok for v in fm.validate_batch(D, s, actions)],
                          [fm.validate(D, s, a).ok for a in actions])
 
+    def test_unit_routes_for_another_player_match_its_own_move_phase(self):
+        s = fm.create_initial_state(D)  # Russians' purchase
+        ita = at_step(s.clone(), "italianCombatMove")
+        start = next(u.loc for u in s.units.values() if u.owner == ITA and u.type == U["armour"])
+        self.assertEqual(toolkit.unit_routes(D, s, ITA, start, 2, False, True, True),
+                         toolkit.reachable_routes(D, ita, start, 2, False, True))
+
+    def test_unit_routes_blocked_cleared_and_ignored_enemies(self):
+        s = at_step(fm.create_initial_state(D), "russianCombatMove")
+        a, b, c = self._land_chain(s)
+        clear_units(s, D.territory_names[b])
+        self.assertIn(c, toolkit.unit_routes(D, s, RUS, a, 2, False, False, True, cleared=[b]))
+        self.assertNotIn(c, toolkit.unit_routes(D, s, RUS, a, 2, False, True, True, blocked=[b]))
+        s.owner[b] = RUS
+        add(s, "infantry", D.territory_names[b], ITA)
+        self.assertNotIn(c, toolkit.unit_routes(D, s, RUS, a, 2, False, False, True))
+        self.assertIn(c, toolkit.unit_routes(D, s, RUS, a, 2, False, False, True, ignore_enemy_units=True))
+
+    @staticmethod
+    def _land_chain(s):
+        """Three passable land territories a-b-c with a not adjacent to c."""
+        for a in range(len(D.territory_names)):
+            for b in D.neighbors[a]:
+                for c in D.neighbors[b]:
+                    if len({a, b, c}) == 3 and c not in D.neighbors[a] and \
+                            not any(D.is_water[x] or D.impassable[x] for x in (a, b, c)):
+                        return a, b, c
+        raise AssertionError("no land chain")
+
+
+class BattleSimTests(unittest.TestCase):
+    def setUp(self):
+        from triplea_fm import battlesim
+        self.sim = battlesim
+        self.s = fm.create_initial_state(D)
+        self.site = T["ItalianBase"]
+
+    def test_undefended_territory_is_won_with_every_attacker(self):
+        r = self.sim.simulate_battle(D, self.s, self.site, [(U["infantry"], RUS)] * 2, [], fm.SeededRng(1), 5)
+        self.assertEqual(r.attacker_win_rate, 1.0)
+        self.assertTrue(all(run.attackers_left == (0, 1) for run in r.runs))
+
+    def test_deterministic_and_leaves_inputs_untouched(self):
+        before = json.dumps(fm.serialize_state(self.s), sort_keys=True)
+        att, dfd = [(U["infantry"], RUS)] * 3 + [(U["armour"], RUS)], [(U["infantry"], ITA)] * 3
+        r1 = self.sim.simulate_battle(D, self.s, self.site, att, dfd, fm.SeededRng(7), 50)
+        r2 = self.sim.simulate_battle(D, self.s, self.site, att, dfd, fm.SeededRng(7), 50)
+        self.assertEqual(r1.runs, r2.runs)
+        self.assertAlmostEqual(r1.attacker_win_rate + r1.defender_win_rate + r1.draw_rate, 1.0)
+        self.assertEqual(before, json.dumps(fm.serialize_state(self.s), sort_keys=True))
+        self.assertIn(r1.closest_to_average(), r1.runs)
+
+    def test_aa_and_retreat_when_only_air_left(self):
+        att, dfd = [(U["fighter"], RUS), (U["infantry"], RUS)], [(U["infantry"], ITA)] * 3 + [(U["aaGun"], ITA)]
+        r = self.sim.simulate_battle(D, self.s, self.site, att, dfd, fm.SeededRng(3), 300, retreat_when_only_air=True)
+        for run in r.runs:
+            self.assertNotIn(3, run.defenders_left)  # the AA gun is infrastructure, never a survivor
+            if run.attackers_left == (0,) and run.defenders_left:
+                self.assertEqual(run.winner, "DEFENDER")  # the fighter retreated
+
+    def test_matches_a_kernel_battle_with_the_same_dice(self):
+        site = self.site
+        origin = next(n for n in D.neighbors[site] if not D.is_water[n] and not D.impassable[n])
+        for seed in range(20):
+            s = at_step(fm.create_initial_state(D), "russianCombatMove")
+            for t in (site, origin):
+                clear_units(s, D.territory_names[t])
+            s.owner[origin] = RUS
+            att = [add(s, n, D.territory_names[origin], RUS) for n in ("infantry", "infantry", "artillery", "armour")]
+            for n in ("infantry", "infantry", "infantry"):
+                add(s, n, D.territory_names[site], ITA)
+            rng = fm.SeededRng(seed)
+            run = self.sim.simulate_battle(D, s, site, [(U[n], RUS) for n in ("infantry", "infantry", "artillery", "armour")],
+                                           [(U["infantry"], ITA)] * 3, rng.copy()).runs[0]
+            r = fm.transition(D, s, move(att, D.territory_names[origin], D.territory_names[site]), rng)
+            r = fm.transition(D, r.next_state, fm.EndPhaseAction(), r.next_rng)
+            while r.next_state.decision.kind in ("CASUALTIES", "RETREAT"):
+                a = toolkit.default_casualties(D, r.next_state) \
+                    if r.next_state.decision.kind == "CASUALTIES" else fm.RetreatAction(fm.CONTINUE)
+                r = fm.transition(D, r.next_state, a, r.next_rng)
+            survivors = sorted(i for i, uid in enumerate(att) if uid in r.next_state.units)
+            self.assertEqual(survivors, list(run.attackers_left), seed)
+            self.assertEqual(r.next_state.owner[site] == RUS, run.winner == "ATTACKER", seed)
+
+
+
+class ActionSpaceTests(unittest.TestCase):
+    """actionspace.legal_actions: sound, and complete against independently generated candidates."""
+
+    @staticmethod
+    def canon(a):
+        k = a.kind
+        if k == "move":
+            return (k, tuple(sorted(a.units)), a.route, a.intent)
+        if k == "place":
+            return (k, tuple(sorted(a.units)), a.territory)
+        if k == "casualties":
+            return (k, a.hit_batch_id, tuple(sorted(a.killed)))
+        if k == "purchase":
+            return (k, tuple(sorted((r, c) for r, c in a.quantities if c)))
+        return (k, a)
+
+    @staticmethod
+    def signature(s, a):
+        """The action with unit ids replaced by their interchangeability class."""
+        from triplea_fm.actionspace import _battle_roles
+        roles = _battle_roles(s)
+
+        def cls(uid):
+            u = s.units[uid]
+            return (u.loc, u.type, u.owner, u.orig_owner, u.moved, u.hits, u.in_combat, roles.get(uid, ()))
+        k = a.kind
+        if k in ("move", "place", "casualties"):
+            ids = a.killed if k == "casualties" else a.units
+            rest = (a.route, a.intent) if k == "move" else (a.territory,) if k == "place" else (a.hit_batch_id,)
+            return (k, tuple(sorted(cls(u) for u in ids)), rest)
+        return ActionSpaceTests.canon(a)
+
+    def test_sound_and_complete_over_random_games(self):
+        from triplea_fm.actionspace import legal_actions
+        rnd = random.Random(11)
+        kinds = set()
+        for seed in range(2):
+            s, rng = fm.create_initial_state(D), fm.SeededRng(seed)
+            for _ in range(800):
+                if fm.is_terminal(s):
+                    break
+                legal = list(legal_actions(D, s))
+                self.assertTrue(legal)
+                self.assertEqual(len({self.canon(a) for a in legal}), len(legal))  # no duplicates
+                for a in legal:
+                    self.assertTrue(fm.validate(D, s, a).ok, a)
+                cands = toolkit.candidates(D, s)
+                sigs = {self.signature(s, a) for a in legal}
+                for c in cands:
+                    self.assertIn(self.signature(s, c), sigs, c)
+                small = max((sum(1 for u in s.units.values() if u.loc == t and u.owner == s.decision.actor)
+                             for t in range(len(D.territory_names))), default=0) <= 6
+                if small and s.decision.kind != "PURCHASE":
+                    distinct = {self.canon(a) for a in legal_actions(D, s, distinct_units=True)}
+                    for c in cands:
+                        self.assertIn(self.canon(c), distinct, c)
+                kinds.add(s.decision.kind)
+                acting = [a for a in legal if a.kind != "end_phase"]  # make progress into battles
+                a = rnd.choice(acting) if acting and rnd.random() < 0.7 else rnd.choice(legal)
+                r = fm.transition(D, s, a, rng)
+                s, rng = r.next_state, r.next_rng
+        self.assertEqual(kinds, {"PURCHASE", "MOVE", "PLACE", "BATTLE_SELECTION", "CASUALTIES", "RETREAT"})
+
+    def test_purchases_are_every_affordable_vector(self):
+        from triplea_fm.actionspace import legal_actions
+        s = fm.create_initial_state(D)
+        p = s.decision.actor
+        s.balances[p][D.treasury_resource] = 17
+        cost = [sum(a for _, a in D.production_rules[r].costs) for r in D.frontier[p]]
+
+        def vectors(i, left):
+            if i == len(cost):
+                return 1
+            return sum(vectors(i + 1, left - k * cost[i]) for k in range(left // cost[i] + 1))
+        purchases = [a for a in legal_actions(D, s) if a.kind == "purchase"]
+        self.assertEqual(len(purchases), vectors(0, 17) - 1)  # minus buying nothing (EndPhase)
+
+    def test_routes_may_revisit_territories(self):
+        from triplea_fm.actionspace import legal_actions
+        s = at_step(fm.create_initial_state(D), "russianCombatMove")
+        f = next(u for u in s.units.values() if u.owner == RUS and U["fighter"] == u.type) \
+            if any(u.owner == RUS and u.type == U["fighter"] for u in s.units.values()) else None
+        if f is None:
+            a, b, _ = ToolkitTests._land_chain(s)
+            s.owner[a] = RUS
+            f = s.units[add(s, "fighter", D.territory_names[a], RUS)]
+        routes = {m.route for m in legal_actions(D, s) if m.kind == "move" and m.units == (f.id,)}
+        self.assertTrue(any(len(set(r)) < len(r) for r in routes))
+
+    def test_from_an_observation(self):
+        from triplea_fm.testbench import LiveBridge, observation_from_state
+        s = at_step(fm.create_initial_state(D), "russianCombatMove")
+        bridge = LiveBridge(D, "Russians")
+        root, actions = bridge.legal_actions(observation_from_state(D, s, "Russians"), "combatMove")
+        actions = list(actions)
+        self.assertTrue(actions)
+        self.assertTrue(all(fm.validate(D, root, a).ok for a in actions))
+        self.assertTrue(any(a.kind == "end_phase" for a in actions))
+        moves = [bridge.move_to_json(a) for a in actions if a.kind == "move"]
+        self.assertTrue(moves and all(m["unitIds"] for m in moves))
+
 
 if __name__ == "__main__":
     unittest.main()

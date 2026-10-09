@@ -126,6 +126,14 @@ class LiveBridge:
         s.next_decision_id = 2
         return s
 
+    def legal_actions(self, obs: dict, phase: str, distinct_units: bool = False):
+        """(state, iterator over every legal action) for this player's `phase` decision as observed
+        in a v1 observation; see actionspace.legal_actions. Actions refer to the returned state's
+        unit ids, which the *_to_json methods translate back to the engine's."""
+        from .actionspace import legal_actions
+        s = self.build_state(obs, phase)
+        return s, legal_actions(self.d, s, distinct_units)
+
     # ---- action -> v1 protocol JSON ----
     def move_to_json(self, action) -> dict:
         tn = self.d.territory_names
