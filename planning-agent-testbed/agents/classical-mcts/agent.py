@@ -70,13 +70,13 @@ class MetricLogger:
 
 
 class ClassicalMctsAgent(SearchAgent):
-    SECONDS = param("TRIPLEA_AGENT_SECONDS", 5.0)            # search time per phase, same for every phase (s)
+    SECONDS = param("TRIPLEA_AGENT_SECONDS", 300.0)            # search time per phase, same for every phase (s)
     SEED = param("TRIPLEA_AGENT_SEED", 0, int)               # agent randomness + simulation dice
 
     # Search
     EXPLORATION = param("TRIPLEA_CLASSIC_MCTS_EXPLORATION", 1.414)        # UCT constant C (rewards are 0 or 1)
     MAX_ITERATIONS = param("TRIPLEA_CLASSIC_MCTS_MAX_ITERATIONS", 100_000, int)  # cap besides the time
-    ROLLOUT_MAX_ROUNDS = param("TRIPLEA_CLASSIC_MCTS_ROLLOUT", 10, int)  # playout cap (rounds); unfinished = loss
+    ROLLOUT_MAX_ROUNDS = param("TRIPLEA_CLASSIC_MCTS_ROLLOUT", 100, int)  # playout cap (rounds); unfinished = loss
 
     # Debugging: dump each search tree to logs/trees/ (Graphviz .dot, optionally .png).
     SAVE_TREE = param("TRIPLEA_CLASSIC_MCTS_SAVE_TREE", 0, int)            # 1 = save after every search

@@ -7,13 +7,13 @@
       "CTF"
     ]
   },
-  "games": 2,
+  "games": 1,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "hard-ai-game-recorder",
-    "Germans": "hard-ai-game-recorder"
+    "Russians": "classical-mcts",
+    "Germans": "Easy (AI)"
   },
   "showObservations": false,
   "observationPlayers": {

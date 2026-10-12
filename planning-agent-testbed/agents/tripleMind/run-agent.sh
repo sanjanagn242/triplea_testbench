@@ -2,15 +2,26 @@
 set -euo pipefail
 
 agent_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# Agent logging to stderr and planning-agent-testbed/logs/agent-<faction>-game-<n>.txt:
-# 1 enables it, 0 disables it. Agents do not log unless this is 1.
-export TRIPLEA_AGENT_LOG=0
+# Settings: change the values here; a value already set in the environment takes precedence.
+# Logging to stderr and planning-agent-testbed/logs/agent-<faction>-game-<n>.txt: 1 on, 0 off.
+export TRIPLEA_AGENT_LOG="${TRIPLEA_AGENT_LOG:-0}"
+# Game records in records/<faction>-game-<n>.jsonl: 1 on, 0 off.
+export TRIPLEMIND_RECORD="${TRIPLEMIND_RECORD:-1}"
+# Search: time per combat-move decision (s), iteration budget (unused; the search is
+# time-bounded), rollout horizon in rounds (a playout still running then has no winner),
+# UCB1 exploration constant, and seed.
+export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-1.0}"
+export TRIPLEA_MCTS_ITERS="${TRIPLEA_MCTS_ITERS:-100000}"
+export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-2}"
+export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"
+export TRIPLEA_MCTS_SEED="${TRIPLEA_MCTS_SEED:-0}"
+# Live map window: 1 shows it, 0 hides it. PURE_PYTHON 1 skips the Cython action generators.
+export TRIPLEMIND_VIEW="${TRIPLEMIND_VIEW:-0}"
+export TRIPLEMIND_PURE_PYTHON="${TRIPLEMIND_PURE_PYTHON:-0}"
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
 # also works; this keeps the repository copy importable without installation).
 
 export PYTHONPATH="$agent_dir/../../forward-model/python${PYTHONPATH:+:$PYTHONPATH}"
-export TRIPLEMIND_VIEW=0
-export TRIPLEMIND_PURE_PYTHON=0
 
 # (Re)build the Cython action generators when the .pyx is newer than the compiled module. The
 # lock serialises agents launched together; a failed build falls back to the Python generators.

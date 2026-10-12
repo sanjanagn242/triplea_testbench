@@ -342,6 +342,17 @@ class MCTS:
             time.time() - start_time,
             len(root.children),
             root.value / root.visits if root.visits > 0 else 0)
+        # Root statistics of the latest search, saved as policy_info in game records.
+        self.last_stats = {
+            "iterations": self.iteration,
+            "max_depth": self.max_depth,
+            "seconds": time.time() - start_time,
+            "root_visits": root.visits,
+            "root_value": root.value / root.visits if root.visits > 0 else 0,
+            "children": [{"action": repr(c.action), "visits": c.visits,
+                          "value": c.value / c.visits if c.visits > 0 else 0}
+                         for c in root.children],
+        }
 
         # tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"
         # os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
