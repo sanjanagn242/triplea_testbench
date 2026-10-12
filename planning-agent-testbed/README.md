@@ -57,6 +57,18 @@ testbench option, then **Run Simulations**, to load the supplied JSON in its edi
 **Evaluate Simulations** is a placeholder for the future metrics viewer. Choose the game engine
 option to continue to the regular TripleA setup.
 
+To skip those screens and start the batch straight from the JSON, add
+`triplea.testbench.autostart=true`:
+
+```bash
+./gradlew :game-headed:run --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/capture-the-flag/config/capture-the-flag.json triplea.testbench.autostart=true"
+```
+
+The client then loads the configuration, resolves the map, and starts the games as if **Play** had
+been pressed. If the configuration or map cannot be loaded, it stops on the setup window with the
+error. When the configured number of games has finished, the client exits (status 0), so the
+command can be scripted.
+
 The configuration gives the map's canonical name, game name, and common aliases. The testbench
 checks the selected game's `map` folder first. Place manually downloaded map packages inside it,
 for example `planning-agent-testbed/games/capture-the-flag/map/capture_the_flag/`. If the map is
@@ -76,7 +88,8 @@ and opens the `games` folder when loading configurations.
 The `agents` object maps faction names from the map to stable agent IDs (for example,
 `"Russians": "simple-infantry"`). The run window shows the display name from each agent's manifest.
 Change those IDs to compare agents. `roundLimit` ends each game at that round without assigning
-a winner. When a game ends, the testbench reloads a fresh copy of the map and automatically starts
+a winner. Each game's result, faction assignments, rounds played, and elapsed time are appended to
+`planning-agent-testbed/logs/game-results.txt`. When a game ends, the testbench reloads a fresh copy of the map and automatically starts
 the next game until it has run the configured `games` count.
 The testbench skips TripleA's end-of-game "continue playing?" prompt so each completed game can
 advance directly to the next one. Results are appended to `planning-agent-testbed/logs/game-results.txt`

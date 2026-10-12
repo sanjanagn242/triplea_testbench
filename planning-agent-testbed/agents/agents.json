@@ -5,6 +5,9 @@
     "cpp-mcts",
     "tripleMind-mcts",
     "does-nothing-python",
-    "hard-ai-python"
+    "hard-ai-python",
+    "greedy-one-step-lookahead",
+    "classical-mcts",
+    "hard-ai-game-recorder"
   ]
 }

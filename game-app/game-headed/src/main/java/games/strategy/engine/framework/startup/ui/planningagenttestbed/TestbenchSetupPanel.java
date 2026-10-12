@@ -54,6 +54,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.triplea.game.startup.SetupModel;
 import org.triplea.java.ThreadRunner;
 import org.triplea.swing.SwingComponents;
+import org.triplea.util.ExitStatus;
 
 /** Interactive configuration for repeatable local planning-agent experiments. */
 public final class TestbenchSetupPanel extends SetupPanel {
@@ -87,10 +88,23 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private int plannedGames;
   private int completedGames;
   private Instant currentGameStartedAt;
+  private boolean autoStartPending;
+  private final boolean exitWhenBatchDone; // autostarted from the command line
   private final StateObservationWindow stateObservationWindow = new StateObservationWindow();
 
   public TestbenchSetupPanel(final HeadedServerSetupModel setupModel, final String configFile) {
+    this(setupModel, configFile, false);
+  }
+
+  /**
+   * With autoStart, the batch in configFile starts as soon as its map has loaded, as if Play had
+   * been pressed, and the client exits when the batch is done.
+   */
+  public TestbenchSetupPanel(
+      final HeadedServerSetupModel setupModel, final String configFile, final boolean autoStart) {
     this.setupModel = setupModel;
+    this.autoStartPending = autoStart && configFile != null;
+    this.exitWhenBatchDone = autoStartPending;
     this.gameSelectorModel = setupModel.getGameSelectorModel();
     this.initialConfig = configFile == null ? null : Path.of(configFile);
     this.activeConfigurationFile = initialConfig;
@@ -381,8 +395,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
       aiMovePauseMs.setValue(clampPause(config.aiMovePauseMs, DEFAULT_AI_MOVE_PAUSE_MS));
       aiCombatStepPauseMs.setValue(
           clampPause(config.aiCombatStepPauseMs, DEFAULT_AI_COMBAT_STEP_PAUSE_MS));
-      showObservationWindow.setSelected(
-          config.showObservations == null || config.showObservations);
+      showObservationWindow.setSelected(config.showObservations == null || config.showObservations);
       clearAgentOutputs.setSelected(Boolean.TRUE.equals(config.clearAgentOutputs));
       activeMapReference = config.map;
       mapStatus.setText("Resolving map…");
@@ -405,10 +418,12 @@ public final class TestbenchSetupPanel extends SetupPanel {
                     loadMap(resolvedMap);
                     applyAgentAssignments(config.agents);
                     applyObservationAssignments(config.observationPlayers);
+                    launchIfAutoStartPending();
                   });
             } catch (IOException | RuntimeException e) {
               SwingUtilities.invokeLater(
                   () -> {
+                    autoStartPending = false;
                     mapStatus.setText("Map resolution failed");
                     mapStatus.setToolTipText(e.getMessage());
                     showError("Could not resolve map from testbench config: " + e.getMessage());
@@ -416,7 +431,21 @@ public final class TestbenchSetupPanel extends SetupPanel {
             }
           });
     } catch (IOException | RuntimeException e) {
+      autoStartPending = false;
       showError("Could not read testbench configuration: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Starts the batch once, for the autostart command-line option; stays on this screen on error.
+   */
+  private void launchIfAutoStartPending() {
+    if (!autoStartPending) {
+      return;
+    }
+    autoStartPending = false;
+    if (canGameStart()) { // otherwise loadMap has already reported the error
+      games.strategy.engine.framework.ui.MainFrame.startGameDirectly(setupModel);
     }
   }
 
@@ -618,7 +647,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   final LocalPlayers localPlayers,
                   final IGame game,
                   final Set<Player> localGamePlayers,
-                final Chat chat) {
+                  final Chat chat) {
                 super.startGame(localPlayers, game, localGamePlayers, chat);
                 SwingUtilities.invokeLater(
                     () ->
@@ -650,12 +679,18 @@ public final class TestbenchSetupPanel extends SetupPanel {
           if (!Files.isRegularFile(selectedMap)
               || !gameSelectorModel.loadMapForTestbench(selectedMap)) {
             experimentRunning = false;
+            if (exitWhenBatchDone) {
+              System.err.println("Could not reload the testbench map; stopping: " + selectedMap);
+              ExitStatus.FAILURE.exit();
+            }
             showError("Could not reload the testbench map after the game ended: " + selectedMap);
             SwingComponents.setFrameFromComponentVisible(this);
             return;
           }
           if (completedGames < plannedGames) {
             getLauncher().ifPresent(launcher -> ThreadRunner.runInNewThread(launcher::launch));
+          } else if (exitWhenBatchDone) {
+            ExitStatus.SUCCESS.exit();
           } else {
             experimentRunning = false;
             plannedGames = 0;
@@ -674,6 +709,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
               .getProperties()
               .get(EndRoundDelegate.TESTBENCH_WINNERS_PROPERTY, "");
       final String result = winners.isBlank() ? "No winner" : "Winner(s): " + winners;
+      final int roundsPlayed =
+          gameSelectorModel
+              .getGameData()
+              .getProperties()
+              .get(
+                  EndRoundDelegate.TESTBENCH_ROUNDS_PLAYED_PROPERTY,
+                  gameSelectorModel.getGameData().getSequence().getRound());
       final String players =
           selectedAssignments().entrySet().stream()
               .map(entry -> entry.getKey() + " = " + entry.getValue())
@@ -685,11 +727,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
           logFile,
           String.format(
               java.util.Locale.ROOT,
-              "Game %d/%d completed%nPlayers: %s%nResult: %s%nElapsed: %.1f seconds%n%n",
+              "Game %d/%d completed%nPlayers: %s%nResult: %s%nRounds played: %d%n"
+                  + "Elapsed: %.1f seconds%n%n",
               completedGames,
               plannedGames,
               players,
               result,
+              roundsPlayed,
               elapsedMillis / 1000.0),
           StandardOpenOption.CREATE,
           StandardOpenOption.APPEND);

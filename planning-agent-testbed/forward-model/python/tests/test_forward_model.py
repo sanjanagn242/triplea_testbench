@@ -659,17 +659,24 @@ class ActionSpaceTests(unittest.TestCase):
         purchases = [a for a in legal_actions(D, s) if a.kind == "purchase"]
         self.assertEqual(len(purchases), vectors(0, 17) - 1)  # minus buying nothing (EndPhase)
 
-    def test_routes_may_revisit_territories(self):
+    def test_routes_never_revisit_territories(self):
         from triplea_fm.actionspace import legal_actions
         s = at_step(fm.create_initial_state(D), "russianCombatMove")
-        f = next(u for u in s.units.values() if u.owner == RUS and U["fighter"] == u.type) \
-            if any(u.owner == RUS and u.type == U["fighter"] for u in s.units.values()) else None
-        if f is None:
-            a, b, _ = ToolkitTests._land_chain(s)
-            s.owner[a] = RUS
-            f = s.units[add(s, "fighter", D.territory_names[a], RUS)]
-        routes = {m.route for m in legal_actions(D, s) if m.kind == "move" and m.units == (f.id,)}
-        self.assertTrue(any(len(set(r)) < len(r) for r in routes))
+        routes = {m.route for m in legal_actions(D, s) if m.kind == "move"}
+        self.assertTrue(routes)
+        self.assertTrue(all(len(set(r)) == len(r) for r in routes))
+
+    def test_route_with_a_loop_is_rejected(self):
+        s = at_step(fm.create_initial_state(D), "russianCombatMove")
+        a, b, _ = ToolkitTests._land_chain(s)
+        s.owner[a] = s.owner[b] = RUS
+        clear_units(s, D.territory_names[a])
+        clear_units(s, D.territory_names[b])
+        uid = add(s, "armour", D.territory_names[a], RUS)
+        self.assertTrue(fm.validate(D, s, move([uid], D.territory_names[a], D.territory_names[b])).ok)
+        r = fm.validate(D, s, move([uid], D.territory_names[a], D.territory_names[b], D.territory_names[a]))
+        self.assertFalse(r.ok)
+        self.assertEqual(r.code, "BAD_ROUTE")
 
     def test_from_an_observation(self):
         from triplea_fm.testbench import LiveBridge, observation_from_state

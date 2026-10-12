@@ -12,6 +12,7 @@ import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_LOBBY;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_LOCAL;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBEM;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBF;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_AUTOSTART;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_CONFIG;
 import static games.strategy.triplea.Constants.PROPERTY_FALSE;
 import static games.strategy.triplea.Constants.PROPERTY_TRUE;
@@ -132,6 +133,7 @@ public final class HeadedGameRunner {
         case TRIPLEA_CLIENT:
         case TRIPLEA_START:
         case TRIPLEA_TESTBENCH_CONFIG:
+        case TRIPLEA_TESTBENCH_AUTOSTART:
           System.setProperty(nameValuePair[0], nameValuePair[1]);
           break;
         default:
@@ -192,6 +194,7 @@ public final class HeadedGameRunner {
               () -> {
                 showMainFrame();
                 gameSelectorModel.setReadyForSaveLoad();
+                autoStartTestbenchIfRequested();
                 UpdateChecks.launch(headedServerSetupModel.getUi());
               });
         });
@@ -224,6 +227,24 @@ public final class HeadedGameRunner {
       MainFrame.show();
       openMapDownloadWindowIfDownloadScheduled();
     }
+  }
+
+  /**
+   * With triplea.testbench.autostart=true and a triplea.testbench.config file, skips the mode and
+   * setup screens and starts the configured testbench batch once its map has loaded.
+   */
+  private static void autoStartTestbenchIfRequested() {
+    if (!System.getProperty(TRIPLEA_TESTBENCH_AUTOSTART, PROPERTY_FALSE).equals(PROPERTY_TRUE)) {
+      return;
+    }
+    System.clearProperty(TRIPLEA_TESTBENCH_AUTOSTART);
+    final String configFile = System.getProperty(TRIPLEA_TESTBENCH_CONFIG, "");
+    if (configFile.isBlank()) {
+      log.warn(
+          "{}=true needs {}=<config.json>", TRIPLEA_TESTBENCH_AUTOSTART, TRIPLEA_TESTBENCH_CONFIG);
+      return;
+    }
+    SwingUtilities.invokeLater(() -> headedServerSetupModel.autoStartTestbench(configFile));
   }
 
   private static void startGameDirectly(String saveGameFileName, String startProperty) {

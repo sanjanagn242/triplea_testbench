@@ -19,7 +19,9 @@ Simulation configuration files store external assignments by stable manifest ID:
 }
 ```
 
-To start a new Python agent, copy `template-python/` and follow its README.
+To start a new Python agent, copy `template-python/` and follow its README. For an agent that
+searches with the forward model, copy `template-search-python/` instead: the agent is a class
+(`SearchAgent`) and you implement only its `search()` method.
 
 `agents.json` is a human-readable inventory of agent IDs; the per-agent `agent.json` is the
 authoritative launch definition. See [the agent developer guide](../docs/AGENT_DEVELOPER_GUIDE.md)

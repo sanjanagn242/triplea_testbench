@@ -1,0 +1,8 @@
+{
+  "id": "template-search-python",
+  "name": "Python Search Template",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Starting point for forward-model search agents: subclass SearchAgent and implement search(). Copy the folder and change this manifest."
+}

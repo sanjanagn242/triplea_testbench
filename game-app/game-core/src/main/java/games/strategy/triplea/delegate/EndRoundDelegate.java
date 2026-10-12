@@ -38,6 +38,9 @@ public class EndRoundDelegate extends BaseTripleADelegate {
   public static final String TESTBENCH_ROUND_LIMIT_PROPERTY = "triplea.testbench.roundLimit";
 
   public static final String TESTBENCH_WINNERS_PROPERTY = "triplea.testbench.winners";
+  public static final String TESTBENCH_ROUNDS_PLAYED_PROPERTY = "triplea.testbench.roundsPlayed";
+
+  public static final String TESTBENCH_STATUS_PROPERTY = "triplea.testbench.status";
 
   private boolean gameOver = false;
   @Getter private Collection<GamePlayer> winners = new ArrayList<>();
@@ -316,6 +319,10 @@ public class EndRoundDelegate extends BaseTripleADelegate {
                 winners.stream()
                     .map(GamePlayer::getName)
                     .collect(java.util.stream.Collectors.joining(", ")));
+        getData()
+            .getProperties()
+            .set(TESTBENCH_ROUNDS_PLAYED_PROPERTY, getData().getSequence().getRound());
+        getData().getProperties().set(TESTBENCH_STATUS_PROPERTY, status);
       }
       bridge
           .getSoundChannelBroadcaster()

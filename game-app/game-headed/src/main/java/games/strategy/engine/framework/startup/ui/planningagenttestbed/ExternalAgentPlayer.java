@@ -13,6 +13,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.player.PlayerBridge;
 import games.strategy.triplea.ai.weak.WeakAi;
+import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.data.BattleListing;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate;
 import games.strategy.triplea.delegate.remote.IBattleDelegate;
@@ -32,6 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.collections.IntegerMap;
 
@@ -42,6 +47,8 @@ import org.triplea.java.collections.IntegerMap;
 public final class ExternalAgentPlayer extends WeakAi {
   private static final Gson GSON = new GsonBuilder().serializeNulls().create();
   private static final int PROTOCOL_VERSION = 1;
+  // How long a finished game waits for the agent to acknowledge game_end before stopping it.
+  private static final long GAME_END_TIMEOUT_SECONDS = 10;
   private final ExternalAgentDefinition definition;
   private final Path commonGameXml;
   private final int simulationNumber;
@@ -74,6 +81,7 @@ public final class ExternalAgentPlayer extends WeakAi {
 
   @Override
   public void stopGame() {
+    notifyGameEnd();
     stopAgentProcess();
     super.stopGame();
   }
@@ -267,7 +275,8 @@ public final class ExternalAgentPlayer extends WeakAi {
               null,
               observation,
               nonCombat,
-              simulationNumber);
+              simulationNumber,
+              null);
       final String response = exchange(request);
       if (response == null || response.isBlank()) {
         log.error(
@@ -312,7 +321,8 @@ public final class ExternalAgentPlayer extends WeakAi {
               new FullStateObservationProvider().observe(getGameData(), player),
               null,
               false,
-              simulationNumber);
+              simulationNumber,
+              null);
       final String response = exchange(request);
       final GameStartResponse acknowledgement = GSON.fromJson(response, GameStartResponse.class);
       if (acknowledgement == null || !acknowledgement.ready()) {
@@ -321,6 +331,74 @@ public final class ExternalAgentPlayer extends WeakAi {
     } catch (final IOException | RuntimeException e) {
       log.error("Could not initialize external testbench agent", e);
       stopAgentProcess();
+    }
+  }
+
+  /**
+   * Sends {@code game_end} with the result and the final observation when the game has ended
+   * (winners or the testbench round limit). A game stopped before that has no result and sends
+   * nothing. The agent's acknowledgement is awaited for at most {@link #GAME_END_TIMEOUT_SECONDS}.
+   */
+  private void notifyGameEnd() {
+    final GameData data = getGameData();
+    final Process process = agentProcess;
+    if (data == null || process == null || !process.isAlive()) {
+      return;
+    }
+    final String status = data.getProperties().get(EndRoundDelegate.TESTBENCH_STATUS_PROPERTY, "");
+    if (status.isBlank()) {
+      return;
+    }
+    final GamePlayer player = getGamePlayer();
+    final List<String> winners =
+        java.util.Arrays.stream(
+                data.getProperties()
+                    .get(EndRoundDelegate.TESTBENCH_WINNERS_PROPERTY, "")
+                    .split(","))
+            .map(String::strip)
+            .filter(name -> !name.isEmpty())
+            .toList();
+    final GameResult result =
+        new GameResult(
+            winners,
+            winners.contains(player.getName()),
+            data.getProperties()
+                .get(
+                    EndRoundDelegate.TESTBENCH_ROUNDS_PLAYED_PROPERTY,
+                    data.getSequence().getRound()),
+            status);
+    try {
+      final AgentRequest request =
+          new AgentRequest(
+              "game_end",
+              PROTOCOL_VERSION,
+              nextRequestId++,
+              player.getName(),
+              null,
+              null,
+              null,
+              new FullStateObservationProvider().observe(data, player),
+              false,
+              simulationNumber,
+              result);
+      CompletableFuture.supplyAsync(
+              () -> {
+                try {
+                  return exchange(request);
+                } catch (final IOException e) {
+                  throw new java.io.UncheckedIOException(e);
+                }
+              })
+          .get(GAME_END_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    } catch (final TimeoutException e) {
+      log.warn("{} agent did not acknowledge game_end in time", player.getName());
+      // The exchange still holds this player's lock while it reads; ending the process ends that
+      // read.
+      process.destroy();
+    } catch (final ExecutionException | RuntimeException e) {
+      log.warn("Could not send game_end to the {} agent: {}", player.getName(), e.toString());
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -396,7 +474,10 @@ public final class ExternalAgentPlayer extends WeakAi {
       StateObservation initialState,
       StateObservation state,
       boolean nonCombat,
-      int gameNumber) {}
+      int gameNumber,
+      GameResult result) {}
+
+  private record GameResult(List<String> winners, boolean won, int roundsPlayed, String status) {}
 
   private record GameStartResponse(boolean ready) {}
 

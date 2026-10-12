@@ -1,0 +1,8 @@
+{
+  "id": "greedy-one-step-lookahead",
+  "name": "Greedy One-Step Lookahead",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Greedy one-step lookahead agent for forward-model search."
+}

@@ -67,6 +67,11 @@ public class HeadedServerSetupModel {
     setGameTypePanel(new TestbenchSetupPanel(this, configFile));
   }
 
+  /** Shows the testbench setup for configFile and starts its batch as soon as the map is ready. */
+  public void autoStartTestbench(final String configFile) {
+    setGameTypePanel(new TestbenchSetupPanel(this, configFile, true));
+  }
+
   public void showGameEngine() {
     ThreadRunner.runInNewThread(
         () -> {

@@ -66,7 +66,8 @@ class AgentProcess:
 
 
 def play_game(d, xml_text, agent_cmds, game_number, seconds, seed, max_rounds, verbose):
-    env = dict(os.environ, TRIPLEA_MCTS_SECONDS=str(seconds), TRIPLEA_MCTS_SEED=str(seed))
+    env = dict(os.environ, TRIPLEA_MCTS_SECONDS=str(seconds), TRIPLEA_MCTS_SEED=str(seed),
+               TRIPLEA_AGENT_SECONDS=str(seconds), TRIPLEA_AGENT_SEED=str(seed))
     rnd = random.Random(seed)
     heuristic = HeuristicPolicy(d)
     s = fm.create_initial_state(d)
@@ -125,6 +126,15 @@ def play_game(d, xml_text, agent_cmds, game_number, seconds, seed, max_rounds, v
                     step(fm.PlaceAction(tuple(ids), d.territory_index[p["territory"]]))
         if s.decision is not None and s.decision.actor == actor and s.decision.kind == dec.kind:
             step(fm.EndPhaseAction())
+    # As the engine does: game_end carries the result (winners are players) and the final observation.
+    winners = [n for pid, n in enumerate(d.player_names)
+               if s.terminal and d.alliance_of[pid] in s.terminal.winners]
+    status = f"{s.terminal.rule_id} victory" if s.terminal else "Arena round limit reached."
+    for actor, a in agents.items():
+        name = d.player_names[actor]
+        a.ask({"type": "game_end", "playerName": name, "state": observation_from_state(d, s, name),
+               "result": {"winners": winners, "won": name in winners, "roundsPlayed": s.round,
+                          "status": status}, "gameNumber": game_number})
     for a in agents.values():
         a.close()
     winner = d.alliance_names[s.terminal.winners[0]] if s.terminal else None

@@ -1,0 +1,9 @@
+{
+  "id": "classical-mcts",
+  "name": "Classical MCTS (Python)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Search agent built on the search template; MCTS parameters are in the PARAMETERS block of agent.py.",
+  "outputDirectories": ["metrics"]
+}

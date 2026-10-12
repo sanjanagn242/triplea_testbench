@@ -441,6 +441,8 @@ def _validate_move(d, s, a) -> Err:
     for x, y in zip(route, route[1:]):
         if y not in d.neighbors[x]:
             return ("BAD_ROUTE", "route territories are not adjacent")
+    if len(set(route)) != len(route):
+        return ("BAD_ROUTE", "loops not allowed in route")  # Route.add
     start, end, middle = route[0], route[-1], route[1:-1]
     units = []
     for uid in a.units:

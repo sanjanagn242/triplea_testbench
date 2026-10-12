@@ -6,6 +6,8 @@ import org.jetbrains.annotations.NonNls;
 public class CliProperties {
   @NonNls public static final String TRIPLEA_GAME = "triplea.game";
   @NonNls public static final String TRIPLEA_TESTBENCH_CONFIG = "triplea.testbench.config";
+  // true/false: skip the testbench menus and start the batch in triplea.testbench.config
+  @NonNls public static final String TRIPLEA_TESTBENCH_AUTOSTART = "triplea.testbench.autostart";
   @NonNls public static final String TRIPLEA_SERVER = "triplea.server"; // true/false
   @NonNls public static final String TRIPLEA_CLIENT = "triplea.client"; // true/false
   @NonNls public static final String TRIPLEA_HOST = "triplea.host";

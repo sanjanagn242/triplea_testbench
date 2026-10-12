@@ -55,7 +55,7 @@ the experiment UI and external-agent bridge are additions in the main repository
 
 1. The testbench round limit ends a game without a winner when reached. The testbench also bypasses
    the normal continue-playing prompt for completed batch games.
-2. It appends result, faction assignments, and elapsed time to `game-results.txt`, hides the
+2. It appends result, faction assignments, rounds played, and elapsed time to `game-results.txt`, hides the
    observation window, reloads a fresh copy of the map, and launches the next numbered game. When
    the batch finishes, it returns to the testbench menu.
 3. Each C++ faction writes `agent-<faction>-game-<number>.txt`. Its first line is the simulation

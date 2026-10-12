@@ -104,6 +104,20 @@ The engine now also sends a `place` turn request. If the response has no `placem
 (for example the older `placeAt` shape), the adapter keeps the built-in `WeakAi` placement.
 Rejected moves and placements are logged as warnings by the engine.
 
+### Game end
+
+When a game ends (a victory, or the testbench round limit), each agent receives one
+`type: "game_end"` message before its process is stopped. A game stopped before it ends sends none.
+It carries the same `playerName`, `gameNumber`, and protocol metadata, plus:
+
+- `state`: the final state observation.
+- `result`: `winners` (player names; empty when the round limit ended the game), `won` (whether
+  this agent's faction is among them), `roundsPlayed`, and `status` (the engine's game-over text).
+
+Reply with one line, for example `{"ok": true}`. The engine waits at most 10 seconds for it, then
+stops the process. Agents that do not handle `game_end` may answer with an error object; it is
+ignored. `tools/arena.py` sends the same message.
+
 ## Forward model
 
 The testbench provides a forward-model library in `planning-agent-testbed/forward-model`, so agents
@@ -141,7 +155,9 @@ invalid proposal to be rejected or logged by the engine.
 ## Registering and running an agent
 
 1. Add the agent code and runtime dependencies under `agents/<agent-id>/`. For a Python agent,
-   copy `agents/template-python/` and follow its README.
+   copy `agents/template-python/` and follow its README. For a Python agent that searches with
+   the forward model, copy `agents/template-search-python/`: subclass `SearchAgent` and
+   implement only `search()`; the protocol, state building and action encoding are done for you.
 2. Add `agents/<agent-id>/agent.json` with its stable ID, display name, language, entry point, and
    launch command. Optionally list `outputDirectories` (paths relative to the agent folder, which is
    also the process working directory) so a run started with `clearAgentOutputs` empties them first;

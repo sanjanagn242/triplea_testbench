@@ -1,0 +1,8 @@
+digraph MCTS {
+  rankdir=TB;
+  node [shape=box, fontsize=10];
+  labelloc=t; label="Germans game 1 round 1 place: 1 iterations, 0 playouts finished (0 wins)";
+  n0 [label="#0\nvis=1\navg=0.000\ndepth=0\nuntried=3"];
+  n1 [label="#1\nvis=1\navg=0.000\ndepth=1\nuntried=?"];
+  n0 -> n1 [label="place @ GermanBase | 1x infantry, 1x aaGun"];
+}

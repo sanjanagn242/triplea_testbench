@@ -8,7 +8,7 @@ action set, which can be very large. It is a generator, so callers can stop earl
 What is enumerated, per decision kind:
   PURCHASE          every nonzero affordable count vector over the frontier rules, then EndPhase
   MOVE              every nonempty set of the actor's units in one territory, along every route
-                    (walks of adjacent territories, revisits included) within their movement, as
+                    (paths of adjacent territories, no territory twice) within their movement, as
                     NORMAL and, for all-bomber groups, RAID; then EndPhase
   PLACE             every nonempty set of held units, at every producer with room; then EndPhase
   BATTLE_SELECTION  every pending battle that may be fought now
@@ -154,8 +154,9 @@ def _purchases(d, s, distinct_units) -> Iterator[PurchaseAction]:
 
 
 def _walks(d, start: int, max_len: int, any_land: bool) -> List[Tuple[int, ...]]:
-    """Every route from start with 1..max_len steps through adjacent territories (revisits
-    included). Impassable territories never appear; water never appears for land units."""
+    """Every route from start with 1..max_len steps through adjacent territories, visiting no
+    territory twice (the engine's Route rejects loops). Impassable territories never appear;
+    water never appears for land units."""
     out = []
     path = [start]
 
@@ -165,7 +166,7 @@ def _walks(d, start: int, max_len: int, any_land: bool) -> List[Tuple[int, ...]]
         if len(path) - 1 == max_len:
             return
         for n in d.neighbors[path[-1]]:
-            if d.impassable[n] or (any_land and d.is_water[n]):
+            if d.impassable[n] or (any_land and d.is_water[n]) or n in path:
                 continue
             path.append(n)
             rec()
