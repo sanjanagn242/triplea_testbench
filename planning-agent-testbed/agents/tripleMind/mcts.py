@@ -204,7 +204,7 @@ class MCTS:
         """Combat move of current_state.current_player, continuing from its excluded set."""
         while True:
             current_state.heuristic_combat_legal_moves()
-            mv = self.pick_rollout_move_adversarial(current_state.actions, topk=3)
+            mv = self.pick_rollout_move_random(current_state.actions)
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])
@@ -342,16 +342,12 @@ class MCTS:
             time.time() - start_time,
             len(root.children),
             root.value / root.visits if root.visits > 0 else 0)
-        # Root statistics of the latest search, saved as policy_info in game records.
+        # The latest search tree and its statistics, saved in game records.
+        self.last_root = root
         self.last_stats = {
             "iterations": self.iteration,
-            "max_depth": self.max_depth,
+            "max_rollout": self.max_depth,
             "seconds": time.time() - start_time,
-            "root_visits": root.visits,
-            "root_value": root.value / root.visits if root.visits > 0 else 0,
-            "children": [{"action": repr(c.action), "visits": c.visits,
-                          "value": c.value / c.visits if c.visits > 0 else 0}
-                         for c in root.children],
         }
 
         # tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"

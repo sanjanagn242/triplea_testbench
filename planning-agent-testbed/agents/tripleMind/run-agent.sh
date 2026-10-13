@@ -4,9 +4,9 @@ set -euo pipefail
 agent_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Settings: change the values here; a value already set in the environment takes precedence.
 # Logging to stderr and planning-agent-testbed/logs/agent-<faction>-game-<n>.txt: 1 on, 0 off.
-export TRIPLEA_AGENT_LOG="${TRIPLEA_AGENT_LOG:-0}"
+export TRIPLEA_AGENT_LOG=0
 # Game records in records/<faction>-game-<n>.jsonl: 1 on, 0 off.
-export TRIPLEMIND_RECORD="${TRIPLEMIND_RECORD:-1}"
+export TRIPLEMIND_RECORD=1
 # Search: time per combat-move decision (s), iteration budget (unused; the search is
 # time-bounded), rollout horizon in rounds (a playout still running then has no winner),
 # UCB1 exploration constant, and seed.

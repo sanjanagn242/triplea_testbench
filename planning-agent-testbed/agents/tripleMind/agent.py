@@ -16,8 +16,8 @@ Environment:
   TRIPLEA_MCTS_SEED        search seed (default 0)
   TRIPLEMIND_VIEW          1 (default) shows the live map window, 0 hides it
   TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
-  TRIPLEMIND_RECORD        1 saves a game record per game in records/<faction>-game-<n>.jsonl
-                           (default 0)
+  TRIPLEMIND_RECORD        1 saves the combat-move search trees of each game in
+                           records/<faction>-game-<n>.jsonl (default 0)
 """
 
 # from __future__ import annotations
@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # this agent's own modules (mcts.py)
 
 import triplea_fm as fm  # noqa: E402
-from triplea_fm.testbench import PHASE_KINDS, LiveBridge  # noqa: E402
+from triplea_fm.testbench import PHASE_KINDS, LiveBridge, observation_from_state  # noqa: E402
 
 from mcts import MCTS, MCTSGameState  # noqa: E402
 
@@ -52,8 +52,9 @@ RECORDING = os.environ.get("TRIPLEMIND_RECORD", "0") == "1"
 
 class GameRecorder:
     """One game's record for this faction, as JSON Lines: a "header" line (metadata and the initial
-    observation), one "step" line per decision (the raw observation and the action answered to it),
-    and a "result" line (winners and the final observation) when the engine sends game_end.
+    observation), one "step" line per combat-move decision (the raw observation, the action answered
+    to it and the search tree's chosen path), and a "result" line (winners and the final
+    observation) when the engine sends game_end.
 
     The process may be stopped at any time, so the agent flushes after every step; a file without
     a result line is a game that was stopped before it ended."""
@@ -70,7 +71,7 @@ class GameRecorder:
         if folder and not os.path.exists(folder):
             os.makedirs(folder, exist_ok=True)
 
-    def buffer(self, phase, state, action, seconds, policy_info=None):
+    def buffer(self, phase, state, action, seconds, search=None, path=None):
         """Stage one decision in memory without touching disk."""
         self._buffer.append({
             "type": "step",
@@ -80,7 +81,8 @@ class GameRecorder:
             "phase": phase,
             "state": state,          # raw observation, as received
             "action": action,        # response, as sent
-            "policy_info": policy_info,  # MCTS root statistics (combat move only)
+            "search": search,        # search statistics (iterations, max depth, seconds)
+            "path": path,            # chosen path through the search tree, root first
             "seconds": seconds,
         })
         self.num_steps += 1
@@ -201,15 +203,96 @@ class TripleMindAgent:
     def turn(self, request):
         started = time.time()
         if self.search is not None:
-            self.search.last_stats = None
+            self.search.last_root = None
         response = self.get_move(request)
         seconds = time.time() - started
-        if self.recorder:
-            policy_info = self.search.last_stats if self.search is not None else None
-            self.recorder.buffer(request.get("phase"), request["state"], response, seconds,
-                                 policy_info)
+        # Only combat moves are searched, so only they are recorded.
+        if self.recorder and request.get("phase") == "combatMove":
+            root = self.search.last_root if self.search is not None else None
+            action = self.with_unit_types(response, root.state.sim) if root is not None else response
+            self.recorder.buffer("combatMove", request["state"], action, seconds,
+                                 self.search.last_stats if root is not None else None,
+                                 self.tree_path(root) if root is not None else None)
             self.recorder.flush()
         return response
+
+    def tree_path(self, root):
+        """The nodes the search chose, root first: at each tree level, the child with the most
+        visits (as mcts_search picks its actions). Each entry has the node's forward-model state,
+        all its children with their states, and the chosen child's index; the path stops at a
+        node with no children or after an end-phase action is chosen."""
+        path = []
+        node = root
+        while node is not None:
+            entry = self.node_json(node)
+            entry["children"] = [self.node_json(c) for c in node.children]
+            best = max(node.children, key=lambda c: c.visits) if node.children else None
+            entry["chosen"] = node.children.index(best) if best is not None else None
+            path.append(entry)
+            node = best if best is not None and not best.action.end_phase else None
+        return path
+
+    def node_json(self, node):
+        return {
+            "level": node.tree_level,
+            "action": (self.combat_action_json(node.action, node.state.sim)
+                       if node.action is not None else None),
+            "visits": node.visits,
+            "value": node.value / node.visits if node.visits > 0 else 0,
+            "state": self.observation(node.state.sim),
+            "terminal_reason": None if node.children else self.terminal_reason(node),
+        }
+
+    @staticmethod
+    def terminal_reason(node):
+        """Why a tree node has no children: "no_actions" when the game is over there,
+        "no_target" when the generator found no enemy territory left to attack, "timeout" when
+        it still had untried actions as the search time ran out."""
+        state = node.state
+        if state.is_terminal():
+            return "no_actions"
+        if all(a.end_phase for a in state.actions):
+            return "no_target"
+        if state.actionIndex < len(state.actions):
+            return "timeout"
+        return "no_actions"
+
+    def observation(self, sim):
+        """The forward-model state as an engine-style observation (the shape of a step's "state"),
+        with the engine's unit ids; a unit the engine never sent keeps its model id."""
+        obs = observation_from_state(self.definition, sim, self.whoAmI)
+        uuid_of = self.bridge.uuid_of
+        units = [u for t in obs["territories"] for u in t["units"]]
+        units += [u for p in obs["players"] for u in p["unitsInReserve"]]
+        for u in units:
+            u["id"] = uuid_of.get(int(u["id"]), u["id"])
+        return obs
+
+    def combat_action_json(self, action, sim):
+        moves = []
+        for mv in action.moves:
+            out = self.bridge.move_to_json(mv)
+            out["unitTypes"] = self.unit_type_names(sim, mv.units)
+            moves.append(out)
+        return {
+            "to": action.to_terr,
+            "end_phase": action.end_phase,
+            "strength": action.strength,
+            "moves": moves,
+        }
+
+    def with_unit_types(self, response, sim):
+        """A copy of a move response whose moves also list unitTypes, in unitIds order."""
+        if "moves" not in response:
+            return response
+        index_of = {uuid: uid for uid, uuid in self.bridge.uuid_of.items()}
+        return {**response, "moves": [
+            {**mv, "unitTypes": self.unit_type_names(sim, [index_of[u] for u in mv["unitIds"]])}
+            for mv in response.get("moves", [])]}
+
+    def unit_type_names(self, sim, unit_ids):
+        """Unit type names of forward-model unit ids (a unit's type never changes)."""
+        return [self.definition.unit_types[sim.units[u].type].name for u in unit_ids]
 
     def build_map(self, request):
         # Any map: territories + <connection>s from the rules XML become the graph.
