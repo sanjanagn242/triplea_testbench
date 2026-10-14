@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 /** Discovers external agent definitions and creates player types backed by the shared adapter. */
 public final class TestbenchAgentRegistry {
@@ -30,6 +31,18 @@ public final class TestbenchAgentRegistry {
 
   public static List<PlayerTypes.Type> getPlayerTypes(
       final Path commonGameXml, final int simulationNumber) {
+    return getPlayerTypes(commonGameXml, simulationNumber, System.currentTimeMillis(), () -> false);
+  }
+
+  /**
+   * Player types for one game of a run that started at runStartedAtMillis; suspendGame saves and
+   * stops the game when an agent asks to suspend it, returning false if it could not be saved.
+   */
+  public static List<PlayerTypes.Type> getPlayerTypes(
+      final Path commonGameXml,
+      final int simulationNumber,
+      final long runStartedAtMillis,
+      final BooleanSupplier suspendGame) {
     final List<PlayerTypes.Type> types = new ArrayList<>(HeadedPlayerTypes.getPlayerTypes());
     discoverAgents().stream()
         .map(
@@ -38,7 +51,12 @@ public final class TestbenchAgentRegistry {
                   @Override
                   public Player newPlayerWithName(final String name) {
                     return new ExternalAgentPlayer(
-                        name, definition, commonGameXml, simulationNumber);
+                        name,
+                        definition,
+                        commonGameXml,
+                        simulationNumber,
+                        runStartedAtMillis,
+                        suspendGame);
                   }
                 })
         .forEach(types::add);
@@ -75,8 +93,12 @@ public final class TestbenchAgentRegistry {
   private static List<ExternalAgentDefinition> discoverAgents() {
     final Path agentRoot = findRepositoryRoot().resolve(AGENT_DIRECTORY);
     if (!Files.isDirectory(agentRoot)) return List.of();
-    try (var manifests = Files.find(agentRoot, 3, (path, attrs) ->
-        attrs.isRegularFile() && path.getFileName().toString().equals("agent.json"))) {
+    try (var manifests =
+        Files.find(
+            agentRoot,
+            3,
+            (path, attrs) ->
+                attrs.isRegularFile() && path.getFileName().toString().equals("agent.json"))) {
       return manifests
           .sorted(Comparator.comparing(Path::toString))
           .map(TestbenchAgentRegistry::readDefinition)

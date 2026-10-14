@@ -10,6 +10,7 @@
     "hard-ai-python",
     "greedy-one-step-lookahead",
     "classical-mcts",
+    "classical-combat-mcts",
     "hard-ai-game-recorder"
   ]
 }

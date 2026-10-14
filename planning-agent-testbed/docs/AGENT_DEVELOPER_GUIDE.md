@@ -54,6 +54,8 @@ The first request is a `game_start` message with:
 - `initialState`: the initial state observation.
 - `playerName`: the faction controlled by this process.
 - `gameNumber`: the batch number, starting at 1.
+- `runStartedAtMillis`: when the testbench run started (epoch milliseconds; a resumed run starts
+  anew), for agents that enforce a run time limit.
 - `schemaVersion` and `requestId`: protocol metadata.
 
 Return an acknowledgement such as:
@@ -99,6 +101,15 @@ Optional fields, ignored by older agents:
 | `route` | each entry of `moves[]` | Full path from start to end (for example `["A", "B", "C"]`), so one move can cross several territories, e.g. an armour blitz. Without it the adapter uses the single step `from` → `to`. |
 | `intent` | each entry of `moves[]` | `"RAID"` makes the adapter answer "bomb" when the engine asks whether bombers moving to that territory should bomb; `"NORMAL"` answers "attack". If omitted, the built-in AI decides. |
 | `placements` | response to `place` | `[{"territory": "X", "unitIds": ["..."]}]`, applied in order. Units left unplaced are destroyed at the end of the step, as in the engine. |
+
+Instead of an action, any turn response may be `{"suspend": true}`. The testbench then saves the
+game to `planning-agent-testbed/saves/<game>/<config>/checkpoint.tsvg` (with `checkpoint.json`
+holding the run's progress), stops the run and appends a "suspended" entry to `game-results.txt`.
+Starting the same configuration again loads the checkpoint (autostart resumes directly; the setup
+window asks first) and continues that game with the same game number, keeping the logs and agent
+outputs of the suspended run; the agents get a fresh `game_start` for the saved state. Suspend at the
+start of a turn: state an agent keeps between requests is lost. The search template does this when
+`TRIPLEA_AGENT_RUN_HOURS` (hours since `runStartedAtMillis`) has passed.
 
 The engine now also sends a `place` turn request. If the response has no `placements` field
 (for example the older `placeAt` shape), the adapter keeps the built-in `WeakAi` placement.

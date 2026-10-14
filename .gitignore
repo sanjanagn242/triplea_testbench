@@ -27,6 +27,7 @@ build/
 out/
 .serena/
 planning-agent-testbed/logs/*.txt
+planning-agent-testbed/saves/
 planning-agent-testbed/**/__pycache__/
 
 CLAUDE.local.md

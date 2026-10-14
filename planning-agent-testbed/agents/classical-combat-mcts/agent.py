@@ -99,7 +99,8 @@ class ClassicalMctsAgent(SearchAgent):
                     "root_actions", "time_taken"])
 
     def setup(self):
-        self.log(f"parameters: seconds={self.SECONDS} seed={self.SEED} C={self.EXPLORATION} "
+        self.log(f"parameters: seconds={self.SECONDS} run_hours={self.run_hours} seed={self.SEED} "
+                 f"C={self.EXPLORATION} "
                  f"max_iterations={self.MAX_ITERATIONS} rollout_max_rounds={self.ROLLOUT_MAX_ROUNDS} "
                  f"save_tree={self.SAVE_TREE} tree_png={self.TREE_PNG}")
 
@@ -123,8 +124,7 @@ class ClassicalMctsAgent(SearchAgent):
         rng = self.new_rng()
         horizon = state.round + self.ROLLOUT_MAX_ROUNDS
         steps = 0
-        while (state.terminal is None and state.decision is not None and state.round < horizon
-               and time.time() < deadline):
+        while (state.terminal is None and state.decision is not None):
             actions = self.legal_actions(state, exhaustive=True)
             action = self.rnd.choice(actions) if actions else fm.EndPhaseAction()
             if not self.apply(state, action, rng) and not self.apply(state, fm.EndPhaseAction(), rng):
@@ -191,7 +191,7 @@ class ClassicalMctsAgent(SearchAgent):
         max_rollout_round = root.round  # furthest round any playout reached
         max_rounds_ahead = 0  # most rounds one playout advanced past the round it started in
 
-        while time.time() < deadline and self.iteration < self.MAX_ITERATIONS:
+        while self.iteration < self.MAX_ITERATIONS:
             self.iteration += 1
             node, depth = root_node, 0
 

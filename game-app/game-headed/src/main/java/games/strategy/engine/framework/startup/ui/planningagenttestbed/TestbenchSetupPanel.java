@@ -8,6 +8,7 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.framework.GameShutdownRegistry;
 import games.strategy.engine.framework.IGame;
 import games.strategy.engine.framework.LocalPlayers;
+import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.framework.map.file.system.loader.InstalledMapsListing;
 import games.strategy.engine.framework.startup.launcher.ILauncher;
 import games.strategy.engine.framework.startup.launcher.LocalLauncher;
@@ -28,6 +29,7 @@ import java.awt.Insets;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
@@ -63,6 +65,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private static final int DEFAULT_AI_MOVE_PAUSE_MS = 300;
   private static final int DEFAULT_AI_COMBAT_STEP_PAUSE_MS = 1000;
   private static final int MAX_AI_PAUSE_MS = 3000;
+  private static final String CHECKPOINT_SAVE = "checkpoint.tsvg";
+  private static final String CHECKPOINT_INFO = "checkpoint.json";
 
   private final HeadedServerSetupModel setupModel;
   private final GameSelectorModel gameSelectorModel;
@@ -88,6 +92,14 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private int plannedGames;
   private int completedGames;
   private Instant currentGameStartedAt;
+  // Start of the current run (also of a resumed one); agents measure their run time limit from it.
+  private Instant runStartedAt = Instant.now();
+  // Time the current game had already run before it was last suspended.
+  private long previouslyElapsedMillis;
+  // Set when a suspended game has been loaded and the next launch resumes it instead of a new run.
+  private Checkpoint pendingResume;
+  private volatile IGame currentGame;
+  private volatile boolean currentGameSuspended;
   private boolean autoStartPending;
   private final boolean exitWhenBatchDone; // autostarted from the command line
   private final StateObservationWindow stateObservationWindow = new StateObservationWindow();
@@ -294,6 +306,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
   }
 
   private void loadMap(final Path path) {
+    pendingResume = null;
     if (!Files.isRegularFile(path) || !gameSelectorModel.loadMapForTestbench(path)) {
       mapStatus.setText("Map could not be loaded");
       mapStatus.setToolTipText(path.toAbsolutePath().toString());
@@ -418,7 +431,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                     loadMap(resolvedMap);
                     applyAgentAssignments(config.agents);
                     applyObservationAssignments(config.observationPlayers);
-                    launchIfAutoStartPending();
+                    resumeOrLaunchIfAutoStartPending();
                   });
             } catch (IOException | RuntimeException e) {
               SwingUtilities.invokeLater(
@@ -434,6 +447,60 @@ public final class TestbenchSetupPanel extends SetupPanel {
       autoStartPending = false;
       showError("Could not read testbench configuration: " + e.getMessage());
     }
+  }
+
+  /**
+   * When this configuration has a suspended game, loads it so the next launch continues from it
+   * (asking first unless autostarted), then autostarts if requested.
+   */
+  private void resumeOrLaunchIfAutoStartPending() {
+    final Optional<Checkpoint> checkpoint = readCheckpoint();
+    if (checkpoint.isEmpty()) {
+      launchIfAutoStartPending();
+      return;
+    }
+    final Checkpoint suspended = checkpoint.get();
+    if (!autoStartPending
+        && JOptionPane.showConfirmDialog(
+                this,
+                String.format(
+                    "Game %d of %d was suspended at round %d (%s).%nResume it?%n%n"
+                        + "Choose No to start a new run; the suspended game is deleted when it"
+                        + " starts.",
+                    suspended.completedGames() + 1,
+                    suspended.plannedGames(),
+                    suspended.round(),
+                    suspended.savedAt()),
+                "Planning agent testbench",
+                JOptionPane.YES_NO_OPTION)
+            != JOptionPane.YES_OPTION) {
+      return;
+    }
+    mapStatus.setText("Loading the suspended game…");
+    final Path saveFile = checkpointDirectory().resolve(CHECKPOINT_SAVE);
+    ThreadRunner.runInNewThread(
+        () -> {
+          final boolean loaded = gameSelectorModel.loadSave(saveFile);
+          SwingUtilities.invokeLater(
+              () -> {
+                if (!loaded) {
+                  autoStartPending = false;
+                  mapStatus.setText("Suspended game could not be loaded");
+                  showError("Could not load the suspended game " + saveFile);
+                  return;
+                }
+                pendingResume = suspended;
+                mapStatus.setText(
+                    String.format(
+                        "Resuming game %d/%d at round %d",
+                        suspended.completedGames() + 1,
+                        suspended.plannedGames(),
+                        suspended.round()));
+                mapStatus.setToolTipText(saveFile.toAbsolutePath().toString());
+                fireListener();
+                launchIfAutoStartPending();
+              });
+        });
   }
 
   /**
@@ -581,13 +648,28 @@ public final class TestbenchSetupPanel extends SetupPanel {
   @Override
   public Optional<ILauncher> getLauncher() {
     if (!experimentRunning) {
-      refreshSimulationLogs();
-      if (clearAgentOutputs.isSelected()) {
-        clearAssignedAgentOutputs();
-      }
       experimentRunning = true;
-      plannedGames = (int) gamesCount.getValue();
-      completedGames = 0;
+      runStartedAt = Instant.now();
+      if (pendingResume != null) {
+        // Keep the logs and agent outputs of the suspended run and continue its numbering.
+        completedGames = pendingResume.completedGames();
+        plannedGames = Math.max((int) gamesCount.getValue(), completedGames + 1);
+        previouslyElapsedMillis = pendingResume.elapsedMillis();
+        appendResultsLog(
+            String.format(
+                "Game %d/%d resumed at round %d%n%n",
+                completedGames + 1, plannedGames, pendingResume.round()));
+        pendingResume = null;
+      } else {
+        refreshSimulationLogs();
+        if (clearAgentOutputs.isSelected()) {
+          clearAssignedAgentOutputs();
+        }
+        deleteCheckpoint();
+        plannedGames = (int) gamesCount.getValue();
+        completedGames = 0;
+        previouslyElapsedMillis = 0;
+      }
     }
     gameSelectorModel
         .getGameData()
@@ -610,7 +692,11 @@ public final class TestbenchSetupPanel extends SetupPanel {
     final Path observedMapXml = Path.of(mapPath.getText());
     final int simulationNumber = completedGames + 1;
     final List<PlayerTypes.Type> selectedGamePlayerTypes =
-        TestbenchAgentRegistry.getPlayerTypes(Path.of(mapPath.getText()), simulationNumber);
+        TestbenchAgentRegistry.getPlayerTypes(
+            Path.of(mapPath.getText()),
+            simulationNumber,
+            runStartedAt.toEpochMilli(),
+            this::suspendCurrentGame);
     assignments.forEach(
         (name, combo) ->
             players.add(
@@ -648,6 +734,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   final IGame game,
                   final Set<Player> localGamePlayers,
                   final Chat chat) {
+                currentGame = game;
                 super.startGame(localPlayers, game, localGamePlayers, chat);
                 SwingUtilities.invokeLater(
                     () ->
@@ -668,11 +755,58 @@ public final class TestbenchSetupPanel extends SetupPanel {
             this::onGameCompleted));
   }
 
+  /**
+   * Called on the game thread when an agent asks to suspend: saves the game as this configuration's
+   * checkpoint and stops it. Returns false, leaving the game running, if the save failed.
+   */
+  private boolean suspendCurrentGame() {
+    final IGame game = currentGame;
+    if (!(game instanceof ServerGame serverGame)) {
+      return false;
+    }
+    final Path directory = checkpointDirectory();
+    final Path saveFile = directory.resolve(CHECKPOINT_SAVE);
+    final Path newSaveFile = directory.resolve("checkpoint-new.tsvg");
+    try {
+      Files.createDirectories(directory);
+      Files.deleteIfExists(newSaveFile);
+      // The engine logs save failures instead of throwing; a missing file means it failed.
+      serverGame.saveGame(newSaveFile);
+      if (!Files.isRegularFile(newSaveFile)) {
+        return false;
+      }
+      Files.move(newSaveFile, saveFile, StandardCopyOption.REPLACE_EXISTING);
+      final Checkpoint checkpoint =
+          new Checkpoint(
+              activeConfigurationKey(),
+              completedGames,
+              plannedGames,
+              game.getData().getSequence().getRound(),
+              currentGameElapsedMillis(),
+              Instant.now().toString());
+      Files.writeString(directory.resolve(CHECKPOINT_INFO), GSON.toJson(checkpoint));
+    } catch (final IOException | RuntimeException e) {
+      System.err.println("Could not save the suspended testbench game: " + e.getMessage());
+      return false;
+    }
+    currentGameSuspended = true;
+    serverGame.stopGame();
+    return true;
+  }
+
   private void onGameCompleted() {
     stateObservationWindow.stopObserving();
     GameShutdownRegistry.runShutdownActions();
+    currentGame = null;
+    if (currentGameSuspended) {
+      currentGameSuspended = false;
+      onGameSuspended();
+      return;
+    }
     completedGames++;
     appendGameLog();
+    previouslyElapsedMillis = 0;
+    deleteCheckpoint();
     SwingUtilities.invokeLater(
         () -> {
           final Path selectedMap = Path.of(mapPath.getText());
@@ -701,6 +835,44 @@ public final class TestbenchSetupPanel extends SetupPanel {
         });
   }
 
+  /** Ends the run after a suspension; starting the same configuration again resumes the game. */
+  private void onGameSuspended() {
+    final Path checkpoint = checkpointDirectory().resolve(CHECKPOINT_SAVE);
+    final String message =
+        String.format(
+            java.util.Locale.ROOT,
+            "Game %d/%d suspended after %.1f seconds; run the same configuration again to resume."
+                + "%nCheckpoint: %s%n",
+            completedGames + 1,
+            plannedGames,
+            currentGameElapsedMillis() / 1000.0,
+            checkpoint);
+    appendResultsLog(message + System.lineSeparator());
+    experimentRunning = false;
+    if (exitWhenBatchDone) {
+      System.err.print(message);
+      ExitStatus.SUCCESS.exit();
+    }
+    SwingUtilities.invokeLater(
+        () -> {
+          final Path selectedMap = Path.of(mapPath.getText());
+          if (Files.isRegularFile(selectedMap)) {
+            gameSelectorModel.loadMapForTestbench(selectedMap);
+          }
+          JOptionPane.showMessageDialog(
+              this, message, "Planning agent testbench", JOptionPane.INFORMATION_MESSAGE);
+          plannedGames = 0;
+          completedGames = 0;
+          setupModel.showTestbenchMenu();
+          games.strategy.engine.framework.ui.MainFrame.show();
+        });
+  }
+
+  private long currentGameElapsedMillis() {
+    return previouslyElapsedMillis
+        + Duration.between(currentGameStartedAt, Instant.now()).toMillis();
+  }
+
   private void appendGameLog() {
     try {
       final String winners =
@@ -720,11 +892,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
           selectedAssignments().entrySet().stream()
               .map(entry -> entry.getKey() + " = " + entry.getValue())
               .collect(java.util.stream.Collectors.joining(", "));
-      final long elapsedMillis = Duration.between(currentGameStartedAt, Instant.now()).toMillis();
-      final Path logFile = resultsLogPath();
-      Files.createDirectories(logFile.getParent());
-      Files.writeString(
-          logFile,
+      final long elapsedMillis = currentGameElapsedMillis();
+      appendResultsLog(
           String.format(
               java.util.Locale.ROOT,
               "Game %d/%d completed%nPlayers: %s%nResult: %s%nRounds played: %d%n"
@@ -734,11 +903,69 @@ public final class TestbenchSetupPanel extends SetupPanel {
               players,
               result,
               roundsPlayed,
-              elapsedMillis / 1000.0),
-          StandardOpenOption.CREATE,
-          StandardOpenOption.APPEND);
-    } catch (IOException | RuntimeException e) {
+              elapsedMillis / 1000.0));
+    } catch (RuntimeException e) {
       System.err.println("Could not write planning-agent testbench log: " + e.getMessage());
+    }
+  }
+
+  private static void appendResultsLog(final String text) {
+    try {
+      final Path logFile = resultsLogPath();
+      Files.createDirectories(logFile.getParent());
+      Files.writeString(logFile, text, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    } catch (IOException e) {
+      System.err.println("Could not write planning-agent testbench log: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Folder of this configuration's suspended game: planning-agent-testbed/saves/(game)/(config),
+   * where (game) is the folder holding the configuration's config folder.
+   */
+  private Path checkpointDirectory() {
+    final Path saves =
+        TestbenchMapRepository.repositoryRoot().resolve("planning-agent-testbed/saves");
+    if (activeConfigurationFile == null) {
+      return saves.resolve("unsaved-configuration");
+    }
+    final String configName =
+        activeConfigurationFile.getFileName().toString().replaceFirst("\\.json$", "");
+    final Path gameDirectory = activeConfigurationFile.getParent().getParent();
+    return gameDirectory == null || gameDirectory.getFileName() == null
+        ? saves.resolve(configName)
+        : saves.resolve(gameDirectory.getFileName().toString()).resolve(configName);
+  }
+
+  private String activeConfigurationKey() {
+    return activeConfigurationFile == null
+        ? ""
+        : activeConfigurationFile.toAbsolutePath().normalize().toString();
+  }
+
+  /** The suspended game of the active configuration, if its checkpoint files are present. */
+  private Optional<Checkpoint> readCheckpoint() {
+    final Path directory = checkpointDirectory();
+    final Path info = directory.resolve(CHECKPOINT_INFO);
+    if (!Files.isRegularFile(info) || !Files.isRegularFile(directory.resolve(CHECKPOINT_SAVE))) {
+      return Optional.empty();
+    }
+    try {
+      return Optional.ofNullable(GSON.fromJson(Files.readString(info), Checkpoint.class))
+          .filter(checkpoint -> activeConfigurationKey().equals(checkpoint.configuration()));
+    } catch (IOException | RuntimeException e) {
+      System.err.println("Could not read testbench checkpoint " + info + ": " + e.getMessage());
+      return Optional.empty();
+    }
+  }
+
+  private void deleteCheckpoint() {
+    final Path directory = checkpointDirectory();
+    try {
+      Files.deleteIfExists(directory.resolve(CHECKPOINT_INFO));
+      Files.deleteIfExists(directory.resolve(CHECKPOINT_SAVE));
+    } catch (IOException e) {
+      System.err.println("Could not delete testbench checkpoint in " + directory + ": " + e);
     }
   }
 
@@ -814,6 +1041,15 @@ public final class TestbenchSetupPanel extends SetupPanel {
       Boolean showObservations,
       Map<String, Boolean> observationPlayers,
       Boolean clearAgentOutputs) {}
+
+  /** A suspended game: the run's progress when it was saved to checkpoint.tsvg. */
+  private record Checkpoint(
+      String configuration,
+      int completedGames,
+      int plannedGames,
+      int round,
+      long elapsedMillis,
+      String savedAt) {}
 
   private record MapReference(
       String name, String gameName, List<String> aliases, String downloadUrl) {}

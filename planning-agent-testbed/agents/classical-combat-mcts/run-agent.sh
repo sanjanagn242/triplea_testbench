@@ -6,10 +6,14 @@ agent_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Logging to stderr and planning-agent-testbed/logs/agent-<faction>-game-<n>.txt: 1 on, 0 off.
 export TRIPLEA_AGENT_LOG=1
 # Search: time per phase (s), seed, UCT exploration constant, iteration cap besides the time.
-export TRIPLEA_AGENT_SECONDS=600
+export TRIPLEA_AGENT_SECONDS=60
 export TRIPLEA_AGENT_SEED=0
 export TRIPLEA_CLASSIC_MCTS_EXPLORATION=1.414
 export TRIPLEA_CLASSIC_MCTS_MAX_ITERATIONS=100000
+# Run time limit in hours (fractions allowed, 0 = no limit), counted from the start of the run.
+# Once it has passed, the agent asks the testbench at the start of its next turn to save the game
+# and stop; starting the same configuration again resumes from that point.
+export TRIPLEA_AGENT_RUN_HOURS=3
 # Rounds a playout runs before it is stopped with no winner (scored as a loss).
 export TRIPLEA_CLASSIC_MCTS_ROLLOUT=100
 # Search trees in logs/trees/: 1 saves a .dot after every search, TREE_PNG 1 also renders a

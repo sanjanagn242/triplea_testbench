@@ -2,6 +2,7 @@ package games.strategy.engine.framework.startup.ui.planningagenttestbed;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import games.strategy.engine.GameOverException;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameState;
@@ -37,6 +38,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.collections.IntegerMap;
 
@@ -52,6 +54,10 @@ public final class ExternalAgentPlayer extends WeakAi {
   private final ExternalAgentDefinition definition;
   private final Path commonGameXml;
   private final int simulationNumber;
+  // Wall-clock start of the testbench run (epoch ms), sent so agents can enforce a run time limit.
+  private final long runStartedAtMillis;
+  // Saves the game and stops it when the agent asks to suspend; false if it could not be saved.
+  private final BooleanSupplier suspendGame;
   private final PlayerGameXmlProvider gameXmlProvider = new FullPlayerGameXmlProvider();
   private Process agentProcess;
   private BufferedReader agentOutput;
@@ -67,10 +73,28 @@ public final class ExternalAgentPlayer extends WeakAi {
       final ExternalAgentDefinition definition,
       final Path commonGameXml,
       final int simulationNumber) {
+    this(
+        playerName,
+        definition,
+        commonGameXml,
+        simulationNumber,
+        System.currentTimeMillis(),
+        () -> false);
+  }
+
+  public ExternalAgentPlayer(
+      final String playerName,
+      final ExternalAgentDefinition definition,
+      final Path commonGameXml,
+      final int simulationNumber,
+      final long runStartedAtMillis,
+      final BooleanSupplier suspendGame) {
     super(playerName, definition.name());
     this.definition = definition;
     this.commonGameXml = commonGameXml;
     this.simulationNumber = simulationNumber;
+    this.runStartedAtMillis = runStartedAtMillis;
+    this.suspendGame = suspendGame;
   }
 
   @Override
@@ -254,7 +278,26 @@ public final class ExternalAgentPlayer extends WeakAi {
     }
   }
 
+  /**
+   * The agent's decision for this phase, or null when it gave none. An agent may answer {@code
+   * {"suspend": true}} instead (for example when its run time limit has passed): the testbench then
+   * saves the game and stops it, so the run can be resumed from this point later.
+   */
   private synchronized Decision askAgent(
+      final String phase, final GameData data, final GamePlayer player, final boolean nonCombat) {
+    final Decision decision = requestDecision(phase, data, player, nonCombat);
+    if (decision == null || !decision.suspend()) {
+      return decision;
+    }
+    log.info("{} agent asked to suspend the game during {}", player.getName(), phase);
+    if (suspendGame.getAsBoolean()) {
+      throw new GameOverException("Game suspended by the " + player.getName() + " agent");
+    }
+    log.error("{} agent asked to suspend, but the game could not be saved", player.getName());
+    return null;
+  }
+
+  private Decision requestDecision(
       final String phase, final GameData data, final GamePlayer player, final boolean nonCombat) {
     try {
       final StateObservation observation = new FullStateObservationProvider().observe(data, player);
@@ -276,6 +319,7 @@ public final class ExternalAgentPlayer extends WeakAi {
               observation,
               nonCombat,
               simulationNumber,
+              runStartedAtMillis,
               null);
       final String response = exchange(request);
       if (response == null || response.isBlank()) {
@@ -322,6 +366,7 @@ public final class ExternalAgentPlayer extends WeakAi {
               null,
               false,
               simulationNumber,
+              runStartedAtMillis,
               null);
       final String response = exchange(request);
       final GameStartResponse acknowledgement = GSON.fromJson(response, GameStartResponse.class);
@@ -380,6 +425,7 @@ public final class ExternalAgentPlayer extends WeakAi {
               new FullStateObservationProvider().observe(data, player),
               false,
               simulationNumber,
+              runStartedAtMillis,
               result);
       CompletableFuture.supplyAsync(
               () -> {
@@ -475,6 +521,7 @@ public final class ExternalAgentPlayer extends WeakAi {
       StateObservation state,
       boolean nonCombat,
       int gameNumber,
+      long runStartedAtMillis,
       GameResult result) {}
 
   private record GameResult(List<String> winners, boolean won, int roundsPlayed, String status) {}
@@ -489,7 +536,8 @@ public final class ExternalAgentPlayer extends WeakAi {
       List<MoveOrder> moves,
       String placeAt,
       List<PlacementOrder> placements,
-      boolean fightAll) {}
+      boolean fightAll,
+      boolean suspend) {}
 
   private record PlacementOrder(String territory, List<String> unitIds) {}
 

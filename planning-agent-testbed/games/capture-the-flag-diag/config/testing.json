@@ -12,7 +12,7 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "Hard (AI)",
+    "Russians": "classical-combat-mcts",
     "Germans": "tripleMind-mcts"
   },
   "showObservations": false,

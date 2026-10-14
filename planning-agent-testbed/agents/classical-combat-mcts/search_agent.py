@@ -15,6 +15,10 @@ search(root, phase, deadline) receives a SimulationState positioned at this play
 rest of that phase, in order. Battles are answered by battle() (default: let the engine fight
 them; in protocol v1 the engine also picks this player's casualties and retreats).
 
+Run time limit: with TRIPLEA_AGENT_RUN_HOURS > 0, once that much time has passed since the testbench
+run started, the agent answers the first request of its next turn with {"suspend": true}. The
+testbench then saves the game and stops; starting the same configuration again resumes it.
+
 Helpers for search code: legal_actions, simulate / apply, same_phase, new_rng, rollout and
 evaluate. They are thin wrappers over the triplea_fm library, which can also be used directly.
 """
@@ -61,6 +65,10 @@ class SearchAgent:
         self.precomp: Optional[Precomp] = None  # distances, unit costs, territory values
         self.policy: Optional[HeuristicPolicy] = None  # library baseline, used by rollout()
         self.log_path: Optional[Path] = None
+        # Run time limit in hours (0 = none), measured from the start of the testbench run.
+        self.run_hours = float(os.environ.get("TRIPLEA_AGENT_RUN_HOURS", "0") or 0)
+        self.run_started_at = time.time()  # replaced by the testbench's run start in game_start
+        self.turn_round: Optional[int] = None  # round of the last search request (turn detection)
 
     # =============================================================================================
     # Override these
@@ -171,10 +179,15 @@ class SearchAgent:
     def game_start(self, request: dict) -> dict:
         self.player_name = request["playerName"]
         game_number = request.get("gameNumber", 1)
+        if request.get("runStartedAtMillis"):
+            self.run_started_at = request["runStartedAtMillis"] / 1000.0
         if LOGGING:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             self.log_path = self.log_dir / f"agent-{self.player_name}-game-{game_number}.txt"
-            self.log_path.write_text(f"{game_number}\n", encoding="utf-8")
+            if self.log_path.exists():  # a resumed game (or restarted process) keeps its log
+                self.log(f"game {game_number} restarted from the testbench's current state")
+            else:
+                self.log_path.write_text(f"{game_number}\n", encoding="utf-8")
         try:
             d, report = fm.load_definition(request["gameXml"], strict=False)
         except Exception as e:  # not a TripleA game XML the forward model can read
@@ -202,6 +215,11 @@ class SearchAgent:
             return self.battle(request.get("state", {}))
         if phase not in SEARCH_PHASES or self.d is None:
             return {}
+        if self.should_suspend(int(request["state"]["round"])):
+            hours = (time.time() - self.run_started_at) / 3600
+            self.log(f"round {request['state']['round']} {phase}: run time limit of "
+                     f"{self.run_hours} h reached after {hours:.2f} h; asking to suspend")
+            return {"suspend": True}
         root = self.bridge.build_state(request["state"], phase)
         try:
             fm.create_state(self.d, root)
@@ -215,6 +233,14 @@ class SearchAgent:
         self.log(f"round {root.round} {phase}: {time.time() - started:.2f}s, {len(accepted)}/{len(actions)} "
                  f"actions accepted -> {json.dumps(response)}")
         return response
+
+    def should_suspend(self, round_: int) -> bool:
+        """True at the first search request of a new turn once the run time limit has passed.
+        Suspending only at a turn's start keeps the bridge's per-turn state valid after resuming."""
+        new_turn = round_ != self.turn_round
+        self.turn_round = round_
+        return (new_turn and self.run_hours > 0
+                and time.time() - self.run_started_at >= self.run_hours * 3600)
 
     def _check(self, root, actions) -> List[object]:
         """Replay the actions on a clone in order; keep those the kernel accepts in this phase."""
