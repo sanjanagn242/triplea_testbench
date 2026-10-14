@@ -4,6 +4,8 @@
     "python-mcts",
     "cpp-mcts",
     "tripleMind-mcts",
+    "tripleMind-bc",
+    "tripleMind-ppo",
     "does-nothing-python",
     "hard-ai-python",
     "greedy-one-step-lookahead",

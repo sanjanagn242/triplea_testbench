@@ -8,15 +8,16 @@
   },
   "games": 2,
   "roundLimit": 100,
-  "aiMovePauseMs": 200,
+  "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "Easy (AI)",
-    "Italians": "simple-infantry"
+    "Russians": "Hard (AI)",
+    "Italians": "tripleMind-bc"
   },
-  "showObservations": true,
+  "showObservations": false,
   "observationPlayers": {
     "Russians": true,
     "Italians": true
-  }
+  },
+  "clearAgentOutputs": true
 }

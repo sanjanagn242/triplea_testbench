@@ -1,0 +1,217 @@
+{
+ "heuristic": {
+  "performance": {
+   "games": 40,
+   "wins": 0,
+   "losses": 40,
+   "draws": 0,
+   "win_rate": 0.0,
+   "draw_rate": 0.0,
+   "score": 0.0,
+   "rounds_mean": 10.0,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 0,
+     "losses": 20,
+     "draws": 0
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 0,
+     "losses": 20,
+     "draws": 0
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 0.06461572051048278,
+   "game_seconds_total": 2.5846288204193115,
+   "policy_decisions_per_game": 28.5,
+   "policy_ms_per_decision": 1.419342343139936,
+   "moves_applied_per_game": 210.175,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "first": {
+  "performance": {
+   "games": 40,
+   "wins": 40,
+   "losses": 0,
+   "draws": 0,
+   "win_rate": 1.0,
+   "draw_rate": 0.0,
+   "score": 1.0,
+   "rounds_mean": 9.0,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 0.027975064516067506,
+   "game_seconds_total": 1.1190025806427002,
+   "policy_decisions_per_game": 17.625,
+   "policy_ms_per_decision": 0.5825529548716037,
+   "moves_applied_per_game": 102.225,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "random": {
+  "performance": {
+   "games": 40,
+   "wins": 16,
+   "losses": 3,
+   "draws": 21,
+   "win_rate": 0.4,
+   "draw_rate": 0.525,
+   "score": 0.6625,
+   "rounds_mean": 58.85,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 10,
+     "losses": 2,
+     "draws": 8
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 6,
+     "losses": 1,
+     "draws": 13
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 0.22152464389801024,
+   "game_seconds_total": 8.86098575592041,
+   "policy_decisions_per_game": 148.95,
+   "policy_ms_per_decision": 0.5155186758624573,
+   "moves_applied_per_game": 604.425,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "mcts": {
+  "performance": {
+   "games": 40,
+   "wins": 40,
+   "losses": 0,
+   "draws": 0,
+   "win_rate": 1.0,
+   "draw_rate": 0.0,
+   "score": 1.0,
+   "rounds_mean": 10.5,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 5.4540976822376255,
+   "game_seconds_total": 218.163907289505,
+   "policy_decisions_per_game": 24.2,
+   "policy_ms_per_decision": 0.7333551477717836,
+   "moves_applied_per_game": 131.4,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "bc": {
+  "performance": {
+   "games": 40,
+   "wins": 40,
+   "losses": 0,
+   "draws": 0,
+   "win_rate": 1.0,
+   "draw_rate": 0.0,
+   "score": 1.0,
+   "rounds_mean": 9.5,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 20,
+     "losses": 0,
+     "draws": 0
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 1.4593725383281708,
+   "game_seconds_total": 58.37490153312683,
+   "policy_decisions_per_game": 20.9,
+   "policy_ms_per_decision": 0.7274394178691734,
+   "moves_applied_per_game": 111.875,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "ppo:runs/ppo-selfplay/checkpoints/iter_0030.pt": {
+  "performance": {
+   "games": 40,
+   "wins": 0,
+   "losses": 0,
+   "draws": 40,
+   "win_rate": 0.0,
+   "draw_rate": 1.0,
+   "score": 0.5,
+   "rounds_mean": 101.0,
+   "by_side": {
+    "Russians": {
+     "games": 20,
+     "wins": 0,
+     "losses": 0,
+     "draws": 20
+    },
+    "Germans": {
+     "games": 20,
+     "wins": 0,
+     "losses": 0,
+     "draws": 20
+    }
+   }
+  },
+  "cost": {
+   "game_seconds_mean": 0.5083075225353241,
+   "game_seconds_total": 20.332300901412964,
+   "policy_decisions_per_game": 298.0,
+   "policy_ms_per_decision": 0.5288900129322037,
+   "moves_applied_per_game": 1012.0,
+   "moves_rejected_per_game": 0.0
+  }
+ },
+ "_wall_seconds": 20.77282166481018,
+ "_meta": {
+  "checkpoint": "runs/ppo-selfplay/checkpoints/best.pt",
+  "chooser": "ppo",
+  "games_per_opponent": 40,
+  "xml": "/home/sanjana/Documents/Codex/2026-09-29/https-github-com-triplea-game-triplea-2/work/triplea/planning-agent-testbed/games/capture-the-flag-diag/map/capture_the_flag/map/games/capture_the_flag.xml",
+  "max_rounds": 100,
+  "mcts_seconds": 0.5,
+  "workers": 16,
+  "seed": 1
+ }
+}

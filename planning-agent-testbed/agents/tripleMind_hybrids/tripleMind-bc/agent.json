@@ -1,0 +1,8 @@
+{
+  "id": "tripleMind-bc",
+  "name": "TripleMind BC",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind with a behaviour-cloning policy instead of MCTS choosing the attack formation for each heuristically chosen target."
+}

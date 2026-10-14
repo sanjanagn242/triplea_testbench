@@ -1,0 +1,6 @@
+__pycache__/
+runs/sanity/
+runs/eval/
+runs/*/mcts-opponent/
+runs/*/checkpoints/iter_*.pt
+runs/*/checkpoints/*.tmp

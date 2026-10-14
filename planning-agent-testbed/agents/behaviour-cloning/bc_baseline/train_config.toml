@@ -1,0 +1,26 @@
+# Training parameters for `run_bc.py train` (bc_baseline.train.TrainConfig).
+#
+# Precedence: a command-line flag (e.g. --lr 3e-4) > this file > the TrainConfig defaults.
+# Use another file with `run_bc.py train --config path/to/file.toml`. Every key is optional;
+# unknown keys are an error. The values used are saved to <run>/config.json.
+
+[train]
+# Adam learning rate.
+lr = 1e-3
+# Decisions per gradient step (each decision is padded to the batch's largest candidate set).
+batch_size = 256
+# Maximum number of passes over the training split.
+epochs = 100
+# Seed of model initialisation, batch order and dropout.
+seed = 0
+# Hidden sizes of the state encoder (1308 -> h1 -> ... -> hk). The candidate encoder maps
+# 94 -> hk and the scorer 2*hk -> hk -> 1, so the last entry sets the embedding size.
+hidden_dims = [256, 128]
+# Dropout after every hidden layer (0 disables it).
+dropout = 0.0
+# Adam L2 weight decay.
+weight_decay = 0.0
+# Early stopping: stop after `patience` epochs whose validation loss did not improve on the
+# best by more than `min_delta`. The best epoch's model is saved as best.pt.
+patience = 20
+min_delta = 1e-4

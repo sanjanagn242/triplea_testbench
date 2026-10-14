@@ -1,0 +1,301 @@
+normalisation warm-up: 16 random self-play games, 3195 decisions, 1.5s
+it    1  games     64  dec  7451  ret -0.26  heuristic 0%  first 12%  pi -0.0017  v 0.0224  H 0.827  kl 0.0007  clip 0.00  ev +0.00  [1s + 0.8s]
+it    2  games    128  dec  6173  ret -0.24  heuristic 0%  first 25%  pi -0.0027  v 0.0229  H 0.804  kl 0.0006  clip 0.00  ev +0.35  [1s + 0.6s]
+it    3  games    192  dec  4872  ret -0.31  heuristic 0%  first 6%  pi -0.0096  v 0.0333  H 0.799  kl 0.0025  clip 0.03  ev +0.41  [1s + 0.5s]
+it    4  games    256  dec  4925  ret -0.20  heuristic 0%  first 31%  pi -0.0137  v 0.0318  H 0.784  kl 0.0043  clip 0.06  ev +0.50  [1s + 0.5s]
+it    5  games    320  dec  4092  ret -0.31  heuristic 0%  first 6%  pi -0.0140  v 0.0361  H 0.782  kl 0.0058  clip 0.07  ev +0.50  [1s + 0.4s]
+it    6  games    384  dec  4298  ret -0.18  heuristic 0%  first 44%  pi -0.0157  v 0.0372  H 0.751  kl 0.0068  clip 0.08  ev +0.60  [1s + 0.4s]
+it    7  games    448  dec  4416  ret -0.25  heuristic 0%  first 25%  pi -0.0149  v 0.0333  H 0.728  kl 0.0077  clip 0.09  ev +0.64  [1s + 0.5s]
+it    8  games    512  dec  4609  ret -0.22  heuristic 0%  first 31%  pi -0.0150  v 0.0411  H 0.707  kl 0.0068  clip 0.08  ev +0.60  [1s + 0.5s]
+it    9  games    576  dec  3664  ret -0.19  heuristic 0%  first 44%  pi -0.0175  v 0.0499  H 0.682  kl 0.0101  clip 0.10  ev +0.49  [1s + 0.4s]
+it   10  games    640  dec  3697  ret -0.17  heuristic 0%  first 50%  pi -0.0171  v 0.0528  H 0.627  kl 0.0110  clip 0.11  ev +0.58  [0s + 0.4s]
+it   11  games    704  dec  3808  ret -0.16  past 19%  heuristic 0%  first 69%  pi -0.0139  v 0.0388  H 0.620  kl 0.0096  clip 0.09  ev +0.64  [1s + 0.4s]
+it   12  games    768  dec  3383  ret -0.29  past 19%  heuristic 0%  first 56%  pi -0.0146  v 0.0526  H 0.575  kl 0.0081  clip 0.08  ev +0.45  [1s + 0.4s]
+it   13  games    832  dec  4218  ret -0.15  past 25%  heuristic 0%  first 75%  pi -0.0124  v 0.0352  H 0.551  kl 0.0091  clip 0.09  ev +0.61  [1s + 0.4s]
+it   14  games    896  dec  5363  ret -0.01  past 19%  heuristic 0%  first 100%  pi -0.0095  v 0.0208  H 0.516  kl 0.0101  clip 0.07  ev +0.74  [1s + 0.5s]
+it   15  games    960  dec  5360  ret -0.03  past 31%  heuristic 0%  first 94%  pi -0.0054  v 0.0213  H 0.502  kl 0.0088  clip 0.07  ev +0.73  [1s + 0.5s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.5  Germans:0/10  Russians:0/10
+  first                           20   10   10    0  50.0%  0.500   11.9  Germans:0/10  Russians:10/10
+  random                          20   11    3    6  55.0%  0.700   38.8  Germans:5/10  Russians:6/10
+  mcts                            20   17    0    3  85.0%  0.925   24.2  Germans:9/10  Russians:8/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.04      0.8           20.2               0.72      215.2          0.00
+  first                           0.03      0.7           22.0               0.59      126.2          0.00
+  random                          0.12      2.4           66.1               0.48      402.3          0.00
+  mcts                           12.31    246.1           43.2               0.87      213.8          0.00
+  wall time 51.3s
+  new best mean score 0.531 -> checkpoints/best.pt
+it   16  games   1024  dec  3672  ret -0.06  past 38%  heuristic 0%  first 88%  pi -0.0096  v 0.0301  H 0.490  kl 0.0102  clip 0.07  ev +0.69  [1s + 0.4s]
+it   17  games   1088  dec  4240  ret +0.01  past 50%  heuristic 0%  first 88%  pi -0.0101  v 0.0304  H 0.472  kl 0.0107  clip 0.07  ev +0.68  [1s + 0.5s]
+it   18  games   1152  dec  4736  ret +0.04  past 44%  heuristic 0%  first 94%  pi -0.0074  v 0.0324  H 0.427  kl 0.0111  clip 0.06  ev +0.61  [1s + 0.5s]
+it   19  games   1216  dec  2949  ret +0.09  past 75%  heuristic 0%  first 94%  pi -0.0094  v 0.0364  H 0.416  kl 0.0104  clip 0.07  ev +0.73  [1s + 0.3s]
+it   20  games   1280  dec  3842  ret +0.10  past 81%  heuristic 0%  first 88%  pi -0.0072  v 0.0309  H 0.382  kl 0.0123  clip 0.07  ev +0.70  [1s + 0.4s]
+it   21  games   1344  dec  2931  ret +0.09  past 69%  heuristic 0%  first 94%  pi -0.0107  v 0.0437  H 0.424  kl 0.0118  clip 0.07  ev +0.70  [1s + 0.3s]
+it   22  games   1408  dec  3495  ret +0.04  past 44%  heuristic 0%  first 100%  pi -0.0075  v 0.0281  H 0.401  kl 0.0126  clip 0.06  ev +0.77  [1s + 0.4s]
+it   23  games   1472  dec  2952  ret +0.04  past 62%  heuristic 0%  first 94%  pi -0.0125  v 0.0409  H 0.387  kl 0.0158  clip 0.09  ev +0.73  [1s + 0.3s]
+it   24  games   1536  dec  3049  ret +0.12  past 81%  heuristic 0%  first 94%  pi -0.0096  v 0.0319  H 0.337  kl 0.0104  clip 0.06  ev +0.76  [1s + 0.3s]
+it   25  games   1600  dec  3098  ret +0.11  past 81%  heuristic 0%  first 94%  pi -0.0081  v 0.0276  H 0.333  kl 0.0129  clip 0.06  ev +0.84  [1s + 0.4s]
+it   26  games   1664  dec  2387  ret +0.17  past 100%  heuristic 0%  first 94%  pi -0.0100  v 0.0366  H 0.367  kl 0.0176  clip 0.08  ev +0.82  [0s + 0.3s]
+it   27  games   1728  dec  2668  ret +0.03  past 94%  heuristic 0%  first 62%  pi -0.0116  v 0.0590  H 0.346  kl 0.0169  clip 0.09  ev +0.70  [1s + 0.3s]
+it   28  games   1792  dec  3288  ret +0.11  past 81%  heuristic 0%  first 94%  pi -0.0103  v 0.0407  H 0.348  kl 0.0124  clip 0.07  ev +0.73  [1s + 0.4s]
+it   29  games   1856  dec  2350  ret +0.14  past 81%  heuristic 0%  first 100%  pi -0.0093  v 0.0460  H 0.378  kl 0.0142  clip 0.08  ev +0.77  [0s + 0.3s]
+it   30  games   1920  dec  3191  ret +0.12  past 94%  heuristic 0%  first 88%  pi -0.0099  v 0.0466  H 0.340  kl 0.0083  clip 0.06  ev +0.64  [0s + 0.4s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.0  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   12    1    7  60.0%  0.775   42.3  Germans:6/10  Russians:6/10
+  mcts                            20   12    2    6  60.0%  0.750   37.8  Germans:10/10  Russians:2/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.04      0.8           22.4               0.70      211.9          0.00
+  first                           0.03      0.6           19.7               0.62      103.2          0.00
+  random                          0.14      2.8           82.0               0.49      439.2          0.00
+  mcts                           19.11    382.2           73.9               0.90      399.4          0.00
+  wall time 56.2s
+  new best mean score 0.631 -> checkpoints/best.pt
+it   31  games   1984  dec  2434  ret +0.06  past 75%  heuristic 0%  first 88%  pi -0.0104  v 0.0529  H 0.343  kl 0.0117  clip 0.07  ev +0.75  [1s + 1.8s]
+it   32  games   2048  dec  2634  ret +0.03  past 69%  heuristic 0%  first 88%  pi -0.0091  v 0.0475  H 0.338  kl 0.0108  clip 0.06  ev +0.78  [1s + 1.9s]
+it   33  games   2112  dec  2962  ret +0.01  past 50%  heuristic 0%  first 100%  pi -0.0065  v 0.0285  H 0.317  kl 0.0104  clip 0.07  ev +0.86  [1s + 2.1s]
+it   34  games   2176  dec  2519  ret +0.10  past 69%  heuristic 0%  first 100%  pi -0.0132  v 0.0393  H 0.347  kl 0.0176  clip 0.08  ev +0.83  [1s + 1.5s]
+it   35  games   2240  dec  2582  ret +0.10  past 69%  heuristic 0%  first 100%  pi -0.0046  v 0.0411  H 0.328  kl 0.0219  clip 0.09  ev +0.80  [1s + 2.0s]
+it   36  games   2304  dec  2882  ret +0.00  past 50%  heuristic 0%  first 100%  pi -0.0029  v 0.0319  H 0.297  kl 0.0111  clip 0.06  ev +0.82  [1s + 2.4s]
+it   37  games   2368  dec  2866  ret +0.01  past 56%  heuristic 0%  first 94%  pi -0.0010  v 0.0309  H 0.315  kl 0.0149  clip 0.07  ev +0.83  [1s + 0.6s]
+it   38  games   2432  dec  2417  ret +0.04  past 69%  heuristic 0%  first 88%  pi -0.0070  v 0.0402  H 0.292  kl 0.0124  clip 0.06  ev +0.78  [0s + 0.3s]
+it   39  games   2496  dec  3397  ret +0.09  past 69%  heuristic 0%  first 100%  pi -0.0046  v 0.0284  H 0.252  kl 0.0177  clip 0.07  ev +0.84  [1s + 0.4s]
+it   40  games   2560  dec  2198  ret +0.10  past 75%  heuristic 0%  first 100%  pi -0.0046  v 0.0350  H 0.304  kl 0.0090  clip 0.06  ev +0.88  [0s + 0.2s]
+it   41  games   2624  dec  2928  ret +0.00  past 44%  heuristic 0%  first 94%  pi -0.0051  v 0.0259  H 0.339  kl 0.0083  clip 0.06  ev +0.88  [1s + 0.4s]
+it   42  games   2688  dec  2230  ret -0.06  past 38%  heuristic 0%  first 94%  pi -0.0063  v 0.0412  H 0.381  kl 0.0084  clip 0.06  ev +0.83  [1s + 0.3s]
+it   43  games   2752  dec  2630  ret -0.06  past 31%  heuristic 0%  first 94%  pi -0.0051  v 0.0317  H 0.348  kl 0.0119  clip 0.07  ev +0.87  [1s + 0.3s]
+it   44  games   2816  dec  2647  ret +0.01  past 50%  heuristic 0%  first 100%  pi -0.0035  v 0.0310  H 0.299  kl 0.0130  clip 0.06  ev +0.87  [1s + 0.3s]
+it   45  games   2880  dec  2726  ret +0.05  past 62%  heuristic 0%  first 94%  pi -0.0064  v 0.0242  H 0.277  kl 0.0110  clip 0.06  ev +0.89  [1s + 0.3s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.0  Germans:0/10  Russians:0/10
+  first                           20   14    6    0  70.0%  0.700   12.5  Germans:4/10  Russians:10/10
+  random                          20   12    2    6  60.0%  0.750   40.0  Germans:8/10  Russians:4/10
+  mcts                            20   11    5    4  55.0%  0.650   30.9  Germans:9/10  Russians:2/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.04      0.8           25.8               0.71      206.7          0.00
+  first                           0.03      0.7           23.3               0.58      124.5          0.00
+  random                          0.13      2.6           72.2               0.48      415.1          0.00
+  mcts                           15.65    313.0           59.2               0.91      335.8          0.00
+  wall time 56.2s
+it   46  games   2944  dec  2550  ret -0.05  past 38%  heuristic 0%  first 94%  pi -0.0050  v 0.0295  H 0.338  kl 0.0077  clip 0.06  ev +0.88  [1s + 0.3s]
+it   47  games   3008  dec  2595  ret +0.06  past 56%  heuristic 0%  first 100%  pi -0.0070  v 0.0270  H 0.322  kl 0.0102  clip 0.07  ev +0.89  [1s + 0.3s]
+it   48  games   3072  dec  2856  ret +0.01  past 44%  heuristic 0%  first 100%  pi -0.0058  v 0.0343  H 0.298  kl 0.0138  clip 0.08  ev +0.84  [1s + 0.3s]
+it   49  games   3136  dec  3514  ret -0.03  past 44%  heuristic 0%  first 88%  pi -0.0042  v 0.0261  H 0.318  kl 0.0151  clip 0.07  ev +0.85  [1s + 0.4s]
+it   50  games   3200  dec  3038  ret +0.04  past 50%  heuristic 0%  first 94%  pi -0.0051  v 0.0179  H 0.324  kl 0.0080  clip 0.05  ev +0.92  [1s + 0.3s]
+it   51  games   3264  dec  3138  ret -0.04  past 38%  heuristic 0%  first 88%  pi -0.0043  v 0.0321  H 0.337  kl 0.0091  clip 0.06  ev +0.83  [1s + 0.3s]
+it   52  games   3328  dec  5149  ret +0.00  past 38%  heuristic 0%  first 94%  pi -0.0053  v 0.0174  H 0.328  kl 0.0170  clip 0.07  ev +0.83  [1s + 0.5s]
+it   53  games   3392  dec  2297  ret +0.03  past 56%  heuristic 0%  first 100%  pi -0.0111  v 0.0398  H 0.351  kl 0.0172  clip 0.09  ev +0.83  [0s + 0.2s]
+it   54  games   3456  dec  2702  ret -0.05  past 31%  heuristic 0%  first 94%  pi -0.0010  v 0.0249  H 0.358  kl 0.0115  clip 0.08  ev +0.87  [1s + 0.3s]
+it   55  games   3520  dec  2904  ret +0.04  past 44%  heuristic 0%  first 100%  pi -0.0054  v 0.0336  H 0.337  kl 0.0142  clip 0.07  ev +0.77  [1s + 0.3s]
+it   56  games   3584  dec  2554  ret -0.03  past 44%  heuristic 0%  first 94%  pi -0.0063  v 0.0429  H 0.330  kl 0.0171  clip 0.07  ev +0.80  [1s + 0.3s]
+it   57  games   3648  dec  2662  ret +0.03  past 50%  heuristic 0%  first 100%  pi -0.0051  v 0.0399  H 0.283  kl 0.0102  clip 0.07  ev +0.75  [1s + 0.3s]
+it   58  games   3712  dec  3112  ret +0.04  past 50%  heuristic 0%  first 100%  pi -0.0027  v 0.0226  H 0.268  kl 0.0081  clip 0.05  ev +0.87  [1s + 0.3s]
+it   59  games   3776  dec  3599  ret +0.10  past 62%  heuristic 0%  first 100%  pi -0.0044  v 0.0297  H 0.302  kl 0.0115  clip 0.06  ev +0.78  [1s + 0.4s]
+it   60  games   3840  dec  2588  ret +0.04  past 62%  heuristic 0%  first 94%  pi -0.0054  v 0.0289  H 0.277  kl 0.0164  clip 0.07  ev +0.86  [1s + 0.3s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.9  Germans:0/10  Russians:0/10
+  first                           20   14    0    6  70.0%  0.850   36.8  Germans:4/10  Russians:10/10
+  random                          20   16    0    4  80.0%  0.900   30.6  Germans:10/10  Russians:6/10
+  mcts                            20   15    2    3  75.0%  0.825   24.3  Germans:7/10  Russians:8/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      1.0           27.3               0.83      226.2          0.00
+  first                           0.10      1.9           78.5               0.52      344.9          0.00
+  random                          0.12      2.4           60.0               0.58      327.8          0.00
+  mcts                           12.33    246.6           38.3               0.88      215.2          0.00
+  wall time 51.1s
+  new best mean score 0.644 -> checkpoints/best.pt
+it   61  games   3904  dec  2787  ret -0.12  past 12%  heuristic 0%  first 94%  pi -0.0037  v 0.0348  H 0.280  kl 0.0143  clip 0.07  ev +0.81  [1s + 0.3s]
+it   62  games   3968  dec  3662  ret +0.07  past 50%  heuristic 0%  first 100%  pi -0.0054  v 0.0177  H 0.187  kl 0.0163  clip 0.05  ev +0.84  [1s + 0.4s]
+it   63  games   4032  dec  3622  ret -0.06  past 31%  heuristic 0%  first 88%  pi -0.0041  v 0.0221  H 0.238  kl 0.0122  clip 0.06  ev +0.85  [1s + 0.4s]
+it   64  games   4096  dec  2611  ret +0.00  past 50%  heuristic 0%  first 94%  pi -0.0037  v 0.0300  H 0.227  kl 0.0089  clip 0.06  ev +0.86  [1s + 0.3s]
+it   65  games   4160  dec  3054  ret -0.05  past 38%  heuristic 0%  first 94%  pi -0.0050  v 0.0273  H 0.218  kl 0.0085  clip 0.05  ev +0.83  [1s + 0.3s]
+it   66  games   4224  dec  2841  ret -0.04  past 38%  heuristic 0%  first 88%  pi -0.0065  v 0.0352  H 0.274  kl 0.0190  clip 0.08  ev +0.79  [1s + 0.3s]
+it   67  games   4288  dec  3585  ret +0.04  past 44%  heuristic 0%  first 100%  pi -0.0032  v 0.0266  H 0.249  kl 0.0106  clip 0.05  ev +0.83  [1s + 0.4s]
+it   68  games   4352  dec  3336  ret -0.12  past 19%  heuristic 0%  first 100%  pi -0.0046  v 0.0244  H 0.276  kl 0.0123  clip 0.06  ev +0.84  [1s + 0.3s]
+it   69  games   4416  dec  3098  ret +0.01  past 50%  heuristic 0%  first 94%  pi -0.0066  v 0.0195  H 0.240  kl 0.0109  clip 0.06  ev +0.88  [1s + 0.3s]
+it   70  games   4480  dec  3037  ret +0.04  past 44%  heuristic 0%  first 100%  pi -0.0032  v 0.0222  H 0.262  kl 0.0113  clip 0.06  ev +0.87  [1s + 0.3s]
+it   71  games   4544  dec  3400  ret +0.00  past 44%  heuristic 0%  first 100%  pi -0.0034  v 0.0288  H 0.219  kl 0.0084  clip 0.04  ev +0.82  [1s + 0.4s]
+it   72  games   4608  dec  2240  ret -0.01  past 44%  heuristic 0%  first 100%  pi -0.0039  v 0.0285  H 0.254  kl 0.0067  clip 0.05  ev +0.88  [1s + 0.2s]
+it   73  games   4672  dec  3231  ret +0.06  past 56%  heuristic 0%  first 100%  pi -0.0028  v 0.0269  H 0.211  kl 0.0063  clip 0.04  ev +0.84  [1s + 0.3s]
+it   74  games   4736  dec  2408  ret +0.05  past 56%  heuristic 0%  first 100%  pi -0.0003  v 0.0331  H 0.256  kl 0.0145  clip 0.05  ev +0.86  [0s + 0.3s]
+it   75  games   4800  dec  3308  ret +0.01  past 38%  heuristic 0%  first 100%  pi -0.0047  v 0.0241  H 0.196  kl 0.0105  clip 0.05  ev +0.86  [1s + 0.3s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.7  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   14    2    4  70.0%  0.800   30.1  Germans:8/10  Russians:6/10
+  mcts                            20   13    6    1  65.0%  0.675   16.9  Germans:8/10  Russians:5/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      1.0           28.0               0.80      221.2          0.00
+  first                           0.03      0.5           18.8               0.58      102.2          0.00
+  random                          0.10      2.0           59.9               0.49      322.4          0.00
+  mcts                            8.55    171.0           32.7               0.79      194.6          0.00
+  wall time 51.2s
+it   76  games   4864  dec  3483  ret +0.04  past 50%  heuristic 0%  first 100%  pi -0.0037  v 0.0249  H 0.184  kl 0.0139  clip 0.05  ev +0.84  [1s + 0.4s]
+it   77  games   4928  dec  3562  ret +0.04  past 56%  heuristic 0%  first 100%  pi -0.0024  v 0.0282  H 0.187  kl 0.0102  clip 0.04  ev +0.81  [1s + 0.4s]
+it   78  games   4992  dec  4155  ret +0.06  past 50%  heuristic 0%  first 100%  pi -0.0024  v 0.0196  H 0.182  kl 0.0236  clip 0.05  ev +0.82  [1s + 0.4s]
+it   79  games   5056  dec  3177  ret +0.11  past 69%  heuristic 0%  first 100%  pi -0.0068  v 0.0279  H 0.229  kl 0.0165  clip 0.06  ev +0.82  [1s + 0.3s]
+it   80  games   5120  dec  3332  ret +0.04  past 50%  heuristic 0%  first 94%  pi -0.0015  v 0.0336  H 0.205  kl 0.0181  clip 0.05  ev +0.82  [1s + 0.4s]
+it   81  games   5184  dec  5250  ret +0.03  past 38%  heuristic 0%  first 100%  pi -0.0017  v 0.0171  H 0.114  kl 0.0162  clip 0.05  ev +0.84  [1s + 0.5s]
+it   82  games   5248  dec  5669  ret +0.03  past 44%  heuristic 0%  first 100%  pi -0.0023  v 0.0156  H 0.119  kl 0.0175  clip 0.05  ev +0.88  [1s + 0.6s]
+it   83  games   5312  dec  4883  ret -0.01  past 25%  heuristic 0%  first 100%  pi -0.0036  v 0.0135  H 0.138  kl 0.0074  clip 0.04  ev +0.86  [1s + 0.5s]
+it   84  games   5376  dec  6563  ret -0.01  past 25%  heuristic 0%  first 100%  pi -0.0042  v 0.0113  H 0.113  kl 0.0099  clip 0.04  ev +0.80  [1s + 0.7s]
+it   85  games   5440  dec  4795  ret -0.01  past 25%  heuristic 0%  first 100%  pi -0.0022  v 0.0244  H 0.150  kl 0.0118  clip 0.04  ev +0.76  [1s + 0.5s]
+it   86  games   5504  dec  6379  ret +0.01  past 25%  heuristic 0%  first 100%  pi -0.0019  v 0.0130  H 0.132  kl 0.0180  clip 0.04  ev +0.82  [1s + 0.6s]
+it   87  games   5568  dec  7567  ret +0.05  past 38%  heuristic 0%  first 100%  pi +0.0004  v 0.0087  H 0.105  kl 0.0079  clip 0.03  ev +0.86  [1s + 0.8s]
+it   88  games   5632  dec  6849  ret +0.06  past 50%  heuristic 0%  first 100%  pi -0.0044  v 0.0104  H 0.146  kl 0.0282  clip 0.05  ev +0.86  [1s + 0.7s]
+it   89  games   5696  dec  6589  ret +0.03  past 25%  heuristic 0%  first 100%  pi -0.0008  v 0.0129  H 0.113  kl 0.0119  clip 0.04  ev +0.85  [1s + 0.7s]
+it   90  games   5760  dec  6741  ret -0.01  past 19%  heuristic 0%  first 94%  pi -0.0022  v 0.0106  H 0.114  kl 0.0105  clip 0.04  ev +0.86  [1s + 0.7s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000    9.9  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   14    1    5  70.0%  0.825   34.7  Germans:6/10  Russians:8/10
+  mcts                            20   12    6    2  60.0%  0.650   20.9  Germans:5/10  Russians:7/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.04      0.7           21.6               0.68      201.9          0.00
+  first                           0.03      0.6           17.8               0.61      101.7          0.00
+  random                          0.13      2.6           95.1               0.47      366.4          0.00
+  mcts                           10.61    212.2           27.1               0.84      224.8          0.00
+  wall time 51.3s
+it   91  games   5824  dec  6584  ret +0.09  past 44%  heuristic 0%  first 100%  pi -0.0050  v 0.0091  H 0.157  kl 0.0545  clip 0.08  ev +0.86  [1s + 0.5s]
+it   92  games   5888  dec  9000  ret +0.06  past 38%  heuristic 0%  first 100%  pi -0.0022  v 0.0059  H 0.144  kl 0.0201  clip 0.06  ev +0.85  [1s + 0.9s]
+it   93  games   5952  dec  8494  ret +0.09  past 56%  heuristic 0%  first 100%  pi +0.0018  v 0.0070  H 0.108  kl 0.0072  clip 0.03  ev +0.83  [1s + 0.9s]
+it   94  games   6016  dec  8484  ret +0.05  past 38%  heuristic 0%  first 100%  pi +0.0020  v 0.0069  H 0.111  kl 0.0157  clip 0.03  ev +0.87  [1s + 0.9s]
+it   95  games   6080  dec  9022  ret +0.03  past 31%  heuristic 0%  first 100%  pi -0.0001  v 0.0047  H 0.088  kl 0.0086  clip 0.02  ev +0.90  [1s + 0.9s]
+it   96  games   6144  dec  7050  ret +0.00  past 38%  heuristic 0%  first 100%  pi -0.0015  v 0.0130  H 0.097  kl 0.0087  clip 0.03  ev +0.81  [1s + 0.7s]
+it   97  games   6208  dec  9568  ret +0.07  past 56%  heuristic 0%  first 100%  pi -0.0019  v 0.0071  H 0.077  kl 0.0061  clip 0.02  ev +0.87  [1s + 1.0s]
+it   98  games   6272  dec  8421  ret -0.03  past 25%  heuristic 0%  first 100%  pi -0.0040  v 0.0077  H 0.084  kl 0.0065  clip 0.03  ev +0.84  [1s + 0.9s]
+it   99  games   6336  dec 10293  ret +0.00  past 31%  heuristic 0%  first 94%  pi +0.0018  v 0.0068  H 0.072  kl 0.0134  clip 0.03  ev +0.81  [1s + 1.0s]
+it  100  games   6400  dec 11685  ret +0.06  past 38%  heuristic 0%  first 100%  pi -0.0041  v 0.0024  H 0.082  kl 0.0109  clip 0.03  ev +0.93  [1s + 1.2s]
+it  101  games   6464  dec 10199  ret +0.07  past 50%  heuristic 0%  first 100%  pi -0.0007  v 0.0032  H 0.080  kl 0.0065  clip 0.02  ev +0.93  [1s + 1.0s]
+it  102  games   6528  dec 12201  ret +0.04  past 25%  heuristic 0%  first 100%  pi +0.0002  v 0.0021  H 0.066  kl 0.0088  clip 0.02  ev +0.92  [1s + 1.2s]
+it  103  games   6592  dec 11314  ret +0.01  past 44%  heuristic 0%  first 94%  pi +0.0010  v 0.0047  H 0.064  kl 0.0473  clip 0.02  ev +0.88  [1s + 0.6s]
+it  104  games   6656  dec 12072  ret +0.03  past 31%  heuristic 0%  first 100%  pi -0.0005  v 0.0026  H 0.074  kl 0.0037  clip 0.02  ev +0.89  [1s + 1.2s]
+it  105  games   6720  dec 12493  ret -0.06  past 19%  heuristic 0%  first 81%  pi -0.0000  v 0.0040  H 0.073  kl 0.0071  clip 0.02  ev +0.83  [2s + 1.2s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000   10.0  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   13    0    7  65.0%  0.825   41.8  Germans:6/10  Russians:7/10
+  mcts                            20   20    0    0 100.0%  1.000   10.5  Germans:10/10  Russians:10/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      0.9           28.5               0.71      210.2          0.00
+  first                           0.03      0.6           18.2               0.59      102.5          0.00
+  random                          0.16      3.2          101.4               0.51      433.4          0.00
+  mcts                            5.44    108.8           24.2               0.74      131.1          0.00
+  wall time 11.1s
+  new best mean score 0.706 -> checkpoints/best.pt
+it  106  games   6784  dec 11639  ret -0.01  past 12%  heuristic 0%  first 100%  pi +0.0011  v 0.0028  H 0.092  kl 0.0053  clip 0.02  ev +0.85  [1s + 1.2s]
+it  107  games   6848  dec 11207  ret +0.03  past 38%  heuristic 0%  first 100%  pi +0.0002  v 0.0039  H 0.080  kl 0.0084  clip 0.02  ev +0.87  [1s + 1.1s]
+it  108  games   6912  dec 12519  ret +0.01  past 12%  heuristic 0%  first 100%  pi +0.0001  v 0.0025  H 0.059  kl 0.0062  clip 0.02  ev +0.87  [1s + 1.2s]
+it  109  games   6976  dec 13030  ret +0.00  past 12%  heuristic 0%  first 100%  pi -0.0001  v 0.0027  H 0.049  kl 0.0038  clip 0.01  ev +0.86  [2s + 1.3s]
+it  110  games   7040  dec 10550  ret +0.06  past 31%  heuristic 0%  first 100%  pi +0.0013  v 0.0047  H 0.111  kl 0.0072  clip 0.02  ev +0.86  [1s + 1.0s]
+it  111  games   7104  dec  6057  ret -0.04  past 25%  heuristic 0%  first 94%  pi -0.0027  v 0.0172  H 0.191  kl 0.0084  clip 0.03  ev +0.75  [1s + 0.6s]
+it  112  games   7168  dec  4693  ret -0.03  past 19%  heuristic 0%  first 100%  pi -0.0066  v 0.0302  H 0.236  kl 0.0448  clip 0.05  ev +0.76  [1s + 0.4s]
+it  113  games   7232  dec  6326  ret -0.07  past 6%  heuristic 0%  first 100%  pi -0.0059  v 0.0158  H 0.166  kl 0.0130  clip 0.04  ev +0.74  [1s + 0.6s]
+it  114  games   7296  dec  8043  ret +0.04  past 31%  heuristic 0%  first 100%  pi -0.0027  v 0.0109  H 0.156  kl 0.0077  clip 0.03  ev +0.74  [1s + 0.8s]
+it  115  games   7360  dec  9472  ret +0.04  past 25%  heuristic 0%  first 100%  pi -0.0019  v 0.0075  H 0.116  kl 0.0059  clip 0.02  ev +0.80  [1s + 1.0s]
+it  116  games   7424  dec  7399  ret +0.01  past 31%  heuristic 0%  first 100%  pi -0.0030  v 0.0115  H 0.137  kl 0.0054  clip 0.02  ev +0.78  [1s + 0.8s]
+it  117  games   7488  dec  8423  ret +0.01  past 25%  heuristic 0%  first 100%  pi -0.0019  v 0.0103  H 0.114  kl 0.0047  clip 0.02  ev +0.80  [1s + 0.8s]
+it  118  games   7552  dec  8277  ret +0.00  past 31%  heuristic 0%  first 94%  pi -0.0014  v 0.0111  H 0.095  kl 0.0066  clip 0.02  ev +0.76  [1s + 0.9s]
+it  119  games   7616  dec  9962  ret +0.00  past 12%  heuristic 0%  first 100%  pi -0.0000  v 0.0083  H 0.072  kl 0.0059  clip 0.02  ev +0.81  [1s + 1.0s]
+it  120  games   7680  dec  6853  ret +0.05  past 38%  heuristic 0%  first 100%  pi +0.0074  v 0.0150  H 0.117  kl 0.0074  clip 0.02  ev +0.80  [1s + 0.7s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000    9.9  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.5  Germans:10/10  Russians:10/10
+  random                          20   13    5    2  65.0%  0.700   21.2  Germans:7/10  Russians:6/10
+  mcts                            20    8    7    5  40.0%  0.525   33.6  Germans:8/10  Russians:0/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      0.9           25.8               0.86      209.0          0.00
+  first                           0.03      0.5           18.0               0.58      105.0          0.00
+  random                          0.07      1.5           35.5               0.53      224.8          0.00
+  mcts                           16.98    339.6           49.0               0.87      233.0          0.00
+  wall time 50.8s
+it  121  games   7744  dec  7733  ret +0.01  past 31%  heuristic 0%  first 94%  pi -0.0022  v 0.0115  H 0.090  kl 0.0072  clip 0.03  ev +0.79  [1s + 0.8s]
+it  122  games   7808  dec  8180  ret +0.04  past 25%  heuristic 0%  first 100%  pi +0.0011  v 0.0099  H 0.078  kl 0.0056  clip 0.02  ev +0.82  [1s + 0.8s]
+it  123  games   7872  dec  5002  ret +0.05  past 25%  heuristic 0%  first 100%  pi -0.0031  v 0.0242  H 0.127  kl 0.0077  clip 0.03  ev +0.80  [1s + 0.5s]
+it  124  games   7936  dec  6003  ret -0.03  past 0%  heuristic 0%  first 100%  pi -0.0052  v 0.0133  H 0.121  kl 0.0110  clip 0.03  ev +0.82  [1s + 0.6s]
+it  125  games   8000  dec  6864  ret +0.00  past 19%  heuristic 0%  first 100%  pi -0.0044  v 0.0106  H 0.108  kl 0.0055  clip 0.03  ev +0.81  [1s + 0.7s]
+it  126  games   8064  dec  6581  ret -0.05  past 12%  heuristic 0%  first 100%  pi -0.0027  v 0.0133  H 0.112  kl 0.0066  clip 0.03  ev +0.82  [1s + 0.7s]
+it  127  games   8128  dec  5100  ret +0.03  past 44%  heuristic 0%  first 100%  pi -0.0035  v 0.0221  H 0.152  kl 0.0052  clip 0.03  ev +0.79  [1s + 0.5s]
+it  128  games   8192  dec  5598  ret +0.06  past 56%  heuristic 0%  first 100%  pi -0.0038  v 0.0148  H 0.126  kl 0.0104  clip 0.04  ev +0.84  [1s + 0.6s]
+it  129  games   8256  dec  6732  ret +0.07  past 50%  heuristic 0%  first 100%  pi -0.0043  v 0.0091  H 0.112  kl 0.0094  clip 0.03  ev +0.84  [1s + 0.7s]
+it  130  games   8320  dec  8414  ret +0.01  past 25%  heuristic 0%  first 100%  pi -0.0022  v 0.0089  H 0.106  kl 0.0032  clip 0.02  ev +0.81  [1s + 0.8s]
+it  131  games   8384  dec  8304  ret -0.01  past 19%  heuristic 0%  first 100%  pi -0.0023  v 0.0093  H 0.101  kl 0.0051  clip 0.02  ev +0.82  [1s + 0.8s]
+it  132  games   8448  dec  6094  ret +0.05  past 31%  heuristic 0%  first 100%  pi -0.0011  v 0.0146  H 0.139  kl 0.0091  clip 0.03  ev +0.77  [1s + 0.6s]
+it  133  games   8512  dec  8052  ret +0.03  past 19%  heuristic 0%  first 100%  pi -0.0016  v 0.0113  H 0.095  kl 0.0043  clip 0.02  ev +0.81  [1s + 0.8s]
+it  134  games   8576  dec  7934  ret +0.03  past 31%  heuristic 0%  first 100%  pi -0.0008  v 0.0142  H 0.092  kl 0.0044  clip 0.02  ev +0.72  [1s + 0.8s]
+it  135  games   8640  dec  6749  ret +0.01  past 12%  heuristic 0%  first 100%  pi -0.0027  v 0.0127  H 0.098  kl 0.0074  clip 0.03  ev +0.79  [1s + 0.7s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000    9.9  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   15    1    4  75.0%  0.850   28.1  Germans:9/10  Russians:6/10
+  mcts                            20   18    1    1  90.0%  0.925   15.5  Germans:8/10  Russians:10/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      0.9           27.2               0.85      207.0          0.00
+  first                           0.03      0.5           17.0               0.59       99.8          0.00
+  random                          0.10      1.9           69.2               0.47      298.4          0.00
+  mcts                            7.95    158.9           35.5               0.76      184.8          0.00
+  wall time 51.3s
+it  136  games   8704  dec  5483  ret -0.01  past 19%  heuristic 0%  first 100%  pi -0.0032  v 0.0179  H 0.107  kl 0.0040  clip 0.02  ev +0.78  [1s + 0.6s]
+it  137  games   8768  dec  6849  ret -0.03  past 19%  heuristic 0%  first 100%  pi -0.0004  v 0.0140  H 0.085  kl 0.0025  clip 0.02  ev +0.85  [1s + 0.7s]
+it  138  games   8832  dec  6466  ret +0.03  past 25%  heuristic 0%  first 100%  pi -0.0006  v 0.0174  H 0.085  kl 0.0067  clip 0.02  ev +0.77  [1s + 0.7s]
+it  139  games   8896  dec  6433  ret +0.04  past 31%  heuristic 0%  first 100%  pi -0.0004  v 0.0141  H 0.105  kl 0.0115  clip 0.03  ev +0.81  [1s + 0.7s]
+it  140  games   8960  dec  6641  ret -0.01  past 6%  heuristic 0%  first 100%  pi -0.0002  v 0.0146  H 0.110  kl 0.0067  clip 0.02  ev +0.82  [1s + 0.7s]
+it  141  games   9024  dec  7886  ret -0.04  past 6%  heuristic 0%  first 100%  pi -0.0008  v 0.0145  H 0.079  kl 0.0115  clip 0.02  ev +0.77  [1s + 0.8s]
+it  142  games   9088  dec 10318  ret +0.04  past 25%  heuristic 0%  first 100%  pi -0.0003  v 0.0069  H 0.076  kl 0.1197  clip 0.05  ev +0.86  [1s + 0.6s]
+it  143  games   9152  dec  8735  ret +0.03  past 12%  heuristic 0%  first 100%  pi +0.0019  v 0.0093  H 0.081  kl 0.0128  clip 0.02  ev +0.84  [1s + 0.9s]
+it  144  games   9216  dec  9917  ret +0.01  past 19%  heuristic 0%  first 100%  pi +0.0005  v 0.0087  H 0.066  kl 0.0041  clip 0.01  ev +0.79  [1s + 1.0s]
+it  145  games   9280  dec  9438  ret -0.04  past 19%  heuristic 0%  first 100%  pi +0.0004  v 0.0080  H 0.087  kl 0.0066  clip 0.02  ev +0.84  [1s + 1.0s]
+it  146  games   9344  dec  8114  ret -0.07  past 6%  heuristic 0%  first 100%  pi -0.0006  v 0.0111  H 0.080  kl 0.0045  clip 0.02  ev +0.81  [1s + 0.8s]
+it  147  games   9408  dec  9267  ret +0.04  past 19%  heuristic 0%  first 100%  pi -0.0014  v 0.0078  H 0.062  kl 0.0036  clip 0.01  ev +0.84  [1s + 0.9s]
+it  148  games   9472  dec 10967  ret +0.06  past 31%  heuristic 0%  first 100%  pi -0.0001  v 0.0056  H 0.050  kl 0.0028  clip 0.01  ev +0.84  [1s + 1.1s]
+it  149  games   9536  dec  7835  ret +0.01  past 19%  heuristic 0%  first 100%  pi -0.0026  v 0.0099  H 0.080  kl 0.0028  clip 0.01  ev +0.82  [1s + 0.8s]
+it  150  games   9600  dec  7945  ret +0.05  past 38%  heuristic 0%  first 100%  pi +0.0003  v 0.0116  H 0.081  kl 0.0035  clip 0.02  ev +0.83  [1s + 0.8s]
+Game performance (policy greedy, sides alternate)
+  opponent                     games  win loss draw   win%  score rounds  by side (wins/games)
+  heuristic                       20    0   20    0   0.0%  0.000    9.9  Germans:0/10  Russians:0/10
+  first                           20   20    0    0 100.0%  1.000    9.0  Germans:10/10  Russians:10/10
+  random                          20   18    0    2  90.0%  0.950   20.6  Germans:10/10  Russians:8/10
+  mcts                            20    9    2    9  45.0%  0.675   52.0  Germans:5/10  Russians:4/10
+
+Computational cost
+  opponent                      s/game  total s decisions/game policy ms/decision moves/game rejected/game
+  heuristic                       0.05      1.0           29.7               0.70      208.6          0.00
+  first                           0.03      0.5           17.0               0.56      101.8          0.00
+  random                          0.07      1.5           42.4               0.51      227.1          0.00
+  mcts                           26.11    522.2           77.8               0.81      534.1          0.00
+  wall time 55.8s
+{
+ "iterations": 150,
+ "games": 9600,
+ "best_score": 0.70625,
+ "checkpoint": "runs/ppo-selfplay/checkpoints/best.pt"
+}

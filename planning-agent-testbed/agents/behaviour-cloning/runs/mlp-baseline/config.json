@@ -1,0 +1,36 @@
+{
+ "train": {
+  "lr": 0.001,
+  "batch_size": 256,
+  "epochs": 100,
+  "seed": 0,
+  "hidden_dims": [
+   256,
+   128
+  ],
+  "dropout": 0.0,
+  "weight_decay": 0.0,
+  "patience": 20,
+  "min_delta": 0.0001
+ },
+ "model": {
+  "node_shape": [
+   29,
+   45
+  ],
+  "glob_dim": 3,
+  "cand_dim": 94,
+  "hidden_dims": [
+   256,
+   128
+  ],
+  "dropout": 0.0
+ },
+ "data_source": "load:data",
+ "data_fingerprint": "c8e51144a752da678ad8b211d473e17e34b98d209e777dd267b286e1c1c9b495",
+ "split_sizes": {
+  "train": 9542,
+  "val": 1931,
+  "test": 2024
+ }
+}

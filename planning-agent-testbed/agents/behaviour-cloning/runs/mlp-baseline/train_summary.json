@@ -1,0 +1,6 @@
+{
+ "best_epoch": 4,
+ "best_val_loss": 0.5902107357978821,
+ "epochs_run": 24,
+ "checkpoint": "runs/mlp-baseline/best.pt"
+}

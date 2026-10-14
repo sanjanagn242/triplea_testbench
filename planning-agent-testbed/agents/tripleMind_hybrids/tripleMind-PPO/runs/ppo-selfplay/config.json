@@ -1,0 +1,73 @@
+{
+ "train": {
+  "iterations": 150,
+  "games_per_iter": 64,
+  "workers": 16,
+  "opponents": [
+   "self",
+   "past",
+   "heuristic",
+   "first"
+  ],
+  "seed": 0,
+  "xml": "/home/sanjana/Documents/Codex/2026-09-29/https-github-com-triplea-game-triplea-2/work/triplea/planning-agent-testbed/games/capture-the-flag-diag/map/capture_the_flag/map/games/capture_the_flag.xml",
+  "max_rounds": 100,
+  "mcts_seconds": 0.5,
+  "actor_hidden": [
+   256,
+   128
+  ],
+  "critic_hidden": [
+   256,
+   128
+  ],
+  "norm_warmup_games": 16,
+  "norm_update_iters": 20,
+  "eval_every": 15,
+  "eval_games": 20,
+  "eval_opponents": [
+   "heuristic",
+   "first",
+   "random",
+   "mcts"
+  ],
+  "save_every": 10
+ },
+ "ppo": {
+  "gamma": 0.995,
+  "gae_lambda": 0.95,
+  "clip": 0.2,
+  "value_coef": 0.5,
+  "entropy_coef": 0.01,
+  "lr": 0.0003,
+  "epochs": 4,
+  "minibatch_size": 256,
+  "max_grad_norm": 0.5,
+  "target_kl": 0.03,
+  "value_clip": 0.0,
+  "normalize_advantages": true
+ },
+ "model": {
+  "node_shape": [
+   29,
+   45
+  ],
+  "glob_dim": 3,
+  "cand_dim": 94,
+  "actor_hidden": [
+   256,
+   128
+  ],
+  "critic_hidden": [
+   256,
+   128
+  ]
+ },
+ "resumed_from": null,
+ "feature_shapes": {
+  "territories": 29,
+  "node": 45,
+  "global": 3,
+  "candidate": 94
+ }
+}

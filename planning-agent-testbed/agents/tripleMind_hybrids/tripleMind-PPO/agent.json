@@ -1,0 +1,8 @@
+{
+  "id": "tripleMind-ppo",
+  "name": "TripleMind PPO",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind with a PPO policy (trained from scratch by self-play) instead of MCTS choosing the attack formation for each heuristically chosen target."
+}

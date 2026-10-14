@@ -12,6 +12,9 @@ Usage (from planning-agent-testbed/):
   python3 tools/arena.py --agent Russians=agents/python-mcts/run-agent.sh --games 2 --seconds 0.5
   python3 tools/arena.py --agent Russians=agents/cpp-mcts/run-agent.sh \
       --agent Italians=agents/python-mcts/run-agent.sh --games 2   # head-to-head
+
+play_game() also accepts in-process agents (objects with ask(message) -> reply and close()) in
+place of commands; the TripleMind PPO trainer collects its rollouts that way.
 """
 
 from __future__ import annotations
@@ -74,7 +77,9 @@ def play_game(d, xml_text, agent_cmds, game_number, seconds, seed, max_rounds, v
     rng = fm.SeededRng(10_000 + seed)
     agents = {}
     for name, cmd in agent_cmds.items():
-        agents[d.player_index[name]] = AgentProcess(cmd, env)
+        # A command list starts a subprocess; an object with ask()/close() (an in-process agent,
+        # e.g. for reinforcement-learning rollouts) is used as it is.
+        agents[d.player_index[name]] = cmd if hasattr(cmd, "ask") else AgentProcess(cmd, env)
         reply = agents[d.player_index[name]].ask({
             "type": "game_start", "playerName": name, "gameXml": xml_text,
             "initialState": observation_from_state(d, s, name), "gameNumber": game_number})

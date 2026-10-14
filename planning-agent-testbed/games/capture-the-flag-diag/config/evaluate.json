@@ -1,0 +1,24 @@
+{
+  "map": {
+    "name": "Capture The Flag",
+    "gameName": "Capture The Flag",
+    "aliases": [
+      "capture_the_flag",
+      "CTF"
+    ]
+  },
+  "games": 5,
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "agents": {
+    "Russians": "tripleMind-bc",
+    "Germans": "Hard (AI)"
+  },
+  "showObservations": false,
+  "observationPlayers": {
+    "Russians": false,
+    "Germans": false
+  },
+  "clearAgentOutputs": true
+}
