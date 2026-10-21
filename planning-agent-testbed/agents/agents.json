@@ -6,6 +6,8 @@
     "tripleMind-mcts",
     "tripleMind-bc",
     "tripleMind-ppo",
+    "tripleMind-mcts-no-reward-heuristic",
+    "tripleMind-mcts-no-terr-sorting-heuristic",
     "does-nothing-python",
     "hard-ai-python",
     "greedy-one-step-lookahead",

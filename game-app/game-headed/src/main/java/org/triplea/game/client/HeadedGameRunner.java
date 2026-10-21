@@ -14,6 +14,9 @@ import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBEM;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_START_PBF;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_AUTOSTART;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_CONFIG;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_GUI;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_OUTPUTS;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_RESULTS;
 import static games.strategy.triplea.Constants.PROPERTY_FALSE;
 import static games.strategy.triplea.Constants.PROPERTY_TRUE;
 
@@ -134,6 +137,9 @@ public final class HeadedGameRunner {
         case TRIPLEA_START:
         case TRIPLEA_TESTBENCH_CONFIG:
         case TRIPLEA_TESTBENCH_AUTOSTART:
+        case TRIPLEA_TESTBENCH_GUI:
+        case TRIPLEA_TESTBENCH_OUTPUTS:
+        case TRIPLEA_TESTBENCH_RESULTS:
           System.setProperty(nameValuePair[0], nameValuePair[1]);
           break;
         default:

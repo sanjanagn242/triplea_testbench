@@ -1,0 +1,13 @@
+Game results: minimap
+============================================================
+
+tripleMind-mcts-MCTS_ROLLOUT-10
+-------------------------------
+  games 20, won 0 (0.0%, 95% interval 0-16%), loss 20
+    vs Hard-AI: 0/20 won (0.0%)
+    moving 1st: 0/10 won (0.0%)
+    moving 2nd: 0/10 won (0.0%)
+  rounds played   mean 11.6, median 10.5, p25-p75 9.75 to 13.2, min 8, max 20
+    in won games  -
+  game time (s)   mean 15.6, median 14.2, p25-p75 12.3 to 17.9, min 10, max 30.1
+

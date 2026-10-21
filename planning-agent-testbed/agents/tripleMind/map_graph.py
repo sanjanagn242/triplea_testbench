@@ -417,14 +417,16 @@ def load_centers(path):
 
 
 class MapView:
-    """Live matplotlib window that redraws a GameState without blocking the agent."""
+    """Live matplotlib window that redraws a GameState without blocking the agent. With
+    live=False the figure is drawn off-screen (no window), for saving images only."""
 
     NEUTRAL = "lightgray"
     WATER = "#cfe8ff"
 
-    def __init__(self, map_graph, whoAmI, centers_path=None):
+    def __init__(self, map_graph, whoAmI, centers_path=None, live=True):
         self.map = map_graph
         self.whoAmI = whoAmI
+        self.live = live
         centers_path = centers_path or find_centers(map_graph.name)
         centers = load_centers(centers_path) if centers_path else {}
         if centers and all(t in centers for t in map_graph.G):
@@ -440,8 +442,13 @@ class MapView:
         import matplotlib.pyplot as plt
 
         G = self.map.G
-        plt.ion()
-        self.fig, self.ax = plt.subplots(figsize=(12, 12))
+        if self.live:
+            plt.ion()
+            self.fig, self.ax = plt.subplots(figsize=(12, 12))
+        else:
+            from matplotlib.figure import Figure  # not registered with pyplot: never shown
+            self.fig = Figure(figsize=(12, 12))
+            self.ax = self.fig.subplots()
         nx.draw_networkx_edges(G, self.pos, ax=self.ax, edge_color="#999999")
         self.node_collection = nx.draw_networkx_nodes(G, self.pos, ax=self.ax, node_size=900)
         xs = [x for x, _ in self.pos.values()]
@@ -500,11 +507,13 @@ class MapView:
             bbox=dict(boxstyle="round,pad=0.5", facecolor="lightyellow", edgecolor="black"))
         self.ax.set_title(f"{self.whoAmI} view - {self.map.name}, round {game.round}, {game.step}")
 
-        self.fig.canvas.draw_idle()
-        plt.pause(0.001)  # let the GUI event loop repaint without blocking the agent
+        if self.live:
+            self.fig.canvas.draw_idle()
+            plt.pause(0.001)  # let the GUI event loop repaint without blocking the agent
 
     def save(self, game, path):
         self.draw(game)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.fig.savefig(path, bbox_inches="tight")
 
 

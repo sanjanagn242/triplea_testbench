@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import games.strategy.engine.chat.Chat;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.framework.CliProperties;
 import games.strategy.engine.framework.GameShutdownRegistry;
 import games.strategy.engine.framework.IGame;
 import games.strategy.engine.framework.LocalPlayers;
@@ -12,6 +13,7 @@ import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.framework.map.file.system.loader.InstalledMapsListing;
 import games.strategy.engine.framework.startup.launcher.ILauncher;
 import games.strategy.engine.framework.startup.launcher.LocalLauncher;
+import games.strategy.engine.framework.startup.launcher.MapNotFoundException;
 import games.strategy.engine.framework.startup.launcher.local.PlayerCountrySelection;
 import games.strategy.engine.framework.startup.mc.HeadedLaunchAction;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
@@ -19,8 +21,10 @@ import games.strategy.engine.framework.startup.ui.SetupPanel;
 import games.strategy.engine.framework.startup.ui.panels.main.HeadedServerSetupModel;
 import games.strategy.engine.framework.startup.ui.panels.main.game.selector.GameSelectorModel;
 import games.strategy.engine.player.Player;
+import games.strategy.triplea.ResourceLoader;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.settings.ClientSetting;
+import games.strategy.triplea.ui.display.HeadlessDisplay;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
@@ -30,7 +34,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -55,6 +58,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import org.triplea.game.startup.SetupModel;
 import org.triplea.java.ThreadRunner;
+import org.triplea.sound.HeadlessSoundChannel;
 import org.triplea.swing.SwingComponents;
 import org.triplea.util.ExitStatus;
 
@@ -74,11 +78,13 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private final JLabel mapStatus =
       new JLabel("Each game's maps are stored in planning-agent-testbed/games/<game>/map");
   private final JSpinner gamesCount = new JSpinner(new SpinnerNumberModel(2, 1, 100_000, 1));
+  private final JSpinner firstGameNumber = new JSpinner(new SpinnerNumberModel(1, 1, 1_000_000, 1));
   private final JSpinner roundLimit = new JSpinner(new SpinnerNumberModel(100, 1, 100_000, 1));
   private final JSpinner aiMovePauseMs =
       new JSpinner(new SpinnerNumberModel(DEFAULT_AI_MOVE_PAUSE_MS, 0, MAX_AI_PAUSE_MS, 10));
   private final JSpinner aiCombatStepPauseMs =
       new JSpinner(new SpinnerNumberModel(DEFAULT_AI_COMBAT_STEP_PAUSE_MS, 0, MAX_AI_PAUSE_MS, 10));
+  private final JCheckBox showGameWindow = new JCheckBox("Show game window", true);
   private final JCheckBox showObservationWindow = new JCheckBox("Visualize observations", true);
   private final JCheckBox clearAgentOutputs =
       new JCheckBox("Clear previous agent outputs (metrics, logs, …) when the run starts", false);
@@ -91,6 +97,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private boolean experimentRunning;
   private int plannedGames;
   private int completedGames;
+  // Number of the run's first game; game n of the run is numbered firstGame + n - 1.
+  private int firstGame = 1;
   private Instant currentGameStartedAt;
   // Start of the current run (also of a resumed one); agents measure their run time limit from it.
   private Instant runStartedAt = Instant.now();
@@ -121,7 +129,6 @@ public final class TestbenchSetupPanel extends SetupPanel {
     this.initialConfig = configFile == null ? null : Path.of(configFile);
     this.activeConfigurationFile = initialConfig;
     buildUi();
-    ensureResultsLogExists();
     if (initialConfig != null) {
       readConfiguration(initialConfig);
     } else if (Files.isRegularFile(defaultCaptureTheFlagConfiguration())) {
@@ -180,8 +187,27 @@ public final class TestbenchSetupPanel extends SetupPanel {
     experiment.add(aiMovePauseMs, constraints(1, row));
     experiment.add(new JLabel("Combat pause (ms)"), constraints(2, row));
     experiment.add(aiCombatStepPauseMs, constraints(3, row++));
+    experiment.add(new JLabel("First game number"), constraints(0, row));
+    experiment.add(firstGameNumber, constraints(1, row++));
     experiment.add(
         new JLabel("Round cap ends without a winner. Pauses apply at launch."),
+        new GridBagConstraints(
+            0,
+            row++,
+            4,
+            1,
+            1,
+            0,
+            GridBagConstraints.WEST,
+            GridBagConstraints.HORIZONTAL,
+            new Insets(3, 4, 4, 4),
+            0,
+            0));
+    showGameWindow.setToolTipText(
+        "When off, games run without the map window, battle window and sounds, which is faster."
+            + " Overridden by -Dtriplea.testbench.gui=true|false.");
+    experiment.add(
+        showGameWindow,
         new GridBagConstraints(
             0,
             row++,
@@ -374,6 +400,40 @@ public final class TestbenchSetupPanel extends SetupPanel {
     return result;
   }
 
+  /**
+   * Name of the games/(game) folder being played (e.g. capture-the-flag-diag): the configuration's
+   * game folder, else the one holding the map; empty when neither is under games/.
+   */
+  private String gameFolderName() {
+    final Path gamesDirectory =
+        TestbenchMapRepository.gamesDirectory().toAbsolutePath().normalize();
+    final Optional<Path> fromMap =
+        mapPath.getText().isBlank()
+            ? Optional.empty()
+            : Optional.ofNullable(Path.of(mapPath.getText()).toAbsolutePath().normalize())
+                .flatMap(
+                    map -> {
+                      for (Path p = map; p != null; p = p.getParent()) {
+                        if (gamesDirectory.equals(p.getParent())) {
+                          return Optional.of(p);
+                        }
+                      }
+                      return Optional.empty();
+                    });
+    return TestbenchMapRepository.gameDirectoryOf(activeConfigurationFile)
+        .or(() -> fromMap)
+        .map(directory -> directory.getFileName().toString())
+        .orElse("");
+  }
+
+  /** Faction -> stable agent ID (as written in configurations) for the current assignments. */
+  private Map<String, String> selectedAgentIds() {
+    final Map<String, String> result = new LinkedHashMap<>();
+    selectedAssignments()
+        .forEach((name, label) -> result.put(name, TestbenchAgentRegistry.idForSelection(label)));
+    return result;
+  }
+
   private Map<String, Boolean> selectedObservationAssignments() {
     final Map<String, Boolean> result = new LinkedHashMap<>();
     observationAssignments.forEach((name, checkbox) -> result.put(name, checkbox.isSelected()));
@@ -404,10 +464,17 @@ public final class TestbenchSetupPanel extends SetupPanel {
       }
       activeConfigurationFile = path.toAbsolutePath().normalize();
       gamesCount.setValue(Math.max(1, config.games));
+      firstGameNumber.setValue(
+          config.firstGameNumber == null ? 1 : Math.max(1, config.firstGameNumber));
       roundLimit.setValue(Math.max(1, config.roundLimit));
       aiMovePauseMs.setValue(clampPause(config.aiMovePauseMs, DEFAULT_AI_MOVE_PAUSE_MS));
       aiCombatStepPauseMs.setValue(
           clampPause(config.aiCombatStepPauseMs, DEFAULT_AI_COMBAT_STEP_PAUSE_MS));
+      final String guiProperty = System.getProperty(CliProperties.TRIPLEA_TESTBENCH_GUI, "");
+      showGameWindow.setSelected(
+          guiProperty.isBlank()
+              ? config.showGame == null || config.showGame
+              : Boolean.parseBoolean(guiProperty));
       showObservationWindow.setSelected(config.showObservations == null || config.showObservations);
       clearAgentOutputs.setSelected(Boolean.TRUE.equals(config.clearAgentOutputs));
       activeMapReference = config.map;
@@ -467,8 +534,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
                     "Game %d of %d was suspended at round %d (%s).%nResume it?%n%n"
                         + "Choose No to start a new run; the suspended game is deleted when it"
                         + " starts.",
-                    suspended.completedGames() + 1,
-                    suspended.plannedGames(),
+                    suspended.firstGame() + suspended.completedGames(),
+                    suspended.firstGame() + suspended.plannedGames() - 1,
                     suspended.round(),
                     suspended.savedAt()),
                 "Planning agent testbench",
@@ -493,8 +560,8 @@ public final class TestbenchSetupPanel extends SetupPanel {
                 mapStatus.setText(
                     String.format(
                         "Resuming game %d/%d at round %d",
-                        suspended.completedGames() + 1,
-                        suspended.plannedGames(),
+                        suspended.firstGame() + suspended.completedGames(),
+                        suspended.firstGame() + suspended.plannedGames() - 1,
                         suspended.round()));
                 mapStatus.setToolTipText(saveFile.toAbsolutePath().toString());
                 fireListener();
@@ -579,6 +646,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   activeMapReference,
                   mapXml,
                   (int) gamesCount.getValue(),
+                  (int) firstGameNumber.getValue(),
                   (int) roundLimit.getValue(),
                   (int) aiMovePauseMs.getValue(),
                   (int) aiCombatStepPauseMs.getValue(),
@@ -589,6 +657,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
                               entry -> TestbenchAgentRegistry.idForSelection(entry.getValue()),
                               (first, second) -> first,
                               LinkedHashMap::new)),
+                  showGameWindow.isSelected(),
                   showObservationWindow.isSelected(),
                   selectedObservationAssignments(),
                   clearAgentOutputs.isSelected())));
@@ -654,19 +723,17 @@ public final class TestbenchSetupPanel extends SetupPanel {
         // Keep the logs and agent outputs of the suspended run and continue its numbering.
         completedGames = pendingResume.completedGames();
         plannedGames = Math.max((int) gamesCount.getValue(), completedGames + 1);
+        firstGame = pendingResume.firstGame();
         previouslyElapsedMillis = pendingResume.elapsedMillis();
-        appendResultsLog(
-            String.format(
-                "Game %d/%d resumed at round %d%n%n",
-                completedGames + 1, plannedGames, pendingResume.round()));
         pendingResume = null;
       } else {
-        refreshSimulationLogs();
+        deleteAgentLogs();
         if (clearAgentOutputs.isSelected()) {
           clearAssignedAgentOutputs();
         }
         deleteCheckpoint();
         plannedGames = (int) gamesCount.getValue();
+        firstGame = (int) firstGameNumber.getValue();
         completedGames = 0;
         previouslyElapsedMillis = 0;
       }
@@ -686,17 +753,23 @@ public final class TestbenchSetupPanel extends SetupPanel {
           ClientSetting.aiCombatStepPauseDuration.setValue(previousCombatPause);
         });
     final List<PlayerCountrySelection> players = new ArrayList<>();
+    final boolean showGame = showGameWindow.isSelected();
     final boolean showAllObservations = showObservationWindow.isSelected();
     final Map<String, Boolean> observationsByPlayer = selectedObservationAssignments();
     final Map<String, String> agentLabels = selectedAssignments();
     final Path observedMapXml = Path.of(mapPath.getText());
-    final int simulationNumber = completedGames + 1;
+    final int simulationNumber = firstGame + completedGames;
     final List<PlayerTypes.Type> selectedGamePlayerTypes =
         TestbenchAgentRegistry.getPlayerTypes(
             Path.of(mapPath.getText()),
             simulationNumber,
             runStartedAt.toEpochMilli(),
-            this::suspendCurrentGame);
+            this::suspendCurrentGame,
+            Map.of(
+                "TRIPLEA_TESTBENCH_AGENTS",
+                new Gson().toJson(selectedAgentIds()),
+                "TRIPLEA_TESTBENCH_GAME",
+                gameFolderName()));
     assignments.forEach(
         (name, combo) ->
             players.add(
@@ -735,7 +808,19 @@ public final class TestbenchSetupPanel extends SetupPanel {
                   final Set<Player> localGamePlayers,
                   final Chat chat) {
                 currentGame = game;
-                super.startGame(localPlayers, game, localGamePlayers, chat);
+                if (showGame) {
+                  super.startGame(localPlayers, game, localGamePlayers, chat);
+                } else {
+                  // What the game window would set up, minus the window: the map's resources
+                  // (the engine reads them, e.g. for politics texts), no display and no sound.
+                  final String mapName = game.getData().getMapName();
+                  game.setResourceLoader(
+                      new ResourceLoader(
+                          InstalledMapsListing.searchAllMapsForMapName(mapName)
+                              .orElseThrow(() -> new MapNotFoundException(mapName))));
+                  game.setDisplay(new HeadlessDisplay());
+                  game.setSoundChannel(new HeadlessSoundChannel());
+                }
                 SwingUtilities.invokeLater(
                     () ->
                         stateObservationWindow.observe(
@@ -781,6 +866,7 @@ public final class TestbenchSetupPanel extends SetupPanel {
               activeConfigurationKey(),
               completedGames,
               plannedGames,
+              firstGame,
               game.getData().getSequence().getRound(),
               currentGameElapsedMillis(),
               Instant.now().toString());
@@ -797,14 +883,17 @@ public final class TestbenchSetupPanel extends SetupPanel {
   private void onGameCompleted() {
     stateObservationWindow.stopObserving();
     GameShutdownRegistry.runShutdownActions();
+    final IGame finishedGame = currentGame;
     currentGame = null;
     if (currentGameSuspended) {
       currentGameSuspended = false;
       onGameSuspended();
       return;
     }
+    if (finishedGame != null) {
+      appendGameResult(finishedGame.getData(), firstGame + completedGames);
+    }
     completedGames++;
-    appendGameLog();
     previouslyElapsedMillis = 0;
     deleteCheckpoint();
     SwingUtilities.invokeLater(
@@ -835,6 +924,57 @@ public final class TestbenchSetupPanel extends SetupPanel {
         });
   }
 
+  /**
+   * Appends one JSON line describing the finished game to the file named by the {@code
+   * triplea.testbench.results} property, when it is set. A blank status means the game stopped
+   * without reaching a result.
+   */
+  private void appendGameResult(final GameData data, final int gameNumber) {
+    final String resultsFile = System.getProperty(CliProperties.TRIPLEA_TESTBENCH_RESULTS, "");
+    if (resultsFile.isBlank() || data == null) {
+      return;
+    }
+    final var properties = data.getProperties();
+    final List<String> winners =
+        java.util.Arrays.stream(
+                properties.get(EndRoundDelegate.TESTBENCH_WINNERS_PROPERTY, "").split(","))
+            .map(String::strip)
+            .filter(name -> !name.isEmpty())
+            .toList();
+    final Map<String, String> alliances = new LinkedHashMap<>();
+    for (final GamePlayer player : data.getPlayerList().getPlayers()) {
+      data.getAllianceTracker().getAlliancesPlayerIsIn(player).stream()
+          .sorted()
+          .findFirst()
+          .ifPresent(alliance -> alliances.put(player.getName(), alliance));
+    }
+    final GameResultLine line =
+        new GameResultLine(
+            activeConfigurationKey(),
+            gameFolderName(),
+            gameNumber,
+            selectedAgentIds(),
+            alliances,
+            winners,
+            properties.get(
+                EndRoundDelegate.TESTBENCH_ROUNDS_PLAYED_PROPERTY, data.getSequence().getRound()),
+            properties.get(EndRoundDelegate.TESTBENCH_STATUS_PROPERTY, ""),
+            currentGameElapsedMillis() / 1000.0);
+    try {
+      final Path path = Path.of(resultsFile);
+      if (path.getParent() != null) {
+        Files.createDirectories(path.getParent());
+      }
+      Files.writeString(
+          path,
+          new Gson().toJson(line) + System.lineSeparator(),
+          java.nio.file.StandardOpenOption.CREATE,
+          java.nio.file.StandardOpenOption.APPEND);
+    } catch (final IOException | RuntimeException e) {
+      System.err.println("Could not write the testbench game result: " + e.getMessage());
+    }
+  }
+
   /** Ends the run after a suspension; starting the same configuration again resumes the game. */
   private void onGameSuspended() {
     final Path checkpoint = checkpointDirectory().resolve(CHECKPOINT_SAVE);
@@ -843,11 +983,10 @@ public final class TestbenchSetupPanel extends SetupPanel {
             java.util.Locale.ROOT,
             "Game %d/%d suspended after %.1f seconds; run the same configuration again to resume."
                 + "%nCheckpoint: %s%n",
-            completedGames + 1,
-            plannedGames,
+            firstGame + completedGames,
+            lastGameNumber(),
             currentGameElapsedMillis() / 1000.0,
             checkpoint);
-    appendResultsLog(message + System.lineSeparator());
     experimentRunning = false;
     if (exitWhenBatchDone) {
       System.err.print(message);
@@ -868,55 +1007,14 @@ public final class TestbenchSetupPanel extends SetupPanel {
         });
   }
 
+  /** Number of the run's last game. */
+  private int lastGameNumber() {
+    return firstGame + plannedGames - 1;
+  }
+
   private long currentGameElapsedMillis() {
     return previouslyElapsedMillis
         + Duration.between(currentGameStartedAt, Instant.now()).toMillis();
-  }
-
-  private void appendGameLog() {
-    try {
-      final String winners =
-          gameSelectorModel
-              .getGameData()
-              .getProperties()
-              .get(EndRoundDelegate.TESTBENCH_WINNERS_PROPERTY, "");
-      final String result = winners.isBlank() ? "No winner" : "Winner(s): " + winners;
-      final int roundsPlayed =
-          gameSelectorModel
-              .getGameData()
-              .getProperties()
-              .get(
-                  EndRoundDelegate.TESTBENCH_ROUNDS_PLAYED_PROPERTY,
-                  gameSelectorModel.getGameData().getSequence().getRound());
-      final String players =
-          selectedAssignments().entrySet().stream()
-              .map(entry -> entry.getKey() + " = " + entry.getValue())
-              .collect(java.util.stream.Collectors.joining(", "));
-      final long elapsedMillis = currentGameElapsedMillis();
-      appendResultsLog(
-          String.format(
-              java.util.Locale.ROOT,
-              "Game %d/%d completed%nPlayers: %s%nResult: %s%nRounds played: %d%n"
-                  + "Elapsed: %.1f seconds%n%n",
-              completedGames,
-              plannedGames,
-              players,
-              result,
-              roundsPlayed,
-              elapsedMillis / 1000.0));
-    } catch (RuntimeException e) {
-      System.err.println("Could not write planning-agent testbench log: " + e.getMessage());
-    }
-  }
-
-  private static void appendResultsLog(final String text) {
-    try {
-      final Path logFile = resultsLogPath();
-      Files.createDirectories(logFile.getParent());
-      Files.writeString(logFile, text, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-    } catch (IOException e) {
-      System.err.println("Could not write planning-agent testbench log: " + e.getMessage());
-    }
   }
 
   /**
@@ -931,7 +1029,9 @@ public final class TestbenchSetupPanel extends SetupPanel {
     }
     final String configName =
         activeConfigurationFile.getFileName().toString().replaceFirst("\\.json$", "");
-    final Path gameDirectory = activeConfigurationFile.getParent().getParent();
+    final Path gameDirectory =
+        TestbenchMapRepository.gameDirectoryOf(activeConfigurationFile)
+            .orElse(activeConfigurationFile.getParent().getParent());
     return gameDirectory == null || gameDirectory.getFileName() == null
         ? saves.resolve(configName)
         : saves.resolve(gameDirectory.getFileName().toString()).resolve(configName);
@@ -969,39 +1069,19 @@ public final class TestbenchSetupPanel extends SetupPanel {
     }
   }
 
-  private void ensureResultsLogExists() {
-    final Path logFile = resultsLogPath();
-    try {
-      Files.createDirectories(logFile.getParent());
-      if (Files.notExists(logFile)) {
-        Files.writeString(logFile, "Planning agent testbench results\n\n");
+  /**
+   * Deletes the agents' per-game logs (planning-agent-testbed/logs/agent-*.txt) of earlier runs.
+   */
+  private static void deleteAgentLogs() {
+    final Path logsDirectory =
+        TestbenchMapRepository.repositoryRoot().resolve("planning-agent-testbed/logs");
+    if (!Files.isDirectory(logsDirectory)) return;
+    try (var existingLogs = Files.newDirectoryStream(logsDirectory, "agent-*.txt")) {
+      for (final Path existingLog : existingLogs) {
+        Files.deleteIfExists(existingLog);
       }
-    } catch (IOException e) {
-      System.err.println("Could not create planning-agent testbench log: " + e.getMessage());
-    }
-  }
-
-  private static Path resultsLogPath() {
-    return TestbenchMapRepository.repositoryRoot()
-        .resolve("planning-agent-testbed/logs/game-results.txt");
-  }
-
-  private static void refreshSimulationLogs() {
-    final Path logsDirectory = resultsLogPath().getParent();
-    try {
-      Files.createDirectories(logsDirectory);
-      try (var existingLogs = Files.newDirectoryStream(logsDirectory, "agent-*.txt")) {
-        for (final Path existingLog : existingLogs) {
-          Files.deleteIfExists(existingLog);
-        }
-      }
-      Files.writeString(
-          resultsLogPath(),
-          "Planning agent testbench results\n\n",
-          StandardOpenOption.CREATE,
-          StandardOpenOption.TRUNCATE_EXISTING);
     } catch (final IOException e) {
-      System.err.println("Could not refresh planning-agent testbench logs: " + e.getMessage());
+      System.err.println("Could not delete earlier planning-agent logs: " + e.getMessage());
     }
   }
 
@@ -1034,10 +1114,12 @@ public final class TestbenchSetupPanel extends SetupPanel {
       MapReference map,
       String mapXml,
       int games,
+      Integer firstGameNumber,
       int roundLimit,
       Integer aiMovePauseMs,
       Integer aiCombatStepPauseMs,
       Map<String, String> agents,
+      Boolean showGame,
       Boolean showObservations,
       Map<String, Boolean> observationPlayers,
       Boolean clearAgentOutputs) {}
@@ -1047,10 +1129,31 @@ public final class TestbenchSetupPanel extends SetupPanel {
       String configuration,
       int completedGames,
       int plannedGames,
+      Integer firstGameNumber,
       int round,
       long elapsedMillis,
-      String savedAt) {}
+      String savedAt) {
+    /** Number of the run's first game; 1 for checkpoints saved before it was recorded. */
+    int firstGame() {
+      return firstGameNumber == null ? 1 : firstGameNumber;
+    }
+  }
 
   private record MapReference(
       String name, String gameName, List<String> aliases, String downloadUrl) {}
+
+  /**
+   * One line of the triplea.testbench.results file; agents and alliances map each faction to its
+   * agent ID and (first) alliance.
+   */
+  private record GameResultLine(
+      String configuration,
+      String gameFolder,
+      int game,
+      Map<String, String> agents,
+      Map<String, String> alliances,
+      List<String> winners,
+      int roundsPlayed,
+      String status,
+      double seconds) {}
 }

@@ -67,6 +67,21 @@ Return an acknowledgement such as:
 Parse and retain rules and initial state at this point. The agent may maintain its own internal
 representation for the rest of the game.
 
+The process environment also carries `TRIPLEA_TESTBENCH_AGENTS`: a JSON object mapping every
+faction of the game to its assigned agent ID (built-in players by their label), for example
+`{"Russians": "Hard (AI)", "Germans": "tripleMind-mcts"}`, and `TRIPLEA_TESTBENCH_GAME`: the
+`games/<game>` folder being played (for example `capture-the-flag-diag`). Agents use them to tell
+the map and who they play against; the TripleMind agents write their metrics and records to
+`metrics/<game>/vs-<opponent>/` and `records/<game>/vs-<opponent>/` (`helper.output_folder`, which
+leaves out allied factions). Both are absent outside the engine (for example in `tools/arena.py`),
+where those agents use `unknown-game/vs-unknown`.
+
+When the engine runs with `triplea.testbench.outputs=<folder>` (a tournament does), the environment
+also carries `TRIPLEA_TESTBENCH_OUTPUT_DIR=<folder>/<agent id>`. An agent should then write its
+metrics under `$TRIPLEA_TESTBENCH_OUTPUT_DIR/metrics/` instead of its own `metrics/`
+(`helper.metrics_dir` in the TripleMind agents), so a tournament's metrics stay in the tournament
+folder. Without it, write to the agent folder as before.
+
 ### Turn requests
 
 At the faction's decision points, the engine sends `type: "turn_request"` with `phase`, `state`,
@@ -104,7 +119,7 @@ Optional fields, ignored by older agents:
 
 Instead of an action, any turn response may be `{"suspend": true}`. The testbench then saves the
 game to `planning-agent-testbed/saves/<game>/<config>/checkpoint.tsvg` (with `checkpoint.json`
-holding the run's progress), stops the run and appends a "suspended" entry to `game-results.txt`.
+holding the run's progress) and stops the run.
 Starting the same configuration again loads the checkpoint (autostart resumes directly; the setup
 window asks first) and continues that game with the same game number, keeping the logs and agent
 outputs of the suspended run; the agents get a fresh `game_start` for the saved state. Suspend at the

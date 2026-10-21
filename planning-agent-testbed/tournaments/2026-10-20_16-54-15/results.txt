@@ -1,0 +1,626 @@
+Tournament 2026-10-20_16-54-15
+==============================
+
+Per configuration
+-----------------
+games/capture-the-flag-diag/config/generated/2p_maps/1.tripleMind-mcts-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = tripleMind-mcts, Germans = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts                        10    100.0%
+  Germans    tripleMind-mcts-no-reward-heuristic     0      0.0%
+  no winner                                          0      0.0%
+  mean rounds 20.4, time in games 0h 07m 18s (43.8 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/2.tripleMind-mcts-no-reward-heuristic-vs-tripleMind-mcts.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Germans = tripleMind-mcts
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic     4     40.0%
+  Germans    tripleMind-mcts                         6     60.0%
+  no winner                                          0      0.0%
+  mean rounds 28.9, time in games 0h 10m 48s (64.8 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/3.tripleMind-mcts-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts, Germans = Hard (AI)
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   tripleMind-mcts    10    100.0%
+  Germans    Hard (AI)           0      0.0%
+  no winner                      0      0.0%
+  mean rounds 14.8, time in games 0h 03m 03s (18.3 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/4.Hard-AI-vs-tripleMind-mcts.json  (10 games)
+  Russians = Hard (AI), Germans = tripleMind-mcts
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   Hard (AI)           0      0.0%
+  Germans    tripleMind-mcts    10    100.0%
+  no winner                      0      0.0%
+  mean rounds 17.3, time in games 0h 03m 47s (22.7 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/5.tripleMind-mcts-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts, Germans = Fast (AI)
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   tripleMind-mcts    10    100.0%
+  Germans    Fast (AI)           0      0.0%
+  no winner                      0      0.0%
+  mean rounds 14.8, time in games 0h 02m 46s (16.6 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/6.Fast-AI-vs-tripleMind-mcts.json  (10 games)
+  Russians = Fast (AI), Germans = tripleMind-mcts
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   Fast (AI)           0      0.0%
+  Germans    tripleMind-mcts    10    100.0%
+  no winner                      0      0.0%
+  mean rounds 17.1, time in games 0h 03m 14s (19.4 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/7.tripleMind-mcts-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = tripleMind-mcts, Germans = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts                               9     90.0%
+  Germans    tripleMind-mcts-no-terr-sorting-heuristic     1     10.0%
+  no winner                                                0      0.0%
+  mean rounds 30.1, time in games 0h 11m 11s (67.1 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/8.tripleMind-mcts-no-terr-sorting-heuristic-vs-tripleMind-mcts.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Germans = tripleMind-mcts
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     9     90.0%
+  Germans    tripleMind-mcts                               1     10.0%
+  no winner                                                0      0.0%
+  mean rounds 25.2, time in games 0h 09m 11s (55.1 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/9.tripleMind-mcts-no-reward-heuristic-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Germans = Hard (AI)
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic    10    100.0%
+  Germans    Hard (AI)                               0      0.0%
+  no winner                                          0      0.0%
+  mean rounds 13.7, time in games 0h 02m 43s (16.3 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/10.Hard-AI-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = Hard (AI), Germans = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   Hard (AI)                               0      0.0%
+  Germans    tripleMind-mcts-no-reward-heuristic    10    100.0%
+  no winner                                          0      0.0%
+  mean rounds 16.4, time in games 0h 03m 30s (21.0 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/11.tripleMind-mcts-no-reward-heuristic-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Germans = Fast (AI)
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic    10    100.0%
+  Germans    Fast (AI)                               0      0.0%
+  no winner                                          0      0.0%
+  mean rounds 14.7, time in games 0h 02m 44s (16.4 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/12.Fast-AI-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = Fast (AI), Germans = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   Fast (AI)                               0      0.0%
+  Germans    tripleMind-mcts-no-reward-heuristic    10    100.0%
+  no winner                                          0      0.0%
+  mean rounds 18.8, time in games 0h 03m 34s (21.4 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/13.tripleMind-mcts-no-reward-heuristic-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Germans = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic           4     40.0%
+  Germans    tripleMind-mcts-no-terr-sorting-heuristic     6     60.0%
+  no winner                                                0      0.0%
+  mean rounds 21.5, time in games 0h 07m 47s (46.7 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/14.tripleMind-mcts-no-terr-sorting-heuristic-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Germans = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     9     90.0%
+  Germans    tripleMind-mcts-no-reward-heuristic           1     10.0%
+  no winner                                                0      0.0%
+  mean rounds 20.5, time in games 0h 07m 24s (44.4 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/15.Hard-AI-vs-Fast-AI.json  (10 games)
+  Russians = Hard (AI), Germans = Fast (AI)
+  faction    agent      wins  win rate
+  ---------  ---------  ----  --------
+  Russians   Hard (AI)     0      0.0%
+  Germans    Fast (AI)     3     30.0%
+  no winner                7     70.0%
+  mean rounds 81.8, time in games 0h 14m 19s (85.9 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/16.Fast-AI-vs-Hard-AI.json  (10 games)
+  Russians = Fast (AI), Germans = Hard (AI)
+  faction    agent      wins  win rate
+  ---------  ---------  ----  --------
+  Russians   Fast (AI)     1     10.0%
+  Germans    Hard (AI)     0      0.0%
+  no winner                9     90.0%
+  mean rounds 91.5, time in games 0h 17m 37s (105.7 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/17.Hard-AI-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = Hard (AI), Germans = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   Hard (AI)                                     0      0.0%
+  Germans    tripleMind-mcts-no-terr-sorting-heuristic    10    100.0%
+  no winner                                                0      0.0%
+  mean rounds 17.3, time in games 0h 03m 45s (22.5 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/18.tripleMind-mcts-no-terr-sorting-heuristic-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Germans = Hard (AI)
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic    10    100.0%
+  Germans    Hard (AI)                                     0      0.0%
+  no winner                                                0      0.0%
+  mean rounds 14.1, time in games 0h 02m 51s (17.1 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/19.Fast-AI-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = Fast (AI), Germans = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   Fast (AI)                                     0      0.0%
+  Germans    tripleMind-mcts-no-terr-sorting-heuristic    10    100.0%
+  no winner                                                0      0.0%
+  mean rounds 18.4, time in games 0h 03m 29s (20.9 s per game)
+
+games/capture-the-flag-diag/config/generated/2p_maps/20.tripleMind-mcts-no-terr-sorting-heuristic-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Germans = Fast (AI)
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic    10    100.0%
+  Germans    Fast (AI)                                     0      0.0%
+  no winner                                                0      0.0%
+  mean rounds 14.5, time in games 0h 02m 43s (16.3 s per game)
+
+games/minimap/config/generated/2p_maps/1.tripleMind-mcts-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = tripleMind-mcts, Italians = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts                         7     70.0%
+  Italians   tripleMind-mcts-no-reward-heuristic     3     30.0%
+  no winner                                          0      0.0%
+  mean rounds 20.8, time in games 0h 07m 30s (45.0 s per game)
+
+games/minimap/config/generated/2p_maps/2.tripleMind-mcts-no-reward-heuristic-vs-tripleMind-mcts.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Italians = tripleMind-mcts
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic     1     10.0%
+  Italians   tripleMind-mcts                         9     90.0%
+  no winner                                          0      0.0%
+  mean rounds 14.9, time in games 0h 05m 22s (32.2 s per game)
+
+games/minimap/config/generated/2p_maps/3.tripleMind-mcts-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts, Italians = Hard (AI)
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   tripleMind-mcts     0      0.0%
+  Italians   Hard (AI)          10    100.0%
+  no winner                      0      0.0%
+  mean rounds 11.9, time in games 0h 02m 40s (16.0 s per game)
+
+games/minimap/config/generated/2p_maps/4.Hard-AI-vs-tripleMind-mcts.json  (10 games)
+  Russians = Hard (AI), Italians = tripleMind-mcts
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   Hard (AI)          10    100.0%
+  Italians   tripleMind-mcts     0      0.0%
+  no winner                      0      0.0%
+  mean rounds 9.9, time in games 0h 02m 08s (12.8 s per game)
+
+games/minimap/config/generated/2p_maps/5.tripleMind-mcts-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts, Italians = Fast (AI)
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   tripleMind-mcts     0      0.0%
+  Italians   Fast (AI)          10    100.0%
+  no winner                      0      0.0%
+  mean rounds 9.8, time in games 0h 01m 51s (11.1 s per game)
+
+games/minimap/config/generated/2p_maps/6.Fast-AI-vs-tripleMind-mcts.json  (10 games)
+  Russians = Fast (AI), Italians = tripleMind-mcts
+  faction    agent            wins  win rate
+  ---------  ---------------  ----  --------
+  Russians   Fast (AI)          10    100.0%
+  Italians   tripleMind-mcts     0      0.0%
+  no winner                      0      0.0%
+  mean rounds 10.4, time in games 0h 01m 51s (11.1 s per game)
+
+games/minimap/config/generated/2p_maps/7.tripleMind-mcts-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = tripleMind-mcts, Italians = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts                               4     40.0%
+  Italians   tripleMind-mcts-no-terr-sorting-heuristic     6     60.0%
+  no winner                                                0      0.0%
+  mean rounds 17.1, time in games 0h 06m 10s (37.0 s per game)
+
+games/minimap/config/generated/2p_maps/8.tripleMind-mcts-no-terr-sorting-heuristic-vs-tripleMind-mcts.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Italians = tripleMind-mcts
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     6     60.0%
+  Italians   tripleMind-mcts                               4     40.0%
+  no winner                                                0      0.0%
+  mean rounds 17.9, time in games 0h 06m 29s (38.9 s per game)
+
+games/minimap/config/generated/2p_maps/9.tripleMind-mcts-no-reward-heuristic-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Italians = Hard (AI)
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic     0      0.0%
+  Italians   Hard (AI)                              10    100.0%
+  no winner                                          0      0.0%
+  mean rounds 10.1, time in games 0h 02m 19s (13.9 s per game)
+
+games/minimap/config/generated/2p_maps/10.Hard-AI-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = Hard (AI), Italians = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   Hard (AI)                              10    100.0%
+  Italians   tripleMind-mcts-no-reward-heuristic     0      0.0%
+  no winner                                          0      0.0%
+  mean rounds 11.6, time in games 0h 02m 31s (15.1 s per game)
+
+games/minimap/config/generated/2p_maps/11.tripleMind-mcts-no-reward-heuristic-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Italians = Fast (AI)
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic     0      0.0%
+  Italians   Fast (AI)                              10    100.0%
+  no winner                                          0      0.0%
+  mean rounds 9.0, time in games 0h 01m 43s (10.3 s per game)
+
+games/minimap/config/generated/2p_maps/12.Fast-AI-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = Fast (AI), Italians = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                wins  win rate
+  ---------  -----------------------------------  ----  --------
+  Russians   Fast (AI)                              10    100.0%
+  Italians   tripleMind-mcts-no-reward-heuristic     0      0.0%
+  no winner                                          0      0.0%
+  mean rounds 10.1, time in games 0h 01m 45s (10.5 s per game)
+
+games/minimap/config/generated/2p_maps/13.tripleMind-mcts-no-reward-heuristic-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = tripleMind-mcts-no-reward-heuristic, Italians = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-reward-heuristic           3     30.0%
+  Italians   tripleMind-mcts-no-terr-sorting-heuristic     7     70.0%
+  no winner                                                0      0.0%
+  mean rounds 15.4, time in games 0h 05m 32s (33.2 s per game)
+
+games/minimap/config/generated/2p_maps/14.tripleMind-mcts-no-terr-sorting-heuristic-vs-tripleMind-mcts-no-reward-heuristic.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Italians = tripleMind-mcts-no-reward-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     7     70.0%
+  Italians   tripleMind-mcts-no-reward-heuristic           3     30.0%
+  no winner                                                0      0.0%
+  mean rounds 13.1, time in games 0h 04m 41s (28.1 s per game)
+
+games/minimap/config/generated/2p_maps/15.Hard-AI-vs-Fast-AI.json  (10 games)
+  Russians = Hard (AI), Italians = Fast (AI)
+  faction    agent      wins  win rate
+  ---------  ---------  ----  --------
+  Russians   Hard (AI)     7     70.0%
+  Italians   Fast (AI)     2     20.0%
+  no winner                1     10.0%
+  mean rounds 40.4, time in games 0h 04m 38s (27.8 s per game)
+
+games/minimap/config/generated/2p_maps/16.Fast-AI-vs-Hard-AI.json  (10 games)
+  Russians = Fast (AI), Italians = Hard (AI)
+  faction    agent      wins  win rate
+  ---------  ---------  ----  --------
+  Russians   Fast (AI)     3     30.0%
+  Italians   Hard (AI)     7     70.0%
+  no winner                0      0.0%
+  mean rounds 33.8, time in games 0h 04m 01s (24.1 s per game)
+
+games/minimap/config/generated/2p_maps/17.Hard-AI-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = Hard (AI), Italians = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   Hard (AI)                                    10    100.0%
+  Italians   tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%
+  no winner                                                0      0.0%
+  mean rounds 13.2, time in games 0h 02m 51s (17.1 s per game)
+
+games/minimap/config/generated/2p_maps/18.tripleMind-mcts-no-terr-sorting-heuristic-vs-Hard-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Italians = Hard (AI)
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%
+  Italians   Hard (AI)                                    10    100.0%
+  no winner                                                0      0.0%
+  mean rounds 10.0, time in games 0h 02m 14s (13.4 s per game)
+
+games/minimap/config/generated/2p_maps/19.Fast-AI-vs-tripleMind-mcts-no-terr-sorting-heuristic.json  (10 games)
+  Russians = Fast (AI), Italians = tripleMind-mcts-no-terr-sorting-heuristic
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   Fast (AI)                                    10    100.0%
+  Italians   tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%
+  no winner                                                0      0.0%
+  mean rounds 9.9, time in games 0h 01m 49s (10.9 s per game)
+
+games/minimap/config/generated/2p_maps/20.tripleMind-mcts-no-terr-sorting-heuristic-vs-Fast-AI.json  (10 games)
+  Russians = tripleMind-mcts-no-terr-sorting-heuristic, Italians = Fast (AI)
+  faction    agent                                      wins  win rate
+  ---------  -----------------------------------------  ----  --------
+  Russians   tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%
+  Italians   Fast (AI)                                    10    100.0%
+  no winner                                                0      0.0%
+  mean rounds 9.3, time in games 0h 01m 46s (10.6 s per game)
+
+Map: capture-the-flag-diag  (200 games)
+=======================================
+
+Head-to-head on capture-the-flag-diag (both seats)
+--------------------------------------------------
+Fast (AI) vs Hard (AI)  (20 games)
+  agent      wins  win rate  by seat
+  ---------  ----  --------  ---------------------------------
+  Fast (AI)     4     20.0%  as Germans 3/10, as Russians 1/10
+  Hard (AI)     0      0.0%  as Germans 0/10, as Russians 0/10
+  no winner    16     80.0%
+
+Fast (AI) vs tripleMind-mcts  (20 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  -----------------------------------
+  Fast (AI)           0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner           0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  -----------------------------------
+  Fast (AI)                               0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts-no-reward-heuristic    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner                               0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  -----------------------------------
+  Fast (AI)                                     0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts-no-terr-sorting-heuristic    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner                                     0      0.0%
+
+Hard (AI) vs tripleMind-mcts  (20 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  -----------------------------------
+  Hard (AI)           0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner           0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  -----------------------------------
+  Hard (AI)                               0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts-no-reward-heuristic    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner                               0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  -----------------------------------
+  Hard (AI)                                     0      0.0%  as Germans 0/10, as Russians 0/10
+  tripleMind-mcts-no-terr-sorting-heuristic    20    100.0%  as Germans 10/10, as Russians 10/10
+  no winner                                     0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  ----------------------------------
+  tripleMind-mcts                        16     80.0%  as Germans 6/10, as Russians 10/10
+  tripleMind-mcts-no-reward-heuristic     4     20.0%  as Germans 0/10, as Russians 4/10
+  no winner                               0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ---------------------------------
+  tripleMind-mcts                              10     50.0%  as Germans 1/10, as Russians 9/10
+  tripleMind-mcts-no-terr-sorting-heuristic    10     50.0%  as Germans 1/10, as Russians 9/10
+  no winner                                     0      0.0%
+
+tripleMind-mcts-no-reward-heuristic vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ---------------------------------
+  tripleMind-mcts-no-reward-heuristic           5     25.0%  as Germans 1/10, as Russians 4/10
+  tripleMind-mcts-no-terr-sorting-heuristic    15     75.0%  as Germans 6/10, as Russians 9/10
+  no winner                                     0      0.0%
+
+Per agent on capture-the-flag-diag
+----------------------------------
+agent                                      games  wins  win rate
+-----------------------------------------  -----  ----  --------
+Fast (AI)                                     80     4      5.0%
+Hard (AI)                                     80     0      0.0%
+tripleMind-mcts                               80    66     82.5%
+tripleMind-mcts-no-reward-heuristic           80    49     61.2%
+tripleMind-mcts-no-terr-sorting-heuristic     80    65     81.2%
+
+Map: minimap  (200 games)
+=========================
+
+Head-to-head on minimap (both seats)
+------------------------------------
+Fast (AI) vs Hard (AI)  (20 games)
+  agent      wins  win rate  by seat
+  ---------  ----  --------  ----------------------------------
+  Fast (AI)     5     25.0%  as Italians 2/10, as Russians 3/10
+  Hard (AI)    14     70.0%  as Italians 7/10, as Russians 7/10
+  no winner     1      5.0%
+
+Fast (AI) vs tripleMind-mcts  (20 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  ------------------------------------
+  Fast (AI)          20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner           0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  ------------------------------------
+  Fast (AI)                              20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts-no-reward-heuristic     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner                               0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ------------------------------------
+  Fast (AI)                                    20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner                                     0      0.0%
+
+Hard (AI) vs tripleMind-mcts  (20 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  ------------------------------------
+  Hard (AI)          20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner           0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  ------------------------------------
+  Hard (AI)                              20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts-no-reward-heuristic     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner                               0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ------------------------------------
+  Hard (AI)                                    20    100.0%  as Italians 10/10, as Russians 10/10
+  tripleMind-mcts-no-terr-sorting-heuristic     0      0.0%  as Italians 0/10, as Russians 0/10
+  no winner                                     0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-reward-heuristic  (20 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  ----------------------------------
+  tripleMind-mcts                        16     80.0%  as Italians 9/10, as Russians 7/10
+  tripleMind-mcts-no-reward-heuristic     4     20.0%  as Italians 3/10, as Russians 1/10
+  no winner                               0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ----------------------------------
+  tripleMind-mcts                               8     40.0%  as Italians 4/10, as Russians 4/10
+  tripleMind-mcts-no-terr-sorting-heuristic    12     60.0%  as Italians 6/10, as Russians 6/10
+  no winner                                     0      0.0%
+
+tripleMind-mcts-no-reward-heuristic vs tripleMind-mcts-no-terr-sorting-heuristic  (20 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ----------------------------------
+  tripleMind-mcts-no-reward-heuristic           6     30.0%  as Italians 3/10, as Russians 3/10
+  tripleMind-mcts-no-terr-sorting-heuristic    14     70.0%  as Italians 7/10, as Russians 7/10
+  no winner                                     0      0.0%
+
+Per agent on minimap
+--------------------
+agent                                      games  wins  win rate
+-----------------------------------------  -----  ----  --------
+Fast (AI)                                     80    65     81.2%
+Hard (AI)                                     80    74     92.5%
+tripleMind-mcts                               80    24     30.0%
+tripleMind-mcts-no-reward-heuristic           80    10     12.5%
+tripleMind-mcts-no-terr-sorting-heuristic     80    26     32.5%
+
+All maps
+========
+
+Head-to-head (all maps, both seats)
+-----------------------------------
+Fast (AI) vs Hard (AI)  (40 games)
+  agent      wins  win rate  by seat
+  ---------  ----  --------  ---------------------------------------------------
+  Fast (AI)     9     22.5%  as Germans 3/10, as Italians 2/10, as Russians 4/20
+  Hard (AI)    14     35.0%  as Germans 0/10, as Italians 7/10, as Russians 7/20
+  no winner    17     42.5%
+
+Fast (AI) vs tripleMind-mcts  (40 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  -----------------------------------------------------
+  Fast (AI)          20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner           0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-reward-heuristic  (40 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  -----------------------------------------------------
+  Fast (AI)                              20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts-no-reward-heuristic    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner                               0      0.0%
+
+Fast (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (40 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  -----------------------------------------------------
+  Fast (AI)                                    20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts-no-terr-sorting-heuristic    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner                                     0      0.0%
+
+Hard (AI) vs tripleMind-mcts  (40 games)
+  agent            wins  win rate  by seat
+  ---------------  ----  --------  -----------------------------------------------------
+  Hard (AI)          20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner           0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-reward-heuristic  (40 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  -----------------------------------------------------
+  Hard (AI)                              20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts-no-reward-heuristic    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner                               0      0.0%
+
+Hard (AI) vs tripleMind-mcts-no-terr-sorting-heuristic  (40 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  -----------------------------------------------------
+  Hard (AI)                                    20     50.0%  as Germans 0/10, as Italians 10/10, as Russians 10/20
+  tripleMind-mcts-no-terr-sorting-heuristic    20     50.0%  as Germans 10/10, as Italians 0/10, as Russians 10/20
+  no winner                                     0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-reward-heuristic  (40 games)
+  agent                                wins  win rate  by seat
+  -----------------------------------  ----  --------  ----------------------------------------------------
+  tripleMind-mcts                        32     80.0%  as Germans 6/10, as Italians 9/10, as Russians 17/20
+  tripleMind-mcts-no-reward-heuristic     8     20.0%  as Germans 0/10, as Italians 3/10, as Russians 5/20
+  no winner                               0      0.0%
+
+tripleMind-mcts vs tripleMind-mcts-no-terr-sorting-heuristic  (40 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ----------------------------------------------------
+  tripleMind-mcts                              18     45.0%  as Germans 1/10, as Italians 4/10, as Russians 13/20
+  tripleMind-mcts-no-terr-sorting-heuristic    22     55.0%  as Germans 1/10, as Italians 6/10, as Russians 15/20
+  no winner                                     0      0.0%
+
+tripleMind-mcts-no-reward-heuristic vs tripleMind-mcts-no-terr-sorting-heuristic  (40 games)
+  agent                                      wins  win rate  by seat
+  -----------------------------------------  ----  --------  ----------------------------------------------------
+  tripleMind-mcts-no-reward-heuristic          11     27.5%  as Germans 1/10, as Italians 3/10, as Russians 7/20
+  tripleMind-mcts-no-terr-sorting-heuristic    29     72.5%  as Germans 6/10, as Italians 7/10, as Russians 16/20
+  no winner                                     0      0.0%
+
+Per agent (all maps)
+--------------------
+agent                                      games  wins  win rate
+-----------------------------------------  -----  ----  --------
+Fast (AI)                                    160    69     43.1%
+Hard (AI)                                    160    74     46.2%
+tripleMind-mcts                              160    90     56.2%
+tripleMind-mcts-no-reward-heuristic          160    59     36.9%
+tripleMind-mcts-no-terr-sorting-heuristic    160    91     56.9%
+
+Time
+----
+started     2026-10-20 16:54:15
+finished    2026-10-20 20:09:04
+total       3h 14m 50s
+in games    3h 13m 37s over 400 games (the rest is engine start-up and map loading between configurations)

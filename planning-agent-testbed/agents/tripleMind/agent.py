@@ -15,6 +15,8 @@ Environment:
   TRIPLEA_MCTS_EXP_CONST   UCB1 exploration constant (default 1.414)
   TRIPLEA_MCTS_SEED        search seed (default 0)
   TRIPLEMIND_VIEW          1 (default) shows the live map window, 0 hides it
+  TRIPLEMIND_SAVE_MAP      1 saves a map image before each combat-move search in
+                           map_images/<game>/vs-<opponent>/ (default 0)
   TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
   TRIPLEMIND_RECORD        1 saves the combat-move search trees of each game in
                            records/<faction>-game-<n>.jsonl (default 0)
@@ -37,6 +39,8 @@ import triplea_fm as fm  # noqa: E402
 from triplea_fm.testbench import PHASE_KINDS, LiveBridge, observation_from_state  # noqa: E402
 
 from mcts import MCTS, MCTSGameState  # noqa: E402
+from helper import (GAME_RESULTS_HEADER, MetricLogger, log_game_result, metrics_dir,  # noqa: E402
+                    output_folder, turn_position)
 
 import map_graph  # noqa: E402
 import generators  # noqa: E402
@@ -46,8 +50,15 @@ PROTOCOL_VERSION = 1
 PHASE_TIME_SHARE = {"combatMove": 1.0}
 LOG_DIR = HERE.parent.parent / "logs"
 LOGGING = os.environ.get("TRIPLEA_AGENT_LOG", "0") == "1"  # set in run-agent.sh
+# Metrics and records go in a subfolder per map and opponent, e.g.
+# metrics/capture-the-flag-diag/vs-Hard-AI/ (helper.output_folder). In a tournament the metrics go
+# to the tournament's folder instead (TRIPLEA_TESTBENCH_OUTPUT_DIR, helper.metrics_dir).
+METRICS_DIR = metrics_dir(HERE)
 RECORD_DIR = HERE / "records"
+GAME_RESULTS_CSV = "game_results.csv"  # one row per game this agent played
 RECORDING = os.environ.get("TRIPLEMIND_RECORD", "0") == "1"
+MAP_IMAGE_DIR = HERE / "map_images"
+SAVING_MAP = os.environ.get("TRIPLEMIND_SAVE_MAP", "0") == "1"
 
 
 class GameRecorder:
@@ -122,7 +133,10 @@ class TripleMindAgent:
         self.definition = None
         self.bridge = None
         self.recorder = None
-
+        self.game_number = None
+        self.turn_position = None
+        self.game_started = None
+        self.output_folder = "unknown-game/vs-unknown"
 
         # MCTS parameters
         self.time_budget = time_budget
@@ -154,6 +168,7 @@ class TripleMindAgent:
 
     def game_start(self, request):
         self.whoAmI = request["playerName"]
+        self.game_started = time.time()
         if LOGGING:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
             self.log_path = LOG_DIR / f"agent-{self.whoAmI}-game-{request.get('gameNumber', 1)}.txt"
@@ -161,12 +176,16 @@ class TripleMindAgent:
         # self.log(f"request: {json.dumps(request)}")
         self.build_map(request)
         definition, report = fm.load_definition(request["gameXml"], strict=False)
+        self.game_number = request.get("gameNumber", 1)
+        self.turn_position = turn_position(definition, self.whoAmI)
+        self.output_folder = output_folder(definition, self.whoAmI)
         if RECORDING:
             game_number = request.get("gameNumber", 1)
             state = request.get("initialState") or {}
-            self.recorder = GameRecorder(str(RECORD_DIR / f"{self.whoAmI}-game-{game_number}.jsonl"), {
+            self.recorder = GameRecorder(str(RECORD_DIR / self.output_folder / f"{self.whoAmI}-game-{game_number}.jsonl"), {
                 "agent": HERE.name,
                 "player": self.whoAmI,
+                "opponents": self.output_folder,
                 "game_number": game_number,
                 "game_name": state.get("gameName"),
                 "map_name": state.get("mapName"),
@@ -189,12 +208,16 @@ class TripleMindAgent:
         self.bridge = LiveBridge(definition, self.whoAmI, request.get("gameNumber", 1))
         random.seed(self.seed)
         self.search = MCTS(definition, self.map, self.whoAmI, self.time_budget,
-                           self.depth_budget, self.exploration_constant)
+                           self.depth_budget, self.exploration_constant,
+                           metrics_dir=METRICS_DIR / self.output_folder)
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
 
     def game_end(self, request):
         result = request.get("result") or {}
-        self.log(f"game over: {result.get('status')} winners {result.get('winners')}")
+        log_game_result(MetricLogger(str(METRICS_DIR / self.output_folder / GAME_RESULTS_CSV),
+                                     header=GAME_RESULTS_HEADER),
+                        self.game_number, self.whoAmI, result, self.turn_position,
+                        time.time() - self.game_started if self.game_started else None)
         if self.recorder:
             self.recorder.finish(result, request.get("state"))
             self.recorder.flush()
@@ -299,8 +322,23 @@ class TripleMindAgent:
         self.map = map_graph.MapGraph.from_xml(request["gameXml"])
         self.view = (map_graph.MapView(self.map, self.whoAmI)
                      if os.environ.get("TRIPLEMIND_VIEW", "1") == "1" else None)
+        # Saving reuses the live window when there is one, else draws off-screen.
+        self.image_view = (self.view or map_graph.MapView(self.map, self.whoAmI, live=False)
+                           if SAVING_MAP else None)
         self.log(f"map graph: {self.map}")
         self.log(f"action generators: {generators.IMPLEMENTATION}")
+
+    def save_map_image(self, game_state, phase):
+        """Map image of the observation as received, in
+        map_images/<game>/vs-<opponent>/<faction>-game-<n>-round-<r>-<phase>.png (TRIPLEMIND_SAVE_MAP)."""
+        if self.image_view is None:
+            return
+        path = (MAP_IMAGE_DIR / self.output_folder /
+                f"{self.whoAmI}-game-{self.game_number}-round-{game_state.round:03d}-{phase}.png")
+        try:
+            self.image_view.save(game_state, path)
+        except Exception as e:  # an image is never worth losing the turn over
+            self.log(f"map image not saved: {e!r}")
 
     def get_move(self, request):
         phase = request.get("phase")
@@ -325,6 +363,7 @@ class TripleMindAgent:
                 response = self.encode("purchase", [move])
             self.log(f"round {game_state.round}: {self.whoAmI} purchase -> {response}")
         elif phase == "combatMove":
+            self.save_map_image(game_state, phase)
             attacks = self.search.mcts_search(MCTSGameState(self.search, fm_state, self.whoAmI))
             moves = [mv for attack in attacks for mv in attack.moves]
             if moves:
@@ -333,6 +372,7 @@ class TripleMindAgent:
                      f"({self.search.iteration} iterations) {attacks}")
             self.log(f"round {game_state.round}: {self.whoAmI} combat move -> {response}")
         elif phase == "nonCombatMove":
+            self.save_map_image(game_state, phase)
             moves = action_generators.noncombat_move(sim_game, self.definition)
             if moves:
                 response = self.encode("nonCombatMove", moves)

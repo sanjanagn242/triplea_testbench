@@ -25,7 +25,8 @@ default there, or override it for a run with its environment variable.
 | `TREE_PNG` | 0 | `TRIPLEA_CLASSIC_MCTS_TREE_PNG` | Also render a `.png` (needs Graphviz `dot`) | yes |
 | `TREE_MAX_NODES` | 500 | `TRIPLEA_CLASSIC_MCTS_TREE_MAX_NODES` | Nodes per saved tree (breadth-first) | yes |
 
-Every search also appends one row to `metrics/efficiency.csv` (in this folder): `game`, `round`,
+Every search also appends one row to `metrics/efficiency.csv` (in this folder; in a tournament,
+in `tournaments/<date>_<time>/agents/<agent id>/metrics/` instead): `game`, `round`,
 `player`, `phase`, `num_iterations`, `avg_rollout_length` (actions per playout), `max_rollout_round`
 (furthest game round any playout reached), `max_rollout_rounds_ahead` (most rounds one playout
 advanced past the round it started in), `max_depth` (of the search tree), `root_value` (mean

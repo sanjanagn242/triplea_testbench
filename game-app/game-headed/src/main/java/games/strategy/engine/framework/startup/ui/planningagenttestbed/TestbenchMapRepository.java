@@ -73,16 +73,9 @@ final class TestbenchMapRepository {
 
   private static Path gameDirectory(final Path configurationFile, final String mapName) {
     final Path gamesDirectory = gamesDirectory().toAbsolutePath().normalize();
-    if (configurationFile != null) {
-      final Path configurationDirectory =
-          configurationFile.toAbsolutePath().normalize().getParent();
-      if (configurationDirectory != null
-          && CONFIG_DIRECTORY.equals(configurationDirectory.getFileName().toString())) {
-        final Path configuredGameDirectory = configurationDirectory.getParent();
-        if (gamesDirectory.equals(configuredGameDirectory.getParent())) {
-          return configuredGameDirectory;
-        }
-      }
+    final Optional<Path> configuredGameDirectory = gameDirectoryOf(configurationFile);
+    if (configuredGameDirectory.isPresent()) {
+      return configuredGameDirectory.get();
     }
     if (mapName == null || mapName.isBlank()) {
       throw new IllegalArgumentException("A map name is required to locate its testbed folder.");
@@ -90,6 +83,26 @@ final class TestbenchMapRepository {
     final String directoryName =
         mapName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
     return gamesDirectory.resolve(directoryName);
+  }
+
+  /**
+   * The games/(game) folder of a configuration stored in games/(game)/config or in a subfolder of
+   * it (for example games/(game)/config/tournament/1.json); empty for configurations elsewhere.
+   */
+  static Optional<Path> gameDirectoryOf(final Path configurationFile) {
+    if (configurationFile == null) {
+      return Optional.empty();
+    }
+    final Path gamesDirectory = gamesDirectory().toAbsolutePath().normalize();
+    Path current = configurationFile.toAbsolutePath().normalize().getParent();
+    while (current != null && current.getParent() != null) {
+      if (CONFIG_DIRECTORY.equals(current.getFileName().toString())
+          && gamesDirectory.equals(current.getParent().getParent())) {
+        return Optional.of(current.getParent());
+      }
+      current = current.getParent();
+    }
+    return Optional.empty();
   }
 
   static Path repositoryRoot() {

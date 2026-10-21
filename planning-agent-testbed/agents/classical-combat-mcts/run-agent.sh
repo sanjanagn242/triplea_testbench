@@ -14,6 +14,8 @@ export TRIPLEA_CLASSIC_MCTS_MAX_ITERATIONS=100000
 # Once it has passed, the agent asks the testbench at the start of its next turn to save the game
 # and stop; starting the same configuration again resumes from that point.
 export TRIPLEA_AGENT_RUN_HOURS=3
+# Progress during a search: one log line at most every this many seconds (0 = off).
+export TRIPLEA_CLASSIC_MCTS_PROGRESS_SECONDS=60
 # Rounds a playout runs before it is stopped with no winner (scored as a loss).
 export TRIPLEA_CLASSIC_MCTS_ROLLOUT=100
 # Search trees in logs/trees/: 1 saves a .dot after every search, TREE_PNG 1 also renders a

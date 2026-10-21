@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -39,11 +40,22 @@ import triplea_fm as fm  # noqa: E402
 
 import generators  # noqa: E402  (TripleMind)
 import map_graph  # noqa: E402  (TripleMind)
+from helper import (EFFICIENCY_HEADER, GAME_RESULTS_HEADER, ROLLOUT_STATS_HEADER,  # noqa: E402
+                    MetricLogger, log_game_result, metrics_dir, output_folder, turn_position)
 from generators import ag  # noqa: E402  (Cython build when available)
 from search_agent import SearchAgent  # noqa: E402
 
 
 class TripleMindBC(SearchAgent):
+    # One row per game this agent played, in a subfolder per map and opponent
+    # (metrics/<game>/vs-<opponent>/game_results.csv, see helper.output_folder; in a tournament under
+    # its folder, see helper.metrics_dir); subclasses not run by the testbench may turn it off.
+    # efficiency.csv and rollout_stats.csv are written next to it, with TripleMind's columns: one
+    # efficiency row per combat move (the search columns stay blank, there is no search) and no
+    # rollout rows (there are no rollouts).
+    game_results_csv = metrics_dir(HERE) / "game_results.csv"
+    record_game_results = True
+
     def __init__(self):
         super().__init__()
         self.checkpoint = os.environ.get("TRIPLEMIND_BC_CHECKPOINT")
@@ -51,12 +63,38 @@ class TripleMindBC(SearchAgent):
         self.map = None
         self.view = None
         self.bc = None
+        self.game_number = None
+        self.turn_position = None
+        self.game_started = None
+        self.efficiency_metric = None
 
     # ---- setup ----------------------------------------------------------------------------
 
+    def handle(self, request: dict) -> dict:
+        if request.get("type") == "game_end":
+            self.log_game_result(request.get("result") or {})
+            return {"ok": True}
+        return super().handle(request)
+
     def game_start(self, request: dict) -> dict:
         self.game_xml = request.get("gameXml")
-        return super().game_start(request)
+        self.game_started = time.time()
+        self.game_number = request.get("gameNumber", 1)
+        response = super().game_start(request)
+        self.turn_position = turn_position(self.d, self.player_name) if self.d is not None else None
+        if self.record_game_results:
+            folder = self.game_results_csv.parent / output_folder(self.d, self.player_name)
+            self.efficiency_metric = MetricLogger(str(folder / "efficiency.csv"), header=EFFICIENCY_HEADER)
+            MetricLogger(str(folder / "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
+        return response
+
+    def log_game_result(self, result: dict):
+        if self.record_game_results:
+            csv_path = (self.game_results_csv.parent / output_folder(self.d, self.player_name)
+                        / self.game_results_csv.name)
+            log_game_result(MetricLogger(str(csv_path), header=GAME_RESULTS_HEADER),
+                            self.game_number, self.player_name, result, self.turn_position,
+                            time.time() - self.game_started if self.game_started else None)
 
     def setup(self):
         random.seed(self.seed)
@@ -104,6 +142,8 @@ class TripleMindBC(SearchAgent):
 
     def combat_move(self, root: fm.SimulationState) -> List[object]:
         """One formation per heuristic target, chosen by the BC policy, until no target is left."""
+        started = time.time()
+        num_children_at_root = None
         s, rng = root.clone(), self.new_rng()
         excluded = set()
         committed: Dict[str, str] = {}  # engine unit id -> territory it attacks
@@ -113,6 +153,8 @@ class TripleMindBC(SearchAgent):
             actions, excluded = ag.combat_actions(view, self.d, excluded, self.player_name)
             if not actions:
                 break  # no target left: end of the phase
+            if num_children_at_root is None:
+                num_children_at_root = len(actions)  # formations for the first target
             index = 0
             if self.bc is not None:
                 try:
@@ -131,6 +173,9 @@ class TripleMindBC(SearchAgent):
                         committed[self.bridge.uuid_of[uid]] = dest
                 else:
                     self.log(f"  rejected {fm.action_to_json(self.d, mv)}")
+        if self.efficiency_metric is not None:
+            self.efficiency_metric.log(self.player_name, self.game_number, root.round,
+                                       time.time() - started, "", "", num_children_at_root or 0, "", "")
         return plan
 
 

@@ -1,0 +1,42 @@
+Game results: capture-the-flag-diag
+============================================================
+
+tripleMind-mcts
+---------------
+  games 80, won 66 (82.5%, 95% interval 73-89%), loss 14
+    vs Fast-AI: 20/20 won (100.0%)
+    vs Hard-AI: 20/20 won (100.0%)
+    vs tripleMind-mcts-no-reward-heuristic: 16/20 won (80.0%)
+    vs tripleMind-mcts-no-terr-sorting-heuristic: 10/20 won (50.0%)
+    moving 1st: 39/40 won (97.5%)
+    moving 2nd: 27/40 won (67.5%)
+  rounds played   mean 21.1, median 18, p25-p75 16 to 23.2, min 12, max 47
+    in won games  mean 19.6, median 17.5, p25-p75 16 to 21, min 12, max 47
+  game time (s)   mean 38.3, median 32.3, p25-p75 18.8 to 49.6, min 14.2, max 110
+
+tripleMind-mcts-no-reward-heuristic
+-----------------------------------
+  games 80, won 49 (61.2%, 95% interval 50-71%), loss 31
+    vs Fast-AI: 20/20 won (100.0%)
+    vs Hard-AI: 20/20 won (100.0%)
+    vs tripleMind-mcts: 4/20 won (20.0%)
+    vs tripleMind-mcts-no-terr-sorting-heuristic: 5/20 won (25.0%)
+    moving 1st: 28/40 won (70.0%)
+    moving 2nd: 21/40 won (52.5%)
+  rounds played   mean 19.4, median 18, p25-p75 15 to 21, min 12, max 47
+    in won games  mean 18.1, median 16, p25-p75 14 to 19, min 12, max 47
+  game time (s)   mean 34.1, median 31.7, p25-p75 16.5 to 43.7, min 13.6, max 110
+
+tripleMind-mcts-no-terr-sorting-heuristic
+-----------------------------------------
+  games 80, won 65 (81.2%, 95% interval 71-88%), loss 15
+    vs Fast-AI: 20/20 won (100.0%)
+    vs Hard-AI: 20/20 won (100.0%)
+    vs tripleMind-mcts: 10/20 won (50.0%)
+    vs tripleMind-mcts-no-reward-heuristic: 15/20 won (75.0%)
+    moving 1st: 38/40 won (95.0%)
+    moving 2nd: 27/40 won (67.5%)
+  rounds played   mean 20.2, median 18, p25-p75 16 to 23.2, min 12, max 47
+    in won games  mean 18.6, median 17, p25-p75 15 to 19, min 12, max 47
+  game time (s)   mean 36.1, median 29.8, p25-p75 18.4 to 49.1, min 13.1, max 109
+

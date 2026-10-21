@@ -28,4 +28,6 @@ from ppo.agent import TripleMindPPO  # noqa: E402
 
 if __name__ == "__main__":
     torch.set_num_threads(int(os.environ.get("TRIPLEMIND_PPO_THREADS", "1")))
-    TripleMindPPO().run()
+    agent = TripleMindPPO()
+    agent.record_game_results = True
+    agent.run()

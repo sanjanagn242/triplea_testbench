@@ -17,6 +17,11 @@ Startup behavior is controlled by system properties (set via CLI arguments):
 - **`triplea.client`** — Start as a network game client
 - **`triplea.map.download`** — Open the map download window for a specific map name
 - **`triplea.start`** — Startup mode selector. Values: `"lobby"` (lobby login), `"local"` (single-player), `"pbem"` (Play-By-Email), `"pbf"` (Play-By-Forum)
+- **`triplea.testbench.config`** — Planning agent testbench JSON configuration to load
+- **`triplea.testbench.autostart`** — `true` skips the testbench menus, plays the configured batch and exits
+- **`triplea.testbench.results`** — File to append one JSON line per completed testbench game to
+- **`triplea.testbench.gui`** — `true`/`false`: show the game window during testbench games; overrides the configuration's `showGame`
+- **`triplea.testbench.outputs`** — Folder for agent outputs: each agent process gets `TRIPLEA_TESTBENCH_OUTPUT_DIR=<folder>/<agent id>` and writes its metrics there instead of its own folder
 
 macOS-specific: opening a file or a `triplea://` URI is translated to the corresponding property.
 

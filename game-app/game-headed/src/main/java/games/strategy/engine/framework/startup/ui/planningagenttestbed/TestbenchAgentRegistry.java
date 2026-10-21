@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
@@ -34,15 +35,28 @@ public final class TestbenchAgentRegistry {
     return getPlayerTypes(commonGameXml, simulationNumber, System.currentTimeMillis(), () -> false);
   }
 
-  /**
-   * Player types for one game of a run that started at runStartedAtMillis; suspendGame saves and
-   * stops the game when an agent asks to suspend it, returning false if it could not be saved.
-   */
   public static List<PlayerTypes.Type> getPlayerTypes(
       final Path commonGameXml,
       final int simulationNumber,
       final long runStartedAtMillis,
       final BooleanSupplier suspendGame) {
+    return getPlayerTypes(
+        commonGameXml, simulationNumber, runStartedAtMillis, suspendGame, Map.of());
+  }
+
+  /**
+   * Player types for one game of a run that started at runStartedAtMillis; suspendGame saves and
+   * stops the game when an agent asks to suspend it, returning false if it could not be saved.
+   * agentEnvironment holds extra environment variables for every agent process: the setup panel
+   * passes TRIPLEA_TESTBENCH_AGENTS (faction -> agent ID, JSON) and TRIPLEA_TESTBENCH_GAME (the
+   * games/(game) folder name) so an agent knows the map and who it plays against.
+   */
+  public static List<PlayerTypes.Type> getPlayerTypes(
+      final Path commonGameXml,
+      final int simulationNumber,
+      final long runStartedAtMillis,
+      final BooleanSupplier suspendGame,
+      final Map<String, String> agentEnvironment) {
     final List<PlayerTypes.Type> types = new ArrayList<>(HeadedPlayerTypes.getPlayerTypes());
     discoverAgents().stream()
         .map(
@@ -56,7 +70,8 @@ public final class TestbenchAgentRegistry {
                         commonGameXml,
                         simulationNumber,
                         runStartedAtMillis,
-                        suspendGame);
+                        suspendGame,
+                        agentEnvironment);
                   }
                 })
         .forEach(types::add);

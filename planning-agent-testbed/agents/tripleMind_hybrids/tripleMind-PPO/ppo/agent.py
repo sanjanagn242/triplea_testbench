@@ -48,6 +48,10 @@ def cached_checkpoint(path) -> Tuple[ActorCritic, dict]:
 
 
 class TripleMindPPO(bc_agent.TripleMindBC):
+    # Off for the in-process agents of training and checks; agent.py turns it on for the testbench.
+    game_results_csv = bc_agent.metrics_dir(paths.AGENT_DIR) / "game_results.csv"
+    record_game_results = False
+
     def __init__(self, model: Optional[ActorCritic] = None, feature_names: Optional[dict] = None,
                  chooser: str = "ppo", mode: Optional[str] = None, record: bool = False,
                  seed: Optional[int] = None, policy_seed: Optional[int] = None,
@@ -105,7 +109,7 @@ class TripleMindPPO(bc_agent.TripleMindBC):
     def handle(self, request: dict) -> dict:
         if request.get("type") == "game_end":
             self.result = request.get("result") or {}
-            self.log(f"game over: {self.result.get('status')} winners {self.result.get('winners')}")
+            self.log_game_result(self.result)
             return {"ok": True}
         return super().handle(request)
 

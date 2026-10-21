@@ -20,7 +20,8 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
 import map_graph
-from helper import MetricLogger, DebugLogger, save_mcts_tree_png
+from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, MetricLogger, DebugLogger,
+                    save_mcts_tree_png)
 
 
 class MCTSGameState:
@@ -125,7 +126,7 @@ class MCTSNode:
 
 class MCTS:
     def __init__(self, definition, map_graph_, whoAmI, time_budget, depth_budget,
-                 exploration_constant):
+                 exploration_constant, metrics_dir="metrics"):
         self.d = definition
         self.map = map_graph_
         self.whoAmI = whoAmI
@@ -141,9 +142,10 @@ class MCTS:
         self._rng = fm.SeededRng(random.getrandbits(62))
 
         self.efficiency_metric = MetricLogger(
-            "metrics/efficiency.csv",
-            header=["game", "round", "num_iterations", "max_depth", "time_taken", "num_children", "value"]
-        )
+            os.path.join(metrics_dir, "efficiency.csv"), header=EFFICIENCY_HEADER)
+        # Buffered during a search and written once at its end, to keep file I/O out of the loop.
+        self.rollout_stats_metric = MetricLogger(
+            os.path.join(metrics_dir, "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
         self.debug_logger = DebugLogger("logs/debug.log", False)
 
     # ---- forward model -------------------------------------------------------------------
@@ -204,7 +206,7 @@ class MCTS:
         """Combat move of current_state.current_player, continuing from its excluded set."""
         while True:
             current_state.heuristic_combat_legal_moves()
-            mv = self.pick_rollout_move_random(current_state.actions)
+            mv = self.pick_rollout_move_adversarial(current_state.actions)
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])
@@ -281,11 +283,13 @@ class MCTS:
                     break                    
                 depth = sim.round - state.round
         except Exception:
-            return -0.5, depth
-
-        # Evaluate final state
-        reward, is_terminal = evaluate_state(current_state, self.whoAmI, self.victory_cities,
-                                             depth, self.depth_budget)
+            reward, is_terminal = -0.5, False
+        else:
+            # Evaluate final state
+            reward, is_terminal = evaluate_state(current_state, self.whoAmI, self.victory_cities,
+                                                 depth, self.depth_budget)
+        self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
+                                         self.iteration, depth, reward, 1 if is_terminal else 0)
         return reward, depth
 
     def backpropagate(self, node, reward):
@@ -335,13 +339,16 @@ class MCTS:
             self.backpropagate(node, value)
         
         self.efficiency_metric.log(
+            self.whoAmI,
             initial_state.sim.game_number,
             initial_state.sim.round,
-            self.iteration,
-            self.max_depth,
             time.time() - start_time,
+            self.iteration,
+            root.value / root.visits if root.visits > 0 else 0,
             len(root.children),
-            root.value / root.visits if root.visits > 0 else 0)
+            self.max_depth,
+            count_leaves(root))
+        self.rollout_stats_metric.flush()
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
         self.last_stats = {
@@ -350,9 +357,9 @@ class MCTS:
             "seconds": time.time() - start_time,
         }
 
-        # tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"
-        # os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
-        # dot_file, png_file = save_mcts_tree_png(root, tree_prefix, max_nodes=500, render_img=True)
+        tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"
+        os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
+        dot_file, png_file = save_mcts_tree_png(root, tree_prefix, max_nodes=500, render_img=True)
 
         action_seq = []
         node = root
@@ -366,6 +373,18 @@ class MCTS:
                 break
             node = best_child
         return action_seq
+
+
+def count_leaves(root):
+    """Number of root-to-leaf paths in the tree, i.e. its leaves (1 for a lone root)."""
+    leaves, stack = 0, [root]
+    while stack:
+        node = stack.pop()
+        if node.children:
+            stack.extend(node.children)
+        else:
+            leaves += 1
+    return leaves
 
 
 # =========================

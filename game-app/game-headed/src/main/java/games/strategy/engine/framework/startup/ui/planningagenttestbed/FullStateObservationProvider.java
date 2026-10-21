@@ -2,9 +2,9 @@ package games.strategy.engine.framework.startup.ui.planningagenttestbed;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.Resource;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
-import games.strategy.engine.data.Resource;
 import games.strategy.engine.data.properties.IEditableProperty;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.attachments.UnitAttachment;
@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Fully observable snapshot implementation; future visibility policies can replace this provider. */
+/**
+ * Fully observable snapshot implementation; future visibility policies can replace this provider.
+ */
 public final class FullStateObservationProvider implements StateObservationProvider {
   @Override
   public StateObservation observe(final GameData gameData, final GamePlayer player) {
@@ -42,7 +44,9 @@ public final class FullStateObservationProvider implements StateObservationProvi
                             .sorted()
                             .toList();
                     final List<StateObservation.UnitState> unitsInReserve =
-                        candidate.getUnits().stream().map(FullStateObservationProvider::unitState).toList();
+                        candidate.getUnits().stream()
+                            .map(FullStateObservationProvider::unitState)
+                            .toList();
                     return new StateObservation.PlayerState(
                         candidate.getName(), resources, technologies, unitsInReserve);
                   })
@@ -51,33 +55,31 @@ public final class FullStateObservationProvider implements StateObservationProvi
           gameData.getMap().getTerritories().stream()
               .sorted(Comparator.comparing(Territory::getName))
               .map(
-                  territory ->
-                      {
-                        final TerritoryAttachment attachment =
-                            TerritoryAttachment.get(territory).orElse(null);
-                        return new StateObservation.TerritoryState(
-                            territory.getName(),
-                            territory.isWater(),
-                            territory.getOwner().isNull() ? null : territory.getOwner().getName(),
-                            gameData.getMap().getNeighbors(territory).stream()
-                                .map(Territory::getName)
-                                .sorted()
-                                .toList(),
-                            attachment == null ? 0 : attachment.getProduction(),
-                            attachment == null ? 0 : attachment.getUnitProduction(),
-                            attachment == null ? null : attachment.getCapital().orElse(null),
-                            attachment == null ? 0 : attachment.getVictoryCity(),
-                            attachment != null && attachment.getIsImpassable(),
-                            territory.getUnitCollection().getUnitCount() == 0
-                                ? List.of()
-                                : territory.getUnitCollection().getUnits().stream()
-                                    .sorted(
-                                        Comparator.comparing(
-                                                (Unit unit) -> unit.getType().getName())
-                                            .thenComparing(unit -> unit.getOwner().getName()))
-                                    .map(FullStateObservationProvider::unitState)
-                                    .toList());
-                      })
+                  territory -> {
+                    final TerritoryAttachment attachment =
+                        TerritoryAttachment.get(territory).orElse(null);
+                    return new StateObservation.TerritoryState(
+                        territory.getName(),
+                        territory.isWater(),
+                        territory.getOwner().isNull() ? null : territory.getOwner().getName(),
+                        gameData.getMap().getNeighbors(territory).stream()
+                            .map(Territory::getName)
+                            .sorted()
+                            .toList(),
+                        attachment == null ? 0 : attachment.getProduction(),
+                        attachment == null ? 0 : attachment.getUnitProduction(),
+                        attachment == null ? null : attachment.getCapital().orElse(null),
+                        attachment == null ? 0 : attachment.getVictoryCity(),
+                        attachment != null && attachment.getIsImpassable(),
+                        territory.getUnitCollection().getUnitCount() == 0
+                            ? List.of()
+                            : territory.getUnitCollection().getUnits().stream()
+                                .sorted(
+                                    Comparator.comparing((Unit unit) -> unit.getType().getName())
+                                        .thenComparing(unit -> unit.getOwner().getName()))
+                                .map(FullStateObservationProvider::unitState)
+                                .toList());
+                  })
               .toList();
       final GamePlayer activePlayer = step.getPlayerId();
       return new StateObservation(

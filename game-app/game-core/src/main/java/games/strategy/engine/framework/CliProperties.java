@@ -8,6 +8,13 @@ public class CliProperties {
   @NonNls public static final String TRIPLEA_TESTBENCH_CONFIG = "triplea.testbench.config";
   // true/false: skip the testbench menus and start the batch in triplea.testbench.config
   @NonNls public static final String TRIPLEA_TESTBENCH_AUTOSTART = "triplea.testbench.autostart";
+  // file path: append one JSON line per completed testbench game (used by tools/tournament.py)
+  @NonNls public static final String TRIPLEA_TESTBENCH_RESULTS = "triplea.testbench.results";
+  // true/false: show the game window during testbench games; overrides the config's showGame
+  @NonNls public static final String TRIPLEA_TESTBENCH_GUI = "triplea.testbench.gui";
+  // folder path: agents write their outputs (metrics) to <folder>/<agent id>/ instead of their own
+  // folder; passed to each agent process as TRIPLEA_TESTBENCH_OUTPUT_DIR (used by tournament.py)
+  @NonNls public static final String TRIPLEA_TESTBENCH_OUTPUTS = "triplea.testbench.outputs";
   @NonNls public static final String TRIPLEA_SERVER = "triplea.server"; // true/false
   @NonNls public static final String TRIPLEA_CLIENT = "triplea.client"; // true/false
   @NonNls public static final String TRIPLEA_HOST = "triplea.host";

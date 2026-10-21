@@ -25,7 +25,9 @@ class ExternalAgentDefinitionTest {
   void outputDirectoriesResolveInsideTheAgentFolder() {
     assertThat(definition(List.of("metrics", "logs", "trees/run")).resolvedOutputDirectories())
         .containsExactly(
-            AGENT_DIR.resolve("metrics"), AGENT_DIR.resolve("logs"), AGENT_DIR.resolve("trees/run"));
+            AGENT_DIR.resolve("metrics"),
+            AGENT_DIR.resolve("logs"),
+            AGENT_DIR.resolve("trees/run"));
   }
 
   @Test

@@ -31,3 +31,8 @@ planning-agent-testbed/saves/
 planning-agent-testbed/**/__pycache__/
 
 CLAUDE.local.md
+
+planning-agent-testbed/games/*/config/generated/*
+planning-agent-testbed/agents/generated-variants/
+planning-agent-testbed/agents/**/metrics/
+planning-agent-testbed/tournaments/**/metrics/

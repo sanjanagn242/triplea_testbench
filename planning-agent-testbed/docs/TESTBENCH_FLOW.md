@@ -12,6 +12,7 @@ the experiment UI and external-agent bridge are additions in the main repository
 3. **Run Simulations** opens the editable experiment setup. It loads a supplied JSON profile when
    configured, otherwise the default Capture The Flag profile. The profile selects a map, game XML,
    aliases/download URL, game count, round limit, AI pause durations, faction-to-agent assignments,
+   whether to show the game window (`showGame`, overridden by `triplea.testbench.gui=true|false`),
    and observation-display preferences.
 4. `TestbenchMapRepository` looks for the XML in the selected game's repository-local map folder.
    It can use a `mapXml` relative path, find an installed map by configured name/aliases, download
@@ -23,10 +24,15 @@ the experiment UI and external-agent bridge are additions in the main repository
 
 ## Starting a batch and running turns
 
-1. On the first launcher request in a batch, the testbench clears its generated agent logs and
-   resets `planning-agent-testbed/logs/game-results.txt`. It sets the configured round cap and AI
+1. On the first launcher request in a batch, the testbench clears its generated agent logs
+   (`planning-agent-testbed/logs/agent-*.txt`). It sets the configured round cap and AI
    pause durations, then asks `LocalLauncher` to start the selected map and faction players.
-2. The simulation number is `completedGames + 1`, starting at 1. It is passed into the selected
+   With the game window on, the game starts as a regular headed game (`TripleAFrame`, battle
+   window, sounds). With it off, no game window is created: the game gets the map's
+   `ResourceLoader`, a `HeadlessDisplay` and a `HeadlessSoundChannel`, and plays the same way.
+   With `triplea.testbench.outputs=<folder>`, each agent process also gets
+   `TRIPLEA_TESTBENCH_OUTPUT_DIR=<folder>/<agent id>`, where it writes its metrics.
+2. The simulation number is `firstGameNumber + completedGames` (`firstGameNumber` defaults to 1). It is passed into the selected
    player's Java AI adapter and included in each agent's `game_start` message.
 3. If enabled, `StateObservationWindow` opens one window with a tab per selected faction. Its JSON
    panes refresh on engine state changes. The current provider marks snapshots `FULL` and supplies
@@ -55,8 +61,7 @@ the experiment UI and external-agent bridge are additions in the main repository
 
 1. The testbench round limit ends a game without a winner when reached. The testbench also bypasses
    the normal continue-playing prompt for completed batch games.
-2. It appends result, faction assignments, rounds played, and elapsed time to `game-results.txt`, hides the
-   observation window, reloads a fresh copy of the map, and launches the next numbered game. When
+2. It hides the observation window, reloads a fresh copy of the map, and launches the next numbered game. When
    the batch finishes, it returns to the testbench menu.
 3. Each C++ faction writes `agent-<faction>-game-<number>.txt`. Its first line is the simulation
    number, followed by received phase requests, rounds, actions, and protocol errors.

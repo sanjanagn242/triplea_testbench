@@ -1,0 +1,17 @@
+{
+  "games": 5,
+  "agents": [
+    "tripleMind-mcts TRIPLEA_MCTS_ROLLOUT=10",
+    "Hard (AI)"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "minimap",
+      "map": {"name": "Minimap", "gameName": "Minimap", "aliases": ["minimap"],
+              "downloadUrl": "https://github.com/triplea-maps/minimap/archive/refs/heads/master.zip"}
+    }
+  ]
+}

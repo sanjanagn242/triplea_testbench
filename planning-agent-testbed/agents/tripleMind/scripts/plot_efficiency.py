@@ -34,7 +34,7 @@ p75_iters = agg["num_iterations"].quantile(0.75)
 fig, ax = plt.subplots(figsize=(10, 6))
 
 # --- 1. Iterations per round (mean + IQR) ---
-ax.plot(mean_iters.index, mean_iters.values, label="Mean", marker='o')
+ax.plot(mean_iters.index, mean_iters.values, label="Mean")
 ax.fill_between(
     mean_iters.index,
     p25_iters.values,
@@ -112,10 +112,10 @@ print(f"Summary written to {summary_path}")
 
 
 fig, ax = plt.subplots(figsize=(10, 6))
-mean_value = agg["value"].mean()
-p25_value = agg["value"].quantile(0.25)
-p75_value = agg["value"].quantile(0.75)
-ax.plot(mean_value.index, mean_value.values, label="Mean", marker='o')
+mean_value = agg["root_value"].mean()
+p25_value = agg["root_value"].quantile(0.25)
+p75_value = agg["root_value"].quantile(0.75)
+ax.plot(mean_value.index, mean_value.values, label="Mean")
 ax.fill_between(
     mean_value.index,
     p25_value.values,

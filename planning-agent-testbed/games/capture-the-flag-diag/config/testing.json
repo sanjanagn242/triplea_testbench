@@ -7,18 +7,18 @@
       "CTF"
     ]
   },
-  "games": 100,
+  "games": 2,
   "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "classical-combat-mcts",
+    "Russians": "tripleMind-mcts-no-reward-heuristic",
     "Germans": "tripleMind-mcts"
   },
   "showObservations": false,
   "observationPlayers": {
-    "Russians": false,
-    "Germans": false
+    "Russians": true,
+    "Germans": true
   },
   "clearAgentOutputs": true
 }

@@ -83,8 +83,10 @@ class ClassicalMctsAgent(SearchAgent):
     TREE_PNG = param("TRIPLEA_CLASSIC_MCTS_TREE_PNG", 0, int)              # 1 = also render .png (needs `dot`)
     TREE_MAX_NODES = param("TRIPLEA_CLASSIC_MCTS_TREE_MAX_NODES", 500, int)  # BFS cap on dumped nodes
 
-    # Efficiency metrics: one row per search (game, round, phase) in metrics/efficiency.csv.
-    METRICS_FILE = Path(__file__).resolve().parent / "metrics" / "efficiency.csv"
+    # Efficiency metrics: one row per search (game, round, phase) in metrics/efficiency.csv; in a
+    # tournament under its folder (TRIPLEA_TESTBENCH_OUTPUT_DIR) instead of this agent's.
+    METRICS_FILE = (Path(os.environ.get("TRIPLEA_TESTBENCH_OUTPUT_DIR") or Path(__file__).resolve().parent)
+                    / "metrics" / "efficiency.csv")
     # ====================================================================
 
     def __init__(self):

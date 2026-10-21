@@ -83,15 +83,23 @@ class ClassicalMctsAgent(SearchAgent):
     SAVE_TREE = param("TRIPLEA_CLASSIC_MCTS_SAVE_TREE", 0, int)            # 1 = save after every search
     TREE_PNG = param("TRIPLEA_CLASSIC_MCTS_TREE_PNG", 0, int)              # 1 = also render .png (needs `dot`)
     TREE_MAX_NODES = param("TRIPLEA_CLASSIC_MCTS_TREE_MAX_NODES", 500, int)  # BFS cap on dumped nodes
+    # Progress: during a search, one log line at most every PROGRESS_SECONDS (0 = off) saying
+    # which stage it is in and how far the current playout has got.
+    PROGRESS_SECONDS = param("TRIPLEA_CLASSIC_MCTS_PROGRESS_SECONDS", 60.0)
 
-    # Efficiency metrics: one row per search (game, round, phase) in metrics/efficiency.csv.
-    METRICS_FILE = Path(__file__).resolve().parent / "metrics" / "efficiency.csv"
+    # Efficiency metrics: one row per search (game, round, phase) in metrics/efficiency.csv; in a
+    # tournament under its folder (TRIPLEA_TESTBENCH_OUTPUT_DIR) instead of this agent's.
+    METRICS_FILE = (Path(os.environ.get("TRIPLEA_TESTBENCH_OUTPUT_DIR") or Path(__file__).resolve().parent)
+                    / "metrics" / "efficiency.csv")
     # ====================================================================
 
     def __init__(self):
         super().__init__(seconds=self.SECONDS, seed=self.SEED)
         self.iteration = 0
         self.max_depth = 0
+        self._search_info = None  # (phase, round, start time) of the running search
+        self._next_progress = 0.0  # time of the next progress line
+        self._playout_started = 0.0
         self.efficiency_metric = MetricLogger(
             str(self.METRICS_FILE),
             header=["game", "round", "player", "phase", "num_iterations", "avg_rollout_length",
@@ -124,17 +132,38 @@ class ClassicalMctsAgent(SearchAgent):
         rng = self.new_rng()
         horizon = state.round + self.ROLLOUT_MAX_ROUNDS
         steps = 0
+        self._playout_started = time.time()
         while (state.terminal is None and state.decision is not None):
             actions = self.legal_actions(state, exhaustive=True)
             action = self.rnd.choice(actions) if actions else fm.EndPhaseAction()
             if not self.apply(state, action, rng) and not self.apply(state, fm.EndPhaseAction(), rng):
                 break
             steps += 1
+            self.progress("playout", state, steps)
         return self.outcome(state), steps
+
+    def progress(self, stage: str, state: fm.SimulationState = None, steps: int = 0):
+        """Log where the running search is, at most once every PROGRESS_SECONDS. A playout whose
+        round keeps growing across lines is not reaching the end of the game."""
+        now = time.time()
+        if not self.PROGRESS_SECONDS or now < self._next_progress or self._search_info is None:
+            return
+        self._next_progress = now + self.PROGRESS_SECONDS
+        phase, root_round, started = self._search_info
+        done = self.iteration - 1  # the current iteration is still running
+        line = (f"  {phase} round {root_round} progress: {now - started:.0f}s, {done}/"
+                f"{self.MAX_ITERATIONS} iterations done ({done / (now - started):.2f}/s), "
+                f"tree depth {self.max_depth}, now in {stage}")
+        if state is not None:
+            line += (f" for {now - self._playout_started:.0f}s: round {state.round} "
+                     f"(+{state.round - root_round}), {steps} actions, "
+                     f"{self.d.player_names[state.decision.actor] if state.decision else '-'} to act")
+        self.log(line)
 
     def expand(self, node: MCTSNode) -> MCTSNode:
         """Add one child for a random untried action; returns it (or node if nothing applies)."""
         while node.untried_actions:
+            self.progress(f"expansion, {len(node.untried_actions)} untried actions")
             action = node.untried_actions.pop(self.rnd.randrange(len(node.untried_actions)))
             new_state = node.state.clone()
             if self.apply(new_state, action, self.new_rng()):
@@ -190,6 +219,8 @@ class ClassicalMctsAgent(SearchAgent):
         wins = finished = rollout_steps = 0
         max_rollout_round = root.round  # furthest round any playout reached
         max_rounds_ahead = 0  # most rounds one playout advanced past the round it started in
+        self._search_info = (phase, root.round, started)
+        self._next_progress = started + self.PROGRESS_SECONDS
 
         while self.iteration < self.MAX_ITERATIONS:
             self.iteration += 1
@@ -197,6 +228,7 @@ class ClassicalMctsAgent(SearchAgent):
 
             # 1. Selection: descend through fully expanded in-phase nodes by UCB1.
             while not self.is_leaf(root, node):
+                self.progress(f"selection at depth {depth}")
                 if node.untried_actions is None:
                     node.untried_actions = self.legal_actions(node.state, exhaustive=True)
                 if not node.is_fully_expanded():
@@ -225,6 +257,7 @@ class ClassicalMctsAgent(SearchAgent):
             # 4. Backpropagation
             self.backpropagate(node, value)
 
+        self._search_info = None
         # Recommended line: most-visited child at each level, until the phase ends.
         action_seq = []
         node = root_node

@@ -12,6 +12,7 @@ import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
+import games.strategy.engine.framework.CliProperties;
 import games.strategy.engine.player.PlayerBridge;
 import games.strategy.triplea.ai.weak.WeakAi;
 import games.strategy.triplea.delegate.EndRoundDelegate;
@@ -58,6 +59,8 @@ public final class ExternalAgentPlayer extends WeakAi {
   private final long runStartedAtMillis;
   // Saves the game and stops it when the agent asks to suspend; false if it could not be saved.
   private final BooleanSupplier suspendGame;
+  // Extra environment variables for the agent process (TRIPLEA_TESTBENCH_AGENTS, ..._GAME).
+  private final Map<String, String> agentEnvironment;
   private final PlayerGameXmlProvider gameXmlProvider = new FullPlayerGameXmlProvider();
   private Process agentProcess;
   private BufferedReader agentOutput;
@@ -79,7 +82,8 @@ public final class ExternalAgentPlayer extends WeakAi {
         commonGameXml,
         simulationNumber,
         System.currentTimeMillis(),
-        () -> false);
+        () -> false,
+        Map.of());
   }
 
   public ExternalAgentPlayer(
@@ -88,13 +92,15 @@ public final class ExternalAgentPlayer extends WeakAi {
       final Path commonGameXml,
       final int simulationNumber,
       final long runStartedAtMillis,
-      final BooleanSupplier suspendGame) {
+      final BooleanSupplier suspendGame,
+      final Map<String, String> agentEnvironment) {
     super(playerName, definition.name());
     this.definition = definition;
     this.commonGameXml = commonGameXml;
     this.simulationNumber = simulationNumber;
     this.runStartedAtMillis = runStartedAtMillis;
     this.suspendGame = suspendGame;
+    this.agentEnvironment = Map.copyOf(agentEnvironment);
   }
 
   @Override
@@ -467,6 +473,19 @@ public final class ExternalAgentPlayer extends WeakAi {
           new ProcessBuilder(command)
               .directory(agentDirectory.toFile())
               .redirectError(ProcessBuilder.Redirect.INHERIT);
+      processBuilder.environment().putAll(agentEnvironment);
+      final String outputs = System.getProperty(CliProperties.TRIPLEA_TESTBENCH_OUTPUTS, "");
+      if (!outputs.isBlank()) {
+        // The agent writes its outputs (metrics) here instead of in its own folder.
+        processBuilder
+            .environment()
+            .put(
+                "TRIPLEA_TESTBENCH_OUTPUT_DIR",
+                Path.of(outputs)
+                    .toAbsolutePath()
+                    .resolve(definition.id().replaceAll("[^A-Za-z0-9._-]+", "-"))
+                    .toString());
+      }
       agentProcess = processBuilder.start();
       agentInput =
           new BufferedWriter(

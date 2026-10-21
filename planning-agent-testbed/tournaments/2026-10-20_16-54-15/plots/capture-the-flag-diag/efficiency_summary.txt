@@ -1,0 +1,219 @@
+Search efficiency: capture-the-flag-diag
+============================================================
+
+tripleMind-mcts
+---------------
+  vs all opponents: 80 games, 1680 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 525, median 376, p25-p75 293 to 587, min 115, max 2477
+    action sequences       mean 35.5, median 17, p25-p75 7 to 48, min 1, max 384
+    children at root       mean 3.75, median 3, p25-p75 1 to 4, min 0, max 24
+    max rollout            mean 1.96, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.331, median 0.292, p25-p75 0.248 to 0.381, min -1, max 0.992
+  vs Fast-AI: 20 games, 319 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1
+    iterations             mean 635, median 508, p25-p75 397 to 684, min 251, max 1911
+    action sequences       mean 29.3, median 11, p25-p75 4 to 27, min 1, max 328
+    children at root       mean 3.07, median 3, p25-p75 1 to 4, min 0, max 22
+    max rollout            mean 1.93, median 2, p25-p75 2 to 2, min 1, max 2
+    root value             mean 0.439, median 0.381, p25-p75 0.32 to 0.45, min 0.244, max 0.992
+  vs Hard-AI: 20 games, 321 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1
+    iterations             mean 601, median 468, p25-p75 349 to 678, min 210, max 1903
+    action sequences       mean 35.9, median 16, p25-p75 6 to 48, min 1, max 342
+    children at root       mean 2.72, median 2, p25-p75 1 to 4, min 1, max 24
+    max rollout            mean 1.97, median 2, p25-p75 2 to 2, min 1, max 2
+    root value             mean 0.437, median 0.379, p25-p75 0.324 to 0.448, min 0.244, max 0.991
+  vs tripleMind-mcts-no-reward-heuristic: 20 games, 490 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 488, median 338, p25-p75 287 to 501, min 184, max 2043
+    action sequences       mean 36.7, median 20, p25-p75 8 to 50, min 1, max 384
+    children at root       mean 4.03, median 3, p25-p75 2 to 4, min 1, max 24
+    max rollout            mean 1.98, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.306, median 0.275, p25-p75 0.248 to 0.316, min -1, max 0.992
+  vs tripleMind-mcts-no-terr-sorting-heuristic: 20 games, 550 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 450, median 318, p25-p75 258 to 416, min 115, max 2477
+    action sequences       mean 37.9, median 20, p25-p75 7.25 to 54, min 1, max 335
+    children at root       mean 4.48, median 3, p25-p75 2 to 7, min 1, max 23
+    max rollout            mean 1.95, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.229, median 0.244, p25-p75 0.197 to 0.272, min -1, max 0.989
+
+tripleMind-mcts-no-reward-heuristic
+-----------------------------------
+  vs all opponents: 80 games, 1538 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.03
+    iterations             mean 200, median 170, p25-p75 116 to 234, min 49, max 2486
+    action sequences       mean 29.6, median 20, p25-p75 8.25 to 36, min 1, max 270
+    children at root       mean 3.76, median 3, p25-p75 2 to 4, min 1, max 23
+    max rollout            mean 29.2, median 10, p25-p75 5 to 29, min 0, max 100
+    root value             mean 0.365, median 0.807, p25-p75 -0.323 to 1, min -1, max 1
+  vs Fast-AI: 20 games, 335 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 256, median 235, p25-p75 214 to 257, min 121, max 762
+    action sequences       mean 34.5, median 21, p25-p75 6.5 to 58.5, min 1, max 235
+    children at root       mean 3.73, median 3, p25-p75 3 to 4, min 1, max 23
+    max rollout            mean 21.3, median 6, p25-p75 3 to 10, min 1, max 100
+    root value             mean 0.988, median 1, p25-p75 1 to 1, min 0.795, max 1
+  vs Hard-AI: 20 games, 301 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 245, median 230, p25-p75 212 to 245, min 110, max 783
+    action sequences       mean 42.9, median 24, p25-p75 16 to 63, min 1, max 270
+    children at root       mean 3.75, median 3, p25-p75 3 to 4, min 1, max 23
+    max rollout            mean 22.1, median 7, p25-p75 4 to 12, min 1, max 100
+    root value             mean 0.987, median 1, p25-p75 1 to 1, min 0.797, max 1
+  vs tripleMind-mcts: 20 games, 488 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1.01, min 1, max 1.03
+    iterations             mean 161, median 119, p25-p75 98 to 146, min 49, max 2486
+    action sequences       mean 22.5, median 18, p25-p75 8 to 30, min 1, max 174
+    children at root       mean 3.83, median 3, p25-p75 2 to 4, min 1, max 23
+    max rollout            mean 34, median 19, p25-p75 7 to 36, min 0, max 100
+    root value             mean -0.113, median -0.0669, p25-p75 -0.972 to 0.624, min -1, max 1
+  vs tripleMind-mcts-no-terr-sorting-heuristic: 20 games, 414 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1.01, min 1, max 1.03
+    iterations             mean 166, median 127, p25-p75 106 to 159, min 70, max 2350
+    action sequences       mean 24.4, median 18, p25-p75 8 to 32.8, min 1, max 253
+    children at root       mean 3.71, median 3, p25-p75 2 to 4, min 1, max 23
+    max rollout            mean 34.9, median 18, p25-p75 6 to 75.5, min 0, max 100
+    root value             mean -0.0263, median 0.118, p25-p75 -1 to 0.762, min -1, max 1
+
+tripleMind-mcts-no-terr-sorting-heuristic
+-----------------------------------------
+  vs all opponents: 80 games, 1611 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 540, median 392, p25-p75 307 to 604, min 89, max 2737
+    action sequences       mean 34, median 16, p25-p75 7 to 45, min 1, max 398
+    children at root       mean 3.85, median 3, p25-p75 1 to 4, min 0, max 24
+    max rollout            mean 1.95, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.327, median 0.298, p25-p75 0.248 to 0.388, min -1, max 0.993
+  vs Fast-AI: 20 games, 329 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1
+    iterations             mean 630, median 504, p25-p75 396 to 686, min 243, max 1912
+    action sequences       mean 25.9, median 12, p25-p75 6 to 27, min 1, max 240
+    children at root       mean 3.23, median 3, p25-p75 1 to 4, min 0, max 24
+    max rollout            mean 1.94, median 2, p25-p75 2 to 2, min 1, max 2
+    root value             mean 0.434, median 0.385, p25-p75 0.316 to 0.45, min 0.243, max 0.992
+  vs Hard-AI: 20 games, 314 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1
+    iterations             mean 616, median 488, p25-p75 369 to 681, min 227, max 1901
+    action sequences       mean 32.9, median 16, p25-p75 6 to 36, min 1, max 308
+    children at root       mean 2.98, median 2, p25-p75 1 to 4, min 1, max 23
+    max rollout            mean 1.95, median 2, p25-p75 2 to 2, min 1, max 2
+    root value             mean 0.438, median 0.379, p25-p75 0.32 to 0.449, min 0.252, max 0.993
+  vs tripleMind-mcts: 20 games, 550 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 457, median 335, p25-p75 275 to 424, min 89, max 2737
+    action sequences       mean 39.8, median 21, p25-p75 7 to 56, min 1, max 398
+    children at root       mean 4.53, median 3, p25-p75 2 to 7, min 1, max 24
+    max rollout            mean 1.95, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.229, median 0.244, p25-p75 0.203 to 0.278, min -1, max 0.991
+  vs tripleMind-mcts-no-reward-heuristic: 20 games, 418 searches
+    time per turn (s)      mean 1, median 1, p25-p75 1 to 1, min 1, max 1.01
+    iterations             mean 520, median 360, p25-p75 283 to 548, min 161, max 2604
+    action sequences       mean 33.5, median 18, p25-p75 8 to 45, min 1, max 263
+    children at root       mean 4.08, median 3, p25-p75 1 to 4, min 0, max 21
+    max rollout            mean 1.96, median 2, p25-p75 2 to 2, min 0, max 2
+    root value             mean 0.289, median 0.278, p25-p75 0.238 to 0.332, min -1, max 0.992
+
+Mean iterations by round
+agent  tripleMind-mcts  tripleMind-mcts-no-reward-heuristic  tripleMind-mcts-no-terr-sorting-heuristic
+round                                                                                                 
+1               1860.6                                227.6                                     1860.4
+2               1150.4                                178.5                                     1151.5
+3                897.2                                183.8                                      897.0
+4                662.1                                175.1                                      664.0
+5                598.3                                177.1                                      598.8
+6                502.7                                176.2                                      502.0
+7                462.2                                178.3                                      464.3
+8                418.9                                173.0                                      415.4
+9                385.6                                178.3                                      393.3
+10               370.8                                181.4                                      375.2
+11               339.6                                181.2                                      346.9
+12               327.4                                205.9                                      346.3
+13               325.3                                208.5                                      336.0
+14               327.9                                208.4                                      330.4
+15               329.9                                244.3                                      376.9
+16               352.9                                209.3                                      347.7
+17               372.3                                218.9                                      363.7
+18               362.9                                233.5                                      376.7
+19               321.1                                284.2                                      344.1
+20               292.1                                278.1                                      289.8
+21               299.8                                453.3                                      342.1
+22               313.1                                294.6                                      325.0
+23               331.5                                136.5                                      301.8
+24               316.0                                203.5                                      522.7
+25               293.6                                171.7                                      324.6
+26               399.1                                320.3                                      324.8
+27               401.4                                102.0                                      296.8
+28               297.4                                119.3                                      290.3
+29               441.1                                139.3                                      305.9
+30               306.1                                215.1                                      296.1
+31               495.8                                 97.8                                      313.4
+32               286.4                                 99.2                                      292.2
+33               469.4                                 96.6                                      346.3
+34               281.0                                112.0                                      316.2
+35               300.1                                115.4                                      318.2
+36               295.1                                101.8                                      616.4
+37               255.5                                130.5                                      285.2
+38               285.7                                138.5                                      335.5
+39               420.3                                209.2                                      665.2
+40               290.5                                141.7                                      257.3
+41               269.2                                171.0                                      274.7
+42               328.8                                205.3                                      772.0
+43               332.3                                110.0                                      425.0
+44               295.0                                139.0                                      362.0
+45               282.0                                170.5                                      313.0
+46               309.0                                241.5                                      287.0
+47               991.7                                435.0                                      660.0
+
+Mean action sequences by round
+agent  tripleMind-mcts  tripleMind-mcts-no-reward-heuristic  tripleMind-mcts-no-terr-sorting-heuristic
+round                                                                                                 
+1                 20.0                                 19.0                                       20.0
+2                  8.0                                  5.7                                        8.0
+3                  4.0                                 20.7                                        4.0
+4                  2.8                                 21.6                                        2.8
+5                 21.6                                 39.4                                       20.6
+6                 31.8                                 23.9                                       30.4
+7                 52.5                                 60.2                                       53.3
+8                 45.0                                 48.5                                       45.4
+9                 54.2                                 37.7                                       51.7
+10                61.8                                 24.1                                       51.6
+11                50.5                                 16.1                                       39.8
+12                42.1                                 22.2                                       41.2
+13                31.5                                 29.1                                       43.1
+14                26.9                                 33.4                                       39.4
+15                24.9                                 23.6                                       35.7
+16                32.3                                 30.5                                       34.8
+17                48.0                                 23.5                                       52.9
+18                55.4                                 29.1                                       35.8
+19                50.7                                 40.7                                       35.0
+20                54.9                                 24.4                                       22.0
+21                39.6                                 42.8                                       44.1
+22                47.2                                 30.4                                       28.4
+23                27.7                                 32.4                                       40.6
+24                52.2                                 50.1                                       53.3
+25                51.5                                 41.0                                       53.1
+26                36.7                                 18.7                                       42.6
+27                44.5                                 26.6                                       55.0
+28                32.4                                 31.4                                       57.7
+29                32.6                                 53.9                                       52.1
+30                30.5                                 66.1                                       11.7
+31                34.3                                 31.4                                       51.7
+32                54.9                                 50.0                                       14.5
+33                32.2                                 35.0                                       21.2
+34                59.2                                 32.2                                       19.8
+35                41.2                                 33.6                                       18.4
+36                22.3                                 16.2                                       10.0
+37                56.3                                 23.0                                       11.0
+38                77.7                                 14.2                                       41.2
+39                58.3                                 29.8                                       29.0
+40                50.2                                 32.3                                       16.7
+41                67.5                                 37.0                                       26.0
+42                43.2                                121.3                                       29.7
+43                34.3                                  7.5                                       21.0
+44                 7.3                                  4.5                                        2.0
+45                71.7                                 36.5                                       15.0
+46                23.7                                 68.0                                      164.0
+47                15.0                                 65.0                                      194.0
+

@@ -20,8 +20,7 @@ final class EngineVersionCheck {
       return;
     }
 
-    LatestVersionClient.fetchLatestVersion(
-            lobbyUri, ProductVersionReader.getCurrentVersion())
+    LatestVersionClient.fetchLatestVersion(lobbyUri, ProductVersionReader.getCurrentVersion())
         .filter(
             response ->
                 !LatestVersionResponse.RecommendedAction.NO_UPDATE

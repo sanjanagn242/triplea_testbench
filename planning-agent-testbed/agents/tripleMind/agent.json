@@ -5,5 +5,5 @@
   "entrypoint": "agent.py",
   "command": ["bash", "${agentDir}/run-agent.sh"],
   "description": "TripleMind large-action-space optimized MCTS agent for the TripleA game.",
-  "outputDirectories": ["metrics", "logs", "trees", "records"]
+  "outputDirectories": ["metrics", "logs", "trees", "records", "map_images"]
 }

@@ -12,17 +12,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.annotation.Nullable;
 import javax.swing.BorderFactory;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 
 /**
- * Shows selected players' live observations in tabs in one read-only window. Each tab draws the
- * map from exactly what that player's observation contains, and names the agent playing it.
+ * Shows selected players' live observations in tabs in one read-only window. Each tab draws the map
+ * from exactly what that player's observation contains, and names the agent playing it.
  */
 public final class StateObservationWindow {
   private final StateObservationProvider provider = new FullStateObservationProvider();
@@ -183,5 +183,4 @@ public final class StateObservationWindow {
           });
     }
   }
-
 }
