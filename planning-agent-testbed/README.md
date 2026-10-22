@@ -127,7 +127,24 @@ On the command line, `triplea.testbench.gui=true|false` overrides the configurat
 ./gradlew :game-headed:run --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/capture-the-flag/config/capture-the-flag.json triplea.testbench.autostart=true triplea.testbench.gui=false"
 ```
 
-`tools/tournament.py --no-gui` (or `--gui`) passes the same override to every configuration.
+`tools/tournament.py --gui` passes the same override to every configuration.
+
+### Without a display (cluster nodes, ssh)
+
+`triplea.testbench.gui=false` only hides the game window; the setup and observation windows still
+open, so the client needs a display. To play with no window at all, use the windowless runner. It
+takes the same `triplea.testbench.*` arguments (no `autostart` needed), ignores `showGame`,
+`showObservations` and `triplea.testbench.gui`, and exits with status 0 when every game was played
+(or an agent suspended the run) and 1 on any error, without waiting on a dialog:
+
+```bash
+./gradlew :game-headed:runTestbenchHeadless --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/capture-the-flag/config/capture-the-flag.json triplea.testbench.results=$PWD/games.jsonl"
+```
+
+On a machine without a display, `:game-headed:run ... triplea.testbench.autostart=true` switches
+to this runner by itself. Results lines, checkpoints, agent logs and outputs are the same as in the
+setup window's runs; an unknown agent ID, or a `Human` player, is an error instead of falling back
+to the default agent.
 
 `aiMovePauseMs` controls the delay after AI movement and `aiCombatStepPauseMs` controls the delay
 between AI combat steps. Set both to `0` for faster runs, or increase them to watch the game. They
@@ -191,8 +208,10 @@ Configurations may sit in subfolders of a game's `config` folder; they still use
 not wipe the metrics another one wrote; add `--clear-outputs` to also empty the agents' output
 folders (records, logs, ...) once before the first game. `--out DIR`
 chooses the output folder, and `--report-only DIR/games.jsonl` rewrites a report without playing.
-`--no-gui` plays every configuration without the game window, and `--gui` forces it on; without
-either, each configuration's `showGame` decides.
+`--no-gui` plays every configuration with the windowless runner (no window at all, see "Without a
+display"), and `--gui` forces the game window on; without either, each configuration's `showGame`
+decides, except that without a display (no `DISPLAY` / `WAYLAND_DISPLAY` on Linux) the windowless
+runner is always used.
 
 ## Planning agents
 

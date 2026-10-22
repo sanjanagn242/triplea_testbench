@@ -25,6 +25,8 @@ Startup behavior is controlled by system properties (set via CLI arguments):
 
 macOS-specific: opening a file or a `triplea://` URI is translated to the corresponding property.
 
+**Windowless testbench runner**: `games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchHeadlessRunner` (Gradle task `:game-headed:runTestbenchHeadless`) plays a `triplea.testbench.config` run without creating any Swing component, for machines without a display. `HeadedGameRunner` delegates to it when started with `triplea.testbench.autostart=true` in a headless environment. The run loop (numbering, checkpoints, results) lives in `TestbenchRun`, shared with `TestbenchSetupPanel`.
+
 ## Package Structure
 
 - **`org.triplea.game.client`** — Client bootstrap: `HeadedGameRunner` (entry point), `HeadedApplicationContext` (provides main class reference for `ApplicationContext`)

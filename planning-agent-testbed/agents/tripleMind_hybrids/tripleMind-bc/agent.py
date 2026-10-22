@@ -148,6 +148,7 @@ class TripleMindBC(SearchAgent):
         excluded = set()
         committed: Dict[str, str] = {}  # engine unit id -> territory it attacks
         plan = []
+        num_attacked = 0  # targets given a formation with any strength
         for _ in range(len(self.d.territory_names) + 1):  # each target is excluded once handled
             view = map_graph.GameState.from_sim(self.map, self.d, s, self.player_name)
             actions, excluded = ag.combat_actions(view, self.d, excluded, self.player_name)
@@ -165,6 +166,8 @@ class TripleMindBC(SearchAgent):
                     self.bc = None
                     self.log(f"BC policy disabled for this game ({e!r}); combat moves use the "
                              f"generator's first (strongest) formation")
+            if actions[index].moves and actions[index].strength != 0:
+                num_attacked += 1
             for mv in actions[index].moves:
                 if self.apply(s, mv, rng):
                     plan.append(mv)
@@ -175,7 +178,8 @@ class TripleMindBC(SearchAgent):
                     self.log(f"  rejected {fm.action_to_json(self.d, mv)}")
         if self.efficiency_metric is not None:
             self.efficiency_metric.log(self.player_name, self.game_number, root.round,
-                                       time.time() - started, "", "", num_children_at_root or 0, "", "")
+                                       time.time() - started, "", "", num_children_at_root or 0, "", "",
+                                       num_attacked, "")
         return plan
 
 

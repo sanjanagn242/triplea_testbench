@@ -37,6 +37,16 @@ dependencies {
     testImplementation(project(":game-headless"))
 }
 
+// Plays a planning-agent testbench configuration without any window, e.g. on a machine without a
+// display: --args="triplea.testbench.config=<config.json> triplea.testbench.results=<file>"
+tasks.register<JavaExec>("runTestbenchHeadless") {
+    group = "application"
+    description = "Plays a testbench configuration to the end without opening any window."
+    mainClass.set("games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchHeadlessRunner")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Djava.awt.headless=true")
+}
+
 tasks.named<Jar>("jar") {
     archiveBaseName.set("$group-$name")
     manifest {

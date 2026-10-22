@@ -1,5 +1,6 @@
 import csv
 import fcntl
+import html
 import itertools
 import json
 import os
@@ -90,7 +91,8 @@ GAME_RESULTS_HEADER = ["game", "player", "rounds_played", "won", "turn_position"
 # seconds, root_value the mean backed-up value at the root, max_rollout the most rounds a rollout
 # advanced and num_action_sequences the number of root-to-leaf paths (leaves) in the search tree.
 EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations", "root_value",
-                     "num_children_at_root", "max_rollout", "num_action_sequences"]
+                     "num_children_at_root", "max_rollout", "num_action_sequences",
+                     "num_of_terr_attacked", "max_tree_depth"]
 
 # One row per rollout in rollout_stats.csv: the rounds it advanced, the reward it backed up and
 # whether it stopped in a terminal (game over) state.
@@ -200,11 +202,74 @@ def attack_summary(action, state):
             counts[d.unit_types[u.type].name if u else f"unit#{uid}"] += 1
     return ", ".join(f"{qty}x {ut}" for ut, qty in counts.items())
 
+_TREE_HTML_HEAD = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>MCTS tree</title><style>
+body { font: 13px monospace; margin: 1em; }
+details { margin-left: 1.4em; border-left: 1px dotted #bbb; padding-left: 4px; }
+summary { cursor: pointer; white-space: nowrap; }
+.node { padding: 0 4px; border-radius: 3px; background: lightblue; }
+.best > summary { font-weight: bold; }
+.act { color: #555; } .unexp { margin-left: 2.8em; color: gray; }
+#bar { position: sticky; top: 0; background: white; padding: 4px 0; border-bottom: 1px solid #ccc; }
+</style></head><body>
+<div id="bar">
+<button onclick="setAll(true)">Expand all</button>
+<button onclick="setAll(false)">Collapse all</button>
+<button onclick="bestPath()">Best path only</button>
+min visits <input id="minv" type="number" value="0" min="0" style="width:5em" oninput="filter()">
+&nbsp; bold = most-visited child; gray = actions not played (never expanded)
+</div>
+<script>
+function setAll(o) { document.querySelectorAll('details').forEach(d => d.open = o); }
+function bestPath() { document.querySelectorAll('details').forEach(d =>
+  d.open = d.classList.contains('best') || d.parentElement.id === 'tree'); }
+function filter() { const m = +document.getElementById('minv').value;
+  document.querySelectorAll('details').forEach(d => d.style.display = +d.dataset.v < m ? 'none' : ''); }
+</script>
+<div id="tree">
+"""
+
+
+def unplayed_actions(n):
+    """The node's generated actions the search never expanded into a child."""
+    return list(n.state.actions[n.state.actionIndex:])
+
+
+def save_mcts_tree_html(root, html_path, edge_label):
+    """Writes the whole tree as a collapsible HTML outline (no node limit): children sorted by
+    visits, the most-visited path opened by default, unplayed actions listed in gray."""
+    out = [_TREE_HTML_HEAD]
+    counter = itertools.count()
+
+    def write(n, act_label, best, parent_open):
+        nid = next(counter)
+        avg = (n.value / n.visits) if n.visits else 0.0
+        is_open = parent_open and (best or nid == 0)
+        out.append(f'<details data-v="{n.visits}" class="{"best" if best else ""}"'
+                   f'{" open" if is_open else ""}><summary>'
+                   f'<span class="act">{html.escape(act_label)}</span> '
+                   f'<span class="node">#{nid} vis={n.visits} avg={avg:.3f} '
+                   f'tl={n.tree_level} actions={n.state.num_actions}</span></summary>\n')
+        kids = sorted(n.children, key=lambda c: c.visits, reverse=True)
+        for i, ch in enumerate(kids):
+            write(ch, edge_label(ch.action, n.state) or "(root)", i == 0, is_open)
+        for act in unplayed_actions(n):
+            out.append(f'<div class="unexp">- {html.escape(edge_label(act, n.state))}</div>\n')
+        out.append("</details>\n")
+
+    write(root, "(root)", True, True)
+    out.append("</div></body></html>\n")
+    with open(html_path, "w") as f:
+        f.write("".join(out))
+    return html_path
+
+
 def save_mcts_tree_png(root, out_prefix, max_nodes=500, render_img=False):
     """
     Saves:
-      - out_prefix + ".dot"
+      - out_prefix + ".dot" (unplayed actions as gray dashed edges)
       - out_prefix + ".png" (if graphviz 'dot' is available)
+      - out_prefix + ".html" (collapsible outline of the full tree)
     """
     # BFS traversal
     q = deque([root])
@@ -237,11 +302,11 @@ def save_mcts_tree_png(root, out_prefix, max_nodes=500, render_img=False):
             nid = node_id[id(n)]
             pid = parent_id[id(n)]
             avg = (n.value / n.visits) if n.visits else 0.0
-            label = f"#{nid}\\nvis={n.visits}\\navg={avg:.3f}\\ntl={n.tree_level}"
+            label = f"#{nid}\\nvis={n.visits}\\navg={avg:.3f}\\ntl={n.tree_level}\\nactions={n.state.num_actions}"
             f.write(f'  n{nid} [label="{label}"];\n')
             # logger.buffer(game, round_num, nid, pid, len(n.state.actions), n.tree_level, n.value, n.visits, avg)
 
-        for a, b, act, parent_state in edges:
+        def edge_label(act, parent_state):
             if act is None:
                 el = ""
             elif getattr(act, "end_phase", False):
@@ -250,11 +315,23 @@ def save_mcts_tree_png(root, out_prefix, max_nodes=500, render_img=False):
                 el = f"{act.to_terr} | skip"
             else:
                 el = f"{act.to_terr} | s={act.strength} | {attack_summary(act, parent_state)}"
-            el = _safe(el, 60)
+            return _safe(el, 60)
 
-            f.write(f'  n{a} -> n{b} [label="{el}"];\n')
+        for a, b, act, parent_state in edges:
+            f.write(f'  n{a} -> n{b} [label="{edge_label(act, parent_state)}"];\n')
+
+        # Actions the search never expanded: an arrowless dashed edge to a small point each, so
+        # the unexplored options are still visible.
+        for n in nodes:
+            nid = node_id[id(n)]
+            for i, act in enumerate(unplayed_actions(n)):
+                f.write(f'  u{nid}_{i} [shape=point, width=0.05];\n')
+                f.write(f'  n{nid} -> u{nid}_{i} [label="{edge_label(act, n.state)}", '
+                        f'arrowhead=none, style=dashed, color=gray, fontcolor=gray];\n')
 
         f.write("}\n")
+
+    save_mcts_tree_html(root, out_prefix + ".html", edge_label)
 
     # Try render to PNG
     if render_img:

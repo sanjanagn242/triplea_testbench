@@ -337,17 +337,8 @@ class MCTS:
             self.max_depth = max(self.max_depth, depth)
             # --- Backprop always ---
             self.backpropagate(node, value)
-        
-        self.efficiency_metric.log(
-            self.whoAmI,
-            initial_state.sim.game_number,
-            initial_state.sim.round,
-            time.time() - start_time,
-            self.iteration,
-            root.value / root.visits if root.visits > 0 else 0,
-            len(root.children),
-            self.max_depth,
-            count_leaves(root))
+
+        search_time = time.time() - start_time
         self.rollout_stats_metric.flush()
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
@@ -372,6 +363,18 @@ class MCTS:
             if best_child.action.end_phase == True:
                 break
             node = best_child
+        self.efficiency_metric.log(
+            self.whoAmI,
+            initial_state.sim.game_number,
+            initial_state.sim.round,
+            search_time,
+            self.iteration,
+            root.value / root.visits if root.visits > 0 else 0,
+            len(root.children),
+            self.max_depth,
+            count_leaves(root),
+            len(action_seq),  # one action per attacked territory
+            tree_depth(root))
         return action_seq
 
 
@@ -385,6 +388,16 @@ def count_leaves(root):
         else:
             leaves += 1
     return leaves
+
+
+def tree_depth(root):
+    """Deepest node of the tree, in edges from the root (0 for a lone root)."""
+    deepest, stack = 0, [root]
+    while stack:
+        node = stack.pop()
+        deepest = max(deepest, node.tree_level)
+        stack.extend(node.children)
+    return deepest
 
 
 # =========================

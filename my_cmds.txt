@@ -1,5 +1,13 @@
-python3 planning-agent-testbed/tools/tournament.py --spec planning-agent-testbed/tournaments/specs/2p_maps.json
+python3 planning-agent-testbed/tools/tournament.py \
+    --spec planning-agent-testbed/tournaments/specs/2p_maps.json
 
-planning-agent-testbed/tournaments/scripts/generate_plots.sh planning-agent-testbed/tournaments/<date>_<time>
+planning-agent-testbed/tournaments/scripts/generate_plots.sh \
+    planning-agent-testbed/tournaments/<date>_<time>
 
-./gradlew :game-headed:run --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/minimap/config/testing.json triplea.testbench.autostart=true triplea.testbench.gui=false"
+./gradlew :game-headed:run \
+    --args="triplea.testbench.config=$PWD/planning-agent-testbed/games/capture-the-flag-diag/config/testing.json \
+    triplea.testbench.autostart=true triplea.testbench.gui=false"
+
+planning-agent-testbed/tools/run_tournament.sh \
+    planning-agent-testbed/tournaments/specs/2p_maps_1s.json \
+    planning-agent-testbed/tournaments/specs/2p_maps_10s.json

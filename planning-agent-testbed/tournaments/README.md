@@ -120,8 +120,9 @@ The same `--map` (and `--out DIR`) options work on each script on its own.
   win rate of every agent on every map. Losses and games without a winner are told apart with the
   tournament's `games.jsonl`; without it a game without a winner counts as lost.
 - `plot_efficiency.py`: iterations per search and action sequences visited (root-to-leaf paths of
-  the search tree) per search, per agent (box; dots are each game's mean) and by round, plus
-  `efficiency_summary.txt`.
+  the search tree) per search, territories attacked per combat move and search tree depth per
+  search, per agent (box; dots are each game's mean) and by round, plus `efficiency_summary.txt`.
+  The last two need the `num_of_terr_attacked` and `max_tree_depth` columns of `efficiency.csv`.
 - `plot_rollout_stats.py`: % of rollouts reaching a terminal state (win / loss) per agent and by
   round; states sampled per turn (the sum of `rollout_depth_reached` over a search's rollouts) per
   agent and by round; `rollout_reward.png`, every agent in one plot (one line each, both seats together): the mean reward

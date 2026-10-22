@@ -32,6 +32,7 @@ import games.strategy.engine.framework.map.file.system.loader.ZippedMapsExtracto
 import games.strategy.engine.framework.startup.mc.ServerModel;
 import games.strategy.engine.framework.startup.ui.panels.main.HeadedServerSetupModel;
 import games.strategy.engine.framework.startup.ui.panels.main.game.selector.GameSelectorModel;
+import games.strategy.engine.framework.startup.ui.planningagenttestbed.TestbenchHeadlessRunner;
 import games.strategy.engine.framework.system.HttpProxy;
 import games.strategy.engine.framework.system.SystemProperties;
 import games.strategy.engine.framework.ui.MainFrame;
@@ -151,6 +152,11 @@ public final class HeadedGameRunner {
   /** Entry point for running a new headed game client. */
   public static void main(final String[] args) {
     checkNotNull(args);
+    if (GraphicsEnvironment.isHeadless() && isTestbenchAutostart(args)) {
+      // No display (e.g. a cluster node): play the testbench batch without any window instead.
+      TestbenchHeadlessRunner.main(args);
+      return;
+    }
     checkState(
         !GraphicsEnvironment.isHeadless(),
         "UI client launcher invoked from headless environment. This is currently "
@@ -179,6 +185,11 @@ public final class HeadedGameRunner {
 
     log.info("Launching game, version: {} ", ProductVersionReader.getCurrentVersion());
     start();
+  }
+
+  private static boolean isTestbenchAutostart(final String[] args) {
+    return Arrays.asList(args).contains(TRIPLEA_TESTBENCH_AUTOSTART + "=" + PROPERTY_TRUE)
+        || System.getProperty(TRIPLEA_TESTBENCH_AUTOSTART, PROPERTY_FALSE).equals(PROPERTY_TRUE);
   }
 
   /**

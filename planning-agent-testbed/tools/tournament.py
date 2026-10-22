@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Tournament: runs testbench JSON configurations one after another and reports win rates.
 
-Each configuration is played by the real engine (the headed client, autostarted, exactly as
-`./gradlew :game-headed:run --args="triplea.testbench.config=... triplea.testbench.autostart=true"`).
+Each configuration is played by the real engine: the headed client, autostarted, exactly as
+`./gradlew :game-headed:run --args="triplea.testbench.config=... triplea.testbench.autostart=true"`,
+or, with --no-gui or when there is no display (e.g. on a cluster node), the windowless runner
+`./gradlew :game-headed:runTestbenchHeadless --args="triplea.testbench.config=..."`, which opens no
+window at all.
 The engine appends one JSON line per finished game to the tournament's games.jsonl
 (triplea.testbench.results); the report is computed from those lines and written to results.txt:
 
@@ -84,6 +87,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import os
 import re
 import xml.etree.ElementTree as ET
 import shutil
@@ -294,7 +298,7 @@ def run_config(config: Path, results: Path, max_resumes, gradle_args, outputs: P
                     f"triplea.testbench.results={results} triplea.testbench.outputs={outputs}")
             if gui is not None:  # overrides each configuration's showGame
                 args += f" triplea.testbench.gui={str(gui).lower()}"
-            command = [str(REPO / "gradlew"), *gradle_args, ":game-headed:run", f"--args={args}"]
+            command = [str(REPO / "gradlew"), *gradle_args, engine_task(gui), f"--args={args}"]
             code = subprocess.call(command, cwd=REPO)
             done = sum(1 for r in read_results(results) if r["configuration"] == str(run_path))
             if code != 0:
@@ -312,6 +316,25 @@ def run_config(config: Path, results: Path, max_resumes, gradle_args, outputs: P
         if changed:
             run_path.unlink(missing_ok=True)
     return run_path
+
+
+def has_display() -> bool:
+    """False on Linux and other X11 systems without DISPLAY / WAYLAND_DISPLAY (cluster nodes, ssh)."""
+    if sys.platform in ("darwin", "win32"):
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def engine_task(gui) -> str:
+    """The windowless runner for --no-gui or without a display, else the headed client, which
+    follows each configuration's showGame (or --gui)."""
+    if gui is False:
+        return ":game-headed:runTestbenchHeadless"
+    if not has_display():
+        if gui:
+            print("  no display: --gui ignored, playing without a window")
+        return ":game-headed:runTestbenchHeadless"
+    return ":game-headed:run"
 
 
 def checkpoint_dir(config: Path) -> Path:
@@ -666,8 +689,8 @@ def main():
     ap.add_argument("--gradle-arg", action="append", default=[],
                     help="extra argument for gradlew, e.g. --gradle-arg=--offline (repeatable)")
     ap.add_argument("--gui", action=argparse.BooleanOptionalAction, default=None,
-                    help="show (--gui) or hide (--no-gui) the game window, overriding the "
-                         "configurations' showGame")
+                    help="show (--gui) the game window, or play without any window (--no-gui, "
+                         "the default without a display), overriding the configurations' showGame")
     ap.add_argument("--report-only", type=Path, metavar="GAMES_JSONL",
                     help="only write the report for an existing games.jsonl (next to it)")
     args = ap.parse_args()

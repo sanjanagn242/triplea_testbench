@@ -28,10 +28,13 @@ from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, 
 class MCTSGameState:
     """Game state for MCTS: a forward-model state plus the combat-phase bookkeeping."""
 
-    def __init__(self, search, sim, current_player):
+    def __init__(self, search, sim, current_player, played_by=None):
         self.search = search
         self.sim = sim
         self.current_player = current_player
+        # The player whose move led to this state: a tree node's value is from its point of view.
+        # The root's state was reached by no searched move; it counts as its own player's.
+        self.played_by = played_by if played_by is not None else current_player
         self.round = sim.round
 
         self.actions = []  # Generated actions for current territory
@@ -40,12 +43,21 @@ class MCTSGameState:
         self.excluded = set()  # Territories already processed
 
     def clone(self):
-        cloned = MCTSGameState(self.search, self.sim.clone(), self.current_player)
+        cloned = MCTSGameState(self.search, self.sim.clone(), self.current_player, self.played_by)
         cloned.actions = list(self.actions)
         cloned.num_actions = len(self.actions)
         cloned.actionIndex = self.actionIndex
         cloned.excluded = set(self.excluded)
         return cloned
+
+    @property
+    def next_moves_by(self):
+        """The player to move in this state: a tree node's actions (children) are this player's."""
+        return self.current_player
+
+    @next_moves_by.setter
+    def next_moves_by(self, player):
+        self.current_player = player
 
     def view(self):
         """map_graph.GameState of the forward-model state, seen by the current player."""
@@ -89,10 +101,9 @@ class MCTSNode:
         self.state = state
         self.parent = parent
         self.action = action
-        # The player who picked `action` (the parent's player to move; the root's own player), and
-        # +1 / -1 for whether that player is on whoAmI's side. value is kept from that player's
-        # point of view, so best_child_uct maximises for whoever chooses at the parent.
-        self.player = parent.state.current_player if parent else state.current_player
+        # +1 / -1 for whether state.played_by (who picked `action`) is on whoAmI's side. value is
+        # kept from that player's point of view, so best_child_uct maximises for whoever chooses
+        # at the parent (the parent's state.next_moves_by).
         self.sign = sign
         self.children = []
         self.untried_actions = None
@@ -102,6 +113,9 @@ class MCTSNode:
         self.tree_level = 0  # number of edges from the root before this node
         if parent:
             self.tree_level = parent.tree_level + 1
+        # True when `action` was the chooser's last combat move decision: expand() then advanced
+        # the state to the next player with a target, so this node is that player's decision.
+        self.passes_turn = False
 
     def is_fully_expanded(self):
         return self.untried_actions is not None and len(self.untried_actions) == 0
@@ -179,27 +193,42 @@ class MCTS:
 
     def expand(self, node):
         action = node.state.getNextAction()
-        if action is None:
+        # END is never a tree edge: it is only generated when no target is left (a forced move),
+        # and the child of the last attack / skip already stands for the next player's turn.
+        if action is None or action.end_phase:
             node.untried_actions = []
             return node
         new_state = node.state.clone()
-        if action.end_phase:
-            # End of this player's combat move: the child is the next player's combat move.
-            try:
-                at_combat = self.advance_to_next_combat_move(new_state)
-            except Exception:
-                node.untried_actions = []
-                return node
-            if at_combat:
-                new_state.heuristic_combat_legal_moves()
-        else:
-            new_state.apply_combat_move([action])
-            new_state.excluded.add(action.to_terr)
-            new_state.heuristic_combat_legal_moves()
+        new_state.played_by = node.state.next_moves_by
+        new_state.apply_combat_move([action])
+        new_state.excluded.add(action.to_terr)
+        new_state.heuristic_combat_legal_moves()
+        passes_turn = no_target(new_state)
+        if passes_turn:
+            self.pass_turn(new_state)
         child = MCTSNode(new_state, parent=node, action=action,
-                         sign=self.sign_of(node.state.current_player))
+                         sign=self.sign_of(new_state.played_by))
+        child.passes_turn = passes_turn
         node.children.append(child)
         return child
+
+    def pass_turn(self, state):
+        """Ends state's combat move (no target left) and plays on to the next combat move with a
+        target, so the node holding state is that player's decision. A player with no target is
+        passed over too, at most once per player (then state stays at a combat move with only END
+        and the node is a leaf). If the game ends or the model rejects an action on the way,
+        state.actions is empty and the node is a leaf."""
+        for _ in range(len(self.d.player_names)):
+            try:
+                at_combat = self.advance_to_next_combat_move(state)
+            except Exception:
+                state.actions, state.num_actions, state.actionIndex = [], 0, 0
+                return
+            if not at_combat:
+                return
+            state.heuristic_combat_legal_moves()
+            if not no_target(state):
+                return
 
     def pick_rollout_move_adversarial(self, actions, topk=3, epsilon=0.10):
         real = [a for a in actions if not getattr(a, "end_phase", False)]
@@ -404,17 +433,8 @@ class MCTS:
             self.max_depth = max(self.max_depth, depth)
             # --- Backprop always ---
             self.backpropagate(node, value)
-        
-        self.efficiency_metric.log(
-            self.whoAmI,
-            initial_state.sim.game_number,
-            initial_state.sim.round,
-            time.time() - start_time,
-            self.iteration,
-            root.value / root.visits if root.visits > 0 else 0,
-            len(root.children),
-            self.max_depth,
-            count_leaves(root))
+
+        search_time = time.time() - start_time
         self.rollout_stats_metric.flush()
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
@@ -428,18 +448,30 @@ class MCTS:
         # os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
         # dot_file, png_file = save_mcts_tree_png(root, self.whoAmI, tree_prefix, max_nodes=500, render_img=True)
 
+        # Our combat move: the most visited path from the root up to the child that passes the
+        # turn on (the opponents' nodes below it are not our actions).
         action_seq = []
         node = root
         while node.children != []:
             best_child = max(node.children, key=lambda c: c.visits)
-            if best_child is None:
-                break
             self.log_choice_stats(initial_state, node, best_child)
-            if best_child.action.moves is not None and best_child.action.end_phase == False and best_child.action.strength != 0:
+            if best_child.action.moves and best_child.action.strength != 0:
                 action_seq.append(best_child.action)
-            if best_child.action.end_phase == True:
+            if best_child.passes_turn:
                 break
             node = best_child
+        self.efficiency_metric.log(
+            self.whoAmI,
+            initial_state.sim.game_number,
+            initial_state.sim.round,
+            search_time,
+            self.iteration,
+            root.value / root.visits if root.visits > 0 else 0,
+            len(root.children),
+            self.max_depth,
+            count_leaves(root),
+            len(action_seq),  # one action per attacked territory
+            tree_depth(root))
         self.action_seq_stats_metric.flush()
         return action_seq
 
@@ -458,7 +490,7 @@ class MCTS:
                                              else f"{act.to_terr} | s={act.strength}")
         self.action_seq_stats_metric.buffer(
             self.whoAmI, initial_state.sim.game_number, initial_state.sim.round,
-            chosen.tree_level, chosen.player, label, len(kids),
+            chosen.tree_level, chosen.state.played_by, label, len(kids),
             visits[i], visits[i] / sum(visits) if sum(visits) else 0.0,
             visits[second] if second is not None else "", mean_v, var_v, math.sqrt(var_v),
             z(visits[i], mean_v, var_v),
@@ -472,6 +504,11 @@ def _mean_var(xs):
     return m, sum((x - m) ** 2 for x in xs) / len(xs)
 
 
+def no_target(state):
+    """True when the combat move generator found no target left (only END is offered)."""
+    return all(a.end_phase for a in state.actions)
+
+
 def count_leaves(root):
     """Number of root-to-leaf paths in the tree, i.e. its leaves (1 for a lone root)."""
     leaves, stack = 0, [root]
@@ -482,6 +519,16 @@ def count_leaves(root):
         else:
             leaves += 1
     return leaves
+
+
+def tree_depth(root):
+    """Deepest node of the tree, in edges from the root (0 for a lone root)."""
+    deepest, stack = 0, [root]
+    while stack:
+        node = stack.pop()
+        deepest = max(deepest, node.tree_level)
+        stack.extend(node.children)
+    return deepest
 
 
 # =========================

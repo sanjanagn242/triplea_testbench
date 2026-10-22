@@ -91,7 +91,8 @@ GAME_RESULTS_HEADER = ["game", "player", "rounds_played", "won", "turn_position"
 # seconds, root_value the mean backed-up value at the root, max_rollout the most rounds a rollout
 # advanced and num_action_sequences the number of root-to-leaf paths (leaves) in the search tree.
 EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations", "root_value",
-                     "num_children_at_root", "max_rollout", "num_action_sequences"]
+                     "num_children_at_root", "max_rollout", "num_action_sequences",
+                     "num_of_terr_attacked", "max_tree_depth"]
 
 # One row per rollout in rollout_stats.csv: the rounds it advanced, the reward it backed up and
 # whether it stopped in a terminal (game over) state.
@@ -217,7 +218,7 @@ summary { cursor: pointer; white-space: nowrap; }
 <button onclick="setAll(false)">Collapse all</button>
 <button onclick="bestPath()">Best path only</button>
 min visits <input id="minv" type="number" value="0" min="0" style="width:5em" oninput="filter()">
-&nbsp; bold = most-visited child; blue = me to move, pink = opponent
+&nbsp; bold = most-visited child; blue = played by me, pink = played by the opponent (the value is that player's)
 </div>
 <script>
 function setAll(o) { document.querySelectorAll('details').forEach(d => d.open = o); }
@@ -230,28 +231,34 @@ function filter() { const m = +document.getElementById('minv').value;
 """
 
 
+def unplayed_actions(n):
+    """The node's generated actions the search never expanded into a child."""
+    return list(n.state.actions[n.state.actionIndex:])
+
+
 def save_mcts_tree_html(root, whoAmI, html_path, edge_label):
     """Writes the whole tree as a collapsible HTML outline (no node limit): children sorted by
-    visits, the most-visited path opened by default, unexpanded actions listed in gray."""
+    visits, the most-visited path opened by default, unplayed actions listed in gray."""
     out = [_TREE_HTML_HEAD]
     counter = itertools.count()
 
     def write(n, act_label, best, parent_open):
         nid = next(counter)
         avg = (n.value / n.visits) if n.visits else 0.0
-        cls = "me" if n.state.current_player == whoAmI else "opp"
+        cls = "me" if n.state.played_by == whoAmI else "opp"
         is_open = parent_open and (best or nid == 0)
         out.append(f'<details data-v="{n.visits}" class="{"best" if best else ""}"'
                    f'{" open" if is_open else ""}><summary>'
                    f'<span class="act">{html.escape(act_label)}</span> '
                    f'<span class="node {cls}">#{nid} vis={n.visits} avg={avg:.3f} '
-                   f'tl={n.tree_level} actions={n.state.num_actions}</span></summary>\n')
+                   f'tl={n.tree_level} played_by={html.escape(n.state.played_by)} '
+                   f'next_moves_by={html.escape(n.state.next_moves_by)} '
+                   f'actions={n.state.num_actions}</span></summary>\n')
         kids = sorted(n.children, key=lambda c: c.visits, reverse=True)
         for i, ch in enumerate(kids):
             write(ch, edge_label(ch.action, n.state) or "(root)", i == 0, is_open)
-        if not n.children:
-            for act in n.state.actions or []:
-                out.append(f'<div class="unexp">- {html.escape(edge_label(act, n.state))}</div>\n')
+        for act in unplayed_actions(n):
+            out.append(f'<div class="unexp">- {html.escape(edge_label(act, n.state))}</div>\n')
         out.append("</details>\n")
 
     write(root, "(root)", True, True)
@@ -299,9 +306,10 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
             nid = node_id[id(n)]
             pid = parent_id[id(n)]
             avg = (n.value / n.visits) if n.visits else 0.0 
-            label = f"#{nid}\\nvis={n.visits}\\navg={avg:.3f}\\ntl={n.tree_level}\\nactions={n.state.num_actions}"
-            # fill by the player to move at the node: whoAmI blue, any other player red
-            fill = "lightblue" if n.state.current_player == whoAmI else "lightpink"
+            label = f"#{nid}\\nvis={n.visits}\\navg={avg:.3f}\\ntl={n.tree_level}\\nplayed_by={n.state.played_by}\\nnext_moves_by={n.state.next_moves_by}\\nactions={n.state.num_actions}"
+            # fill by the player whose move led to the node (its value's point of view): whoAmI
+            # blue, any other player red
+            fill = "lightblue" if n.state.played_by == whoAmI else "lightpink"
             f.write(f'  n{nid} [label="{label}", style=filled, fillcolor={fill}];\n')
             # logger.buffer(game, round_num, nid, pid, len(n.state.actions), n.tree_level, n.value, n.visits, avg)
 
@@ -319,13 +327,11 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
         for a, b, act, parent_state in edges:
             f.write(f'  n{a} -> n{b} [label="{edge_label(act, parent_state)}"];\n')
 
-        # Nodes with generated actions but no expanded children: draw each action as an
-        # arrowless edge to a small point, so the unexplored options are still visible.
+        # Actions the search never expanded: an arrowless dashed edge to a small point each, so
+        # the unexplored options are still visible.
         for n in nodes:
-            if n.children or not n.state.actions:
-                continue
             nid = node_id[id(n)]
-            for i, act in enumerate(n.state.actions):
+            for i, act in enumerate(unplayed_actions(n)):
                 f.write(f'  u{nid}_{i} [shape=point, width=0.05];\n')
                 f.write(f'  n{nid} -> u{nid}_{i} [label="{edge_label(act, n.state)}", '
                         f'arrowhead=none, style=dashed, color=gray, fontcolor=gray];\n')

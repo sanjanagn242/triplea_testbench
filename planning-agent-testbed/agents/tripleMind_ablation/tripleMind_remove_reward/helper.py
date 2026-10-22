@@ -90,7 +90,8 @@ GAME_RESULTS_HEADER = ["game", "player", "rounds_played", "won", "turn_position"
 # seconds, root_value the mean backed-up value at the root, max_rollout the most rounds a rollout
 # advanced and num_action_sequences the number of root-to-leaf paths (leaves) in the search tree.
 EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations", "root_value",
-                     "num_children_at_root", "max_rollout", "num_action_sequences"]
+                     "num_children_at_root", "max_rollout", "num_action_sequences",
+                     "num_of_terr_attacked", "max_tree_depth"]
 
 # One row per rollout in rollout_stats.csv: the rounds it advanced, the reward it backed up and
 # whether it stopped in a terminal (game over) state.

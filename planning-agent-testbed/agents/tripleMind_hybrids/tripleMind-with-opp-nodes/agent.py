@@ -243,7 +243,8 @@ class TripleMindAgent:
         """The nodes the search chose, root first: at each tree level, the child with the most
         visits (as mcts_search picks its actions). Each entry has the node's forward-model state,
         all its children with their states, and the chosen child's index; the path stops at a
-        node with no children or after an end-phase action is chosen."""
+        node with no children or at the node that passes the turn on (its state is the next
+        player's combat move; its children are that player's options)."""
         path = []
         node = root
         while node is not None:
@@ -252,12 +253,14 @@ class TripleMindAgent:
             best = max(node.children, key=lambda c: c.visits) if node.children else None
             entry["chosen"] = node.children.index(best) if best is not None else None
             path.append(entry)
-            node = best if best is not None and not best.action.end_phase else None
+            node = best if best is not None and not node.passes_turn else None
         return path
 
     def node_json(self, node):
         return {
             "level": node.tree_level,
+            "played_by": node.state.played_by,  # whose move led here; value is from their view
+            "next_moves_by": node.state.next_moves_by,  # whose moves the node's children are
             "action": (self.combat_action_json(node.action, node.state.sim)
                        if node.action is not None else None),
             "visits": node.visits,

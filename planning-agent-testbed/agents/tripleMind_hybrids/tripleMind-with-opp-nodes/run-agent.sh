@@ -10,7 +10,7 @@ export TRIPLEMIND_RECORD=0
 # Search: time per combat-move decision (s), iteration budget (unused; the search is
 # time-bounded), rollout horizon in rounds (a playout still running then has no winner),
 # UCB1 exploration constant, and seed.
-export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-3.0}"
+export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-1.0}"
 export TRIPLEA_MCTS_ITERS="${TRIPLEA_MCTS_ITERS:-100000}"
 export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-10}"
 export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"

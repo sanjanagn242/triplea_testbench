@@ -7,8 +7,18 @@ For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-map
                                    1.5 IQR whiskers are left out of both plots (not the summary)
   efficiency_action_sequences.png  action sequences visited (root-to-leaf paths of the search tree)
                                    per search: distribution per agent and mean per round
+  efficiency_terr_attacked.png      territories attacked per combat move (the chosen action
+                                   sequence, END and skips left out): distribution per agent and
+                                   mean per round
+  efficiency_tree_depth.png        size of the search tree as its depth (deepest node, in edges
+                                   from the root) per search: distribution per agent and mean per
+                                   round
   efficiency_summary.txt           per agent (and per opponent): games, searches, iterations, time,
-                                   action sequences, root children, rollout depth
+                                   action sequences, root children, rollout depth, territories
+                                   attacked, tree depth
+
+The last two plots need the num_of_terr_attacked and max_tree_depth columns; efficiency.csv files
+written before them only feed the other plots. Both are small integers, so no outliers are left out.
 
 Agents without a search (e.g. tripleMind-bc, tripleMind-ppo leave num_iterations blank) are listed in
 the summary but left out of the plots.
@@ -19,7 +29,7 @@ Usage (from planning-agent-testbed/):
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from common import (agent_colors, boxes_by_agent, by_map, load, mean_by_round, parse_args, save,
+from common import (ALL_MAPS, agent_colors, boxes_by_agent, by_map, load, mean_by_round, parse_args, save,
                     stats, style)
 
 COLUMNS = ["player", "game", "round", "time_per_turn", "num_iterations", "root_value",
@@ -32,6 +42,11 @@ if df.empty:
     raise SystemExit(f"no efficiency.csv under {args.tournament / 'agents'}")
 for c in COLUMNS[2:]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
+# Newer columns, loaded apart so older efficiency.csv files still feed the plots above.
+TREE_COLUMNS = ["player", "game", "round", "num_iterations", "num_of_terr_attacked", "max_tree_depth"]
+tree_df = load(args.tournament, "efficiency.csv", TREE_COLUMNS)
+for c in TREE_COLUMNS[2:]:
+    tree_df[c] = pd.to_numeric(tree_df[c], errors="coerce")
 colors = agent_colors(args.tournament)
 
 
@@ -45,14 +60,16 @@ def without_outliers(searched, value):
     return searched.groupby("agent", group_keys=False).apply(keep)
 
 
-def compare(searched, value, label, title, path):
-    searched = without_outliers(searched, value)
+def compare(searched, value, label, title, path, drop_outliers=True):
+    if drop_outliers:
+        searched = without_outliers(searched, value)
+    note = "outliers left out" if drop_outliers else "all searches"
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), gridspec_kw={"width_ratios": [2, 3]})
     agents = sorted(searched["agent"].unique())
     boxes_by_agent(ax1, {a: searched.loc[searched["agent"] == a, value] for a in agents}, colors,
                    {a: searched[searched["agent"] == a].groupby(["map", "game"])[value].mean() for a in agents})
     ax1.set_ylabel(label, fontsize=12)
-    ax1.set_title(f"{title} per search (dots: each game's mean; outliers left out)", fontsize=12)
+    ax1.set_title(f"{title} per search (dots: each game's mean; {note})", fontsize=12)
     mean_by_round(ax2, searched, value, colors)
     ax2.set_xlabel("Round", fontsize=12)
     ax2.set_ylabel(f"Mean {label.lower()}", fontsize=12)
@@ -70,6 +87,14 @@ for map_name, m in by_map(df, args.maps):
                 out / "efficiency_iterations.png")
         compare(searched.dropna(subset=["num_action_sequences"]), "num_action_sequences",
                 "Action sequences", "Action sequences visited", out / "efficiency_action_sequences.png")
+    tree = tree_df[tree_df["map"] == map_name] if map_name != ALL_MAPS else tree_df
+    tree = tree.dropna(subset=["num_iterations"])
+    if not tree.empty:
+        compare(tree.dropna(subset=["num_of_terr_attacked"]), "num_of_terr_attacked",
+                "Territories attacked", "Territories attacked", out / "efficiency_terr_attacked.png",
+                drop_outliers=False)
+        compare(tree.dropna(subset=["max_tree_depth"]), "max_tree_depth", "Tree depth",
+                "Search tree depth", out / "efficiency_tree_depth.png", drop_outliers=False)
 
     lines = [f"Search efficiency: {map_name}\n", "=" * 60 + "\n\n"]
     for agent, a in m.groupby("agent"):
@@ -87,6 +112,11 @@ for map_name, m in by_map(df, args.maps):
             lines.append(f"    children at root       {stats(s['num_children_at_root'])}\n")
             lines.append(f"    max rollout            {stats(s['max_rollout'])}\n")
             lines.append(f"    root value             {stats(s['root_value'])}\n")
+            t = tree[(tree["agent"] == agent) & ((tree["opponent"] == opponent) |
+                                                 (opponent == "all opponents"))]
+            if not t.empty:
+                lines.append(f"    territories attacked   {stats(t['num_of_terr_attacked'])}\n")
+                lines.append(f"    tree depth             {stats(t['max_tree_depth'])}\n")
         lines.append("\n")
 
     searched = m.dropna(subset=["num_iterations"])
@@ -94,6 +124,12 @@ for map_name, m in by_map(df, args.maps):
         for value, label in [("num_iterations", "Mean iterations"),
                              ("num_action_sequences", "Mean action sequences")]:
             table = searched.pivot_table(index="round", columns="agent", values=value, aggfunc="mean")
+            lines.append(f"{label} by round\n")
+            lines.append(table.round(1).to_string(na_rep="-") + "\n\n")
+    for value, label in [("num_of_terr_attacked", "Mean territories attacked"),
+                         ("max_tree_depth", "Mean tree depth")]:
+        if tree[value].notna().any():
+            table = tree.pivot_table(index="round", columns="agent", values=value, aggfunc="mean")
             lines.append(f"{label} by round\n")
             lines.append(table.round(1).to_string(na_rep="-") + "\n\n")
 
