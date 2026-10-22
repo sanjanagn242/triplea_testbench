@@ -97,6 +97,15 @@ EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations
 ROLLOUT_STATS_HEADER = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward",
                         "is_terminal"]
 
+# One row per tree level of the chosen action sequence in action_seq_stats.csv: how the chosen
+# (most-visited) child compared to its siblings. visit_count / var / std_dev are over the visit
+# counts of all children at that level, avg_* over their average values (both from the chooser's
+# point of view); *_z is the chosen child's z-score among them (blank when they are all equal).
+ACTION_SEQ_HEADER = ["player", "game", "round", "tl", "chooser", "action", "num_children",
+                     "visit_count", "visit_share", "second_visit_count", "mean_visits", "var",
+                     "std_dev", "visit_z", "avg_value", "second_avg_value", "mean_avg_value",
+                     "avg_value_std_dev", "avg_value_z"]
+
 
 def turn_position(definition, player_name):
     """1-based place of player_name in the round's turn order (order of the combat-move steps)."""

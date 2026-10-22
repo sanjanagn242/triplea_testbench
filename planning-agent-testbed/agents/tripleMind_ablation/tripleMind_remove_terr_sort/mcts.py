@@ -109,7 +109,7 @@ class MCTSNode:
 
         bestNode = None
         choices_weights = [
-            (child.value / child.visits) + c_param * math.sqrt(2 * math.log(self.visits) / child.visits)
+            (child.value / child.visits) + c_param * math.sqrt(math.log(self.visits) / child.visits)
             for child in self.children
         ]
         if choices_weights != []:
@@ -206,16 +206,25 @@ class MCTS:
         """Combat move of current_state.current_player, continuing from its excluded set."""
         while True:
             current_state.heuristic_combat_legal_moves()
-            mv = self.pick_rollout_move_adversarial(current_state.actions)
+            mv = self.pick_rollout_move_random(current_state.actions)
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])
         return self.end_phase(current_state.sim)
 
     def _rollout_noncombat(self, current_state):
-        for mv in ag.noncombat_move_rollout(current_state.view(), self.d, current_state.current_player):
+        # The same policy the live turn plays (agent.get_move), so the search models its own moves.
+        for mv in ag.noncombat_move(current_state.view(), self.d, current_state.current_player):
             self.apply(current_state.sim, mv)
         return self.end_phase(current_state.sim)
+
+    def _rollout_purchase(self, current_state):
+        """The live turn's purchase (agent.get_move): the first of purchase_actions, if any."""
+        sim = current_state.sim
+        actions = ag.purchase_actions(current_state.view(), self.d, current_state.current_player)
+        if actions:
+            self.apply(sim, actions[0])
+        return self.end_phase(sim)
 
     def _place_units(self, current_state):
         """player.place_units(): put everything bought at the home factory."""
@@ -260,10 +269,6 @@ class MCTS:
                 round_ = sim.round
 
                 current_state.current_player = self.d.player_names[dec.actor]
-                if dec.kind == MOVE_D:
-                    phase = "COMBAT_MOVE" if step.kind == COMBAT_MOVE else "NONCOMBAT_MOVE"
-                else:
-                    phase = dec.kind  # PURCHASE / PLACE / BATTLE_SELECTION / CASUALTIES / RETREAT
                 if dec.kind == MOVE_D and step.kind == COMBAT_MOVE:
                     if not first_sim:
                         current_state.excluded = set()
@@ -272,13 +277,19 @@ class MCTS:
                 elif dec.kind == MOVE_D:
                     ok = self._rollout_noncombat(current_state)
                 elif dec.kind == PURCHASE_D:
-                    ok = self.end_phase(sim)  # purchases are not simulated (as in the original)
+                    # ok = self.end_phase(current_state.sim)  # skip purchase in rollout, as it is not relevant to combat
+                    ok = self._rollout_purchase(current_state)
                 elif dec.kind == PLACE_D:
                     ok = self._place_units(current_state)
                 else:
                     ok = self._fight_battles(current_state)
-                self.debug_logger.log(f"simulate: round {round_}, step {step.id} {step.name}, {phase} "
-                                      f"for {current_state.current_player}, ok={ok}")
+                if self.debug_logger.is_debug:  # skip building the message when not logging
+                    if dec.kind == MOVE_D:
+                        phase = "COMBAT_MOVE" if step.kind == COMBAT_MOVE else "NONCOMBAT_MOVE"
+                    else:
+                        phase = dec.kind  # PURCHASE / PLACE / BATTLE_SELECTION / CASUALTIES / RETREAT
+                    self.debug_logger.log(f"simulate: round {round_}, step {step.id} {step.name}, "
+                                          f"{phase} for {current_state.current_player}, ok={ok}")
                 if not ok:
                     break                    
                 depth = sim.round - state.round
@@ -286,8 +297,8 @@ class MCTS:
             reward, is_terminal = -0.5, False
         else:
             # Evaluate final state
-            reward, is_terminal = evaluate_state(current_state, self.whoAmI, self.victory_cities,
-                                                 depth, self.depth_budget)
+            reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
+                                                 self.depth_budget)
         self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
                                          self.iteration, depth, reward, 1 if is_terminal else 0)
         return reward, depth
@@ -310,29 +321,28 @@ class MCTS:
         start_time = time.time()
         while time.time() - start_time < self.time_budget:
             self.iteration += 1
-            # --- Selection: walk down until leaf or terminal ---
+            # --- Selection and expansion: walk down by UCT to a node with an untried action and
+            # expand it. expand() returns the node itself when it finds the node has no untried
+            # action left (it is now fully expanded); then keep walking down from it, so every
+            # iteration still adds a node unless it reaches a terminal or childless node. ---
             node = root
-            while node.is_fully_expanded() and not node.is_terminal():
-                best = node.best_child_uct(self.exploration_constant)
-                if best is None:
+            while True:
+                while node.is_fully_expanded() and not node.is_terminal():
+                    best = node.best_child_uct(self.exploration_constant)
+                    if best is None:
+                        break
+                    node = best
+                if node.is_terminal():
                     break
-                node = best
+                child = self.expand(node)
+                if child is not node:
+                    node = child  # rollout from the new child
+                    break
+                if not node.children:
+                    break  # nothing to expand or walk into: roll out from here
 
-            # --- Expand or evaluate terminal ---
-            if node.is_terminal():
-                value, depth = self.simulate(node.state)  # or use known outcome
-            else:
-                child = self.expand(node)  # expand leaf
-                if child != node:
-                    node = child
-                    value, depth = self.simulate(node.state)  # rollout from new child
-                else:
-                    while node.is_fully_expanded() and not node.is_terminal():
-                        best = node.best_child_uct(self.exploration_constant)
-                        if best is None:
-                            break
-                        node = best
-                    value, depth = self.simulate(node.state)
+            # --- Simulation ---
+            value, depth = self.simulate(node.state)
 
             self.max_depth = max(self.max_depth, depth)
             # --- Backprop always ---
@@ -391,22 +401,21 @@ def count_leaves(root):
 # State evaluation (evaluate_state of move_generator.pyx)
 # =========================
 
-def evaluate_state(state, whoAmI, victory_cities, depth, depth_budget):
+def evaluate_state(state, whoAmI, depth, depth_budget):
     me = whoAmI
+
+    # --- terminal check: the forward model's victory test (EndRoundDelegate.checkVictoryCities,
+    # run at the end of each round), whose winners are alliance ids ---
+    terminal = state.sim.terminal
+    if terminal is not None:
+        d = state.search.d
+        if d.alliance_of[d.player_index[me]] in terminal.winners:
+            return 0.5 + 0.5 * (depth_budget - depth) / depth_budget, True
+        return -0.5 - 0.5 * (depth_budget - depth) / depth_budget, True
+
     game = state.view()
     m = game.map
     territories = game.territories
-
-    # --- terminal check ---
-    vc_owner_count = {}
-    for name in victory_cities:
-        owner = territories[name].owner
-        vc_owner_count[owner] = vc_owner_count.get(owner, 0) + 1
-    for owner, count in vc_owner_count.items():
-        if victory_cities and count == len(victory_cities):
-            if owner == me:
-                return 0.5 + 0.5 * (depth_budget - depth) / depth_budget, True
-            return -0.5 - 0.5 * (depth_budget - depth) / depth_budget, True
 
     my_tuv = 0.0
     enemy_tuv = 0.0
@@ -432,5 +441,5 @@ def evaluate_state(state, whoAmI, victory_cities, depth, depth_budget):
     income_term = income / income_denom if income_denom > 0 else 0
 
     score = 0.50 * tuv_term + 0.50 * income_term
-    scaled_score = 0.5 * score
+    scaled_score = score - 0.5
     return scaled_score, False

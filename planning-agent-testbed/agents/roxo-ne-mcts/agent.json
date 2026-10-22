@@ -1,0 +1,9 @@
+{
+  "id": "roxo-ne-mcts",
+  "name": "Roxo NE-MCTS",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Non-Exploring MCTS with territory-based actions, pruning, Weak AI playouts and deterministic battles, after Roxo, MCTS-based Planning for Grand Strategy Games (IST thesis).",
+  "outputDirectories": ["metrics"]
+}

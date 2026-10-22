@@ -20,7 +20,8 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
 import map_graph
-from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, MetricLogger, DebugLogger,
+from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger,
+                    DebugLogger,
                     save_mcts_tree_png)
 
 
@@ -34,12 +35,14 @@ class MCTSGameState:
         self.round = sim.round
 
         self.actions = []  # Generated actions for current territory
+        self.num_actions = len(self.actions)
         self.actionIndex = 0  # Current position in actions list
         self.excluded = set()  # Territories already processed
 
     def clone(self):
         cloned = MCTSGameState(self.search, self.sim.clone(), self.current_player)
         cloned.actions = list(self.actions)
+        cloned.num_actions = len(self.actions)
         cloned.actionIndex = self.actionIndex
         cloned.excluded = set(self.excluded)
         return cloned
@@ -60,8 +63,10 @@ class MCTSGameState:
                                                    self.current_player)
         if actions:
             self.actions = actions
+            self.num_actions = len(self.actions)
         else:
             self.actions.append(ag.CombatAction(end_phase=True, strength=0))
+            self.num_actions = len(self.actions)
 
     def apply_combat_move(self, moves):
         for move in moves:
@@ -109,7 +114,7 @@ class MCTSNode:
 
         bestNode = None
         choices_weights = [
-            (child.value / child.visits) + c_param * math.sqrt(2 * math.log(self.visits) / child.visits)
+            (child.value / child.visits) + c_param * math.sqrt(math.log(self.visits) / child.visits)
             for child in self.children
         ]
         if choices_weights != []:
@@ -147,6 +152,8 @@ class MCTS:
         self.rollout_stats_metric = MetricLogger(
             os.path.join(metrics_dir, "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
         self.debug_logger = DebugLogger("logs/debug.log", False)
+        self.action_seq_stats_metric = MetricLogger(
+            os.path.join(metrics_dir, "action_seq_stats.csv"), header=ACTION_SEQ_HEADER)
 
     # ---- forward model -------------------------------------------------------------------
 
@@ -206,16 +213,25 @@ class MCTS:
         """Combat move of current_state.current_player, continuing from its excluded set."""
         while True:
             current_state.heuristic_combat_legal_moves()
-            mv = self.pick_rollout_move_adversarial(current_state.actions)
+            mv = self.pick_rollout_move_random(current_state.actions)
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])
         return self.end_phase(current_state.sim)
 
     def _rollout_noncombat(self, current_state):
-        for mv in ag.noncombat_move_rollout(current_state.view(), self.d, current_state.current_player):
+        # The same policy the live turn plays (agent.get_move), so the search models its own moves.
+        for mv in ag.noncombat_move(current_state.view(), self.d, current_state.current_player):
             self.apply(current_state.sim, mv)
         return self.end_phase(current_state.sim)
+
+    def _rollout_purchase(self, current_state):
+        """The live turn's purchase (agent.get_move): the first of purchase_actions, if any."""
+        sim = current_state.sim
+        actions = ag.purchase_actions(current_state.view(), self.d, current_state.current_player)
+        if actions:
+            self.apply(sim, actions[0])
+        return self.end_phase(sim)
 
     def _place_units(self, current_state):
         """player.place_units(): put everything bought at the home factory."""
@@ -260,10 +276,6 @@ class MCTS:
                 round_ = sim.round
 
                 current_state.current_player = self.d.player_names[dec.actor]
-                if dec.kind == MOVE_D:
-                    phase = "COMBAT_MOVE" if step.kind == COMBAT_MOVE else "NONCOMBAT_MOVE"
-                else:
-                    phase = dec.kind  # PURCHASE / PLACE / BATTLE_SELECTION / CASUALTIES / RETREAT
                 if dec.kind == MOVE_D and step.kind == COMBAT_MOVE:
                     if not first_sim:
                         current_state.excluded = set()
@@ -272,13 +284,19 @@ class MCTS:
                 elif dec.kind == MOVE_D:
                     ok = self._rollout_noncombat(current_state)
                 elif dec.kind == PURCHASE_D:
-                    ok = self.end_phase(sim)  # purchases are not simulated (as in the original)
+                    # ok = self.end_phase(current_state.sim)  # skip purchase in rollout, as it is not relevant to combat
+                    ok = self._rollout_purchase(current_state)
                 elif dec.kind == PLACE_D:
                     ok = self._place_units(current_state)
                 else:
                     ok = self._fight_battles(current_state)
-                self.debug_logger.log(f"simulate: round {round_}, step {step.id} {step.name}, {phase} "
-                                      f"for {current_state.current_player}, ok={ok}")
+                if self.debug_logger.is_debug:  # skip building the message when not logging
+                    if dec.kind == MOVE_D:
+                        phase = "COMBAT_MOVE" if step.kind == COMBAT_MOVE else "NONCOMBAT_MOVE"
+                    else:
+                        phase = dec.kind  # PURCHASE / PLACE / BATTLE_SELECTION / CASUALTIES / RETREAT
+                    self.debug_logger.log(f"simulate: round {round_}, step {step.id} {step.name}, "
+                                          f"{phase} for {current_state.current_player}, ok={ok}")
                 if not ok:
                     break                    
                 depth = sim.round - state.round
@@ -286,8 +304,8 @@ class MCTS:
             reward, is_terminal = -0.5, False
         else:
             # Evaluate final state
-            reward, is_terminal = evaluate_state(current_state, self.whoAmI, self.victory_cities,
-                                                 depth, self.depth_budget)
+            reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
+                                                 self.depth_budget)
         self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
                                          self.iteration, depth, reward, 1 if is_terminal else 0)
         return reward, depth
@@ -310,29 +328,28 @@ class MCTS:
         start_time = time.time()
         while time.time() - start_time < self.time_budget:
             self.iteration += 1
-            # --- Selection: walk down until leaf or terminal ---
+            # --- Selection and expansion: walk down by UCT to a node with an untried action and
+            # expand it. expand() returns the node itself when it finds the node has no untried
+            # action left (it is now fully expanded); then keep walking down from it, so every
+            # iteration still adds a node unless it reaches a terminal or childless node. ---
             node = root
-            while node.is_fully_expanded() and not node.is_terminal():
-                best = node.best_child_uct(self.exploration_constant)
-                if best is None:
+            while True:
+                while node.is_fully_expanded() and not node.is_terminal():
+                    best = node.best_child_uct(self.exploration_constant)
+                    if best is None:
+                        break
+                    node = best
+                if node.is_terminal():
                     break
-                node = best
+                child = self.expand(node)
+                if child is not node:
+                    node = child  # rollout from the new child
+                    break
+                if not node.children:
+                    break  # nothing to expand or walk into: roll out from here
 
-            # --- Expand or evaluate terminal ---
-            if node.is_terminal():
-                value, depth = self.simulate(node.state)  # or use known outcome
-            else:
-                child = self.expand(node)  # expand leaf
-                if child != node:
-                    node = child
-                    value, depth = self.simulate(node.state)  # rollout from new child
-                else:
-                    while node.is_fully_expanded() and not node.is_terminal():
-                        best = node.best_child_uct(self.exploration_constant)
-                        if best is None:
-                            break
-                        node = best
-                    value, depth = self.simulate(node.state)
+            # --- Simulation ---
+            value, depth = self.simulate(node.state)
 
             self.max_depth = max(self.max_depth, depth)
             # --- Backprop always ---
@@ -357,9 +374,9 @@ class MCTS:
             "seconds": time.time() - start_time,
         }
 
-        tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"
-        os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
-        dot_file, png_file = save_mcts_tree_png(root, tree_prefix, max_nodes=500, render_img=True)
+        # tree_prefix = f"trees/tree_g{initial_state.sim.game_number}_r{initial_state.sim.round}"
+        # os.makedirs(os.path.dirname(tree_prefix), exist_ok=True)
+        # dot_file, png_file = save_mcts_tree_png(root, tree_prefix, max_nodes=500, render_img=True)
 
         action_seq = []
         node = root
@@ -367,12 +384,42 @@ class MCTS:
             best_child = max(node.children, key=lambda c: c.visits)
             if best_child is None:
                 break
+            self.log_choice_stats(initial_state, node, best_child)
             if best_child.action.moves is not None and best_child.action.end_phase == False and best_child.action.strength != 0:
                 action_seq.append(best_child.action)
             if best_child.action.end_phase == True:
                 break
             node = best_child
+        self.action_seq_stats_metric.flush()
         return action_seq
+
+    def log_choice_stats(self, initial_state, node, chosen):
+        """Buffers one action_seq_stats row: how `chosen` stood out among node's children."""
+        kids = node.children
+        visits = [c.visits for c in kids]
+        avgs = [c.value / c.visits if c.visits else 0.0 for c in kids]
+        i = kids.index(chosen)
+        second = max((k for k in range(len(kids)) if k != i), key=lambda k: visits[k], default=None)
+        mean_v, var_v = _mean_var(visits)
+        mean_a, var_a = _mean_var(avgs)
+        z = lambda x, m, var: (x - m) / math.sqrt(var) if var > 1e-12 else ""  # blank if all equal
+        act = chosen.action
+        label = "END" if act.end_phase else (f"{act.to_terr} | skip" if not act.moves
+                                             else f"{act.to_terr} | s={act.strength}")
+        self.action_seq_stats_metric.buffer(
+            self.whoAmI, initial_state.sim.game_number, initial_state.sim.round,
+            chosen.tree_level, node.state.current_player, label, len(kids),
+            visits[i], visits[i] / sum(visits) if sum(visits) else 0.0,
+            visits[second] if second is not None else "", mean_v, var_v, math.sqrt(var_v),
+            z(visits[i], mean_v, var_v),
+            avgs[i], avgs[second] if second is not None else "", mean_a, math.sqrt(var_a),
+            z(avgs[i], mean_a, var_a))
+
+
+def _mean_var(xs):
+    """Mean and population variance of a non-empty list."""
+    m = sum(xs) / len(xs)
+    return m, sum((x - m) ** 2 for x in xs) / len(xs)
 
 
 def count_leaves(root):
@@ -391,26 +438,35 @@ def count_leaves(root):
 # State evaluation (evaluate_state of move_generator.pyx)
 # =========================
 
-def evaluate_state(state, whoAmI, victory_cities, depth, depth_budget):
+def evaluate_state(state, whoAmI, depth, depth_budget):
     me = whoAmI
+
+    # --- terminal check: the forward model's victory test (EndRoundDelegate.checkVictoryCities,
+    # run at the end of each round), whose winners are alliance ids ---
+    terminal = state.sim.terminal
+    if terminal is not None:
+        d = state.search.d
+        if d.alliance_of[d.player_index[me]] in terminal.winners:
+            return 0.5 + 0.5 * (depth_budget - depth) / depth_budget, True
+        return -0.5 - 0.5 * (depth_budget - depth) / depth_budget, True
+
     game = state.view()
     m = game.map
     territories = game.territories
 
-    # --- terminal check ---
-    vc_owner_count = {}
-    for name in victory_cities:
-        owner = territories[name].owner
-        vc_owner_count[owner] = vc_owner_count.get(owner, 0) + 1
-    for owner, count in vc_owner_count.items():
-        if victory_cities and count == len(victory_cities):
-            if owner == me:
-                return 0.5 + 0.5 * (depth_budget - depth) / depth_budget, True
-            return -0.5 - 0.5 * (depth_budget - depth) / depth_budget, True
-
+    # production counts the territories each player owns now (not the PU balance, which lags
+    # captures and includes unspent PUs)
     my_tuv = 0.0
     enemy_tuv = 0.0
+    income = 0
+    income_denom = 0
+    nodes = m.G.nodes
     for name, terr in territories.items():
+        if terr.owner != "Neutral":
+            prod = nodes[name]["production"]
+            income_denom += prod
+            if terr.owner == me:
+                income += prod
         for u in terr.units:
             ut = m.unit_types.get(u.unit_type)
             if ut and ut.is_infrastructure:
@@ -426,11 +482,8 @@ def evaluate_state(state, whoAmI, victory_cities, depth, depth_budget):
         tuv_denom = 1e-9
     tuv_term = my_tuv / tuv_denom
 
-    players = game.players
-    income = players[me].PU
-    income_denom = sum(p.PU for p in players.values())
     income_term = income / income_denom if income_denom > 0 else 0
 
     score = 0.50 * tuv_term + 0.50 * income_term
-    scaled_score = 0.5 * score
+    scaled_score = score - 0.5
     return scaled_score, False

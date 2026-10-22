@@ -1,0 +1,23 @@
+{
+  "map": {
+    "name": "Minimap",
+    "gameName": "Minimap Roxo",
+    "aliases": [
+      "minimap"
+    ]
+  },
+  "games": 1,
+  "roundLimit": 35,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "agents": {
+    "Russians": "roxo-ne-mcts",
+    "Italians": "Hard (AI)"
+  },
+  "showObservations": false,
+  "observationPlayers": {
+    "Russians": false,
+    "Italians": false
+  },
+  "clearAgentOutputs": true
+}

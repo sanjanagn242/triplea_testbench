@@ -129,6 +129,14 @@ The same `--map` (and `--out DIR`) options work on each script on its own.
   reward); `rollout_turn_stats.csv`, one row per turn (`avg_reward`, `var_reward`, `std_reward`,
   `avg_depth_reached`, `depth_reached_std`, `n_visits`); plus `rollout_stats_summary.txt`.
 
+- `plot_action_selection.py`: how clearly the chosen (most-visited) child stood out from its
+  siblings at each tree level of the chosen action sequence, from `action_seq_stats.csv`
+  (`action_selection_by_tl.png`, x = tree level): visits relative to the siblings, margin over the
+  runner-up, % of ties, visit z-score, value gap and the chosen child's visits, split into the
+  agent's own and the modelled opponent's choices; plus `action_selection_by_tl.csv` and
+  `action_selection_summary.txt`. Only agents that write `action_seq_stats.csv`
+  (`tripleMind-with-opp-nodes` so far) appear.
+
 Agents without a search (`tripleMind-bc`, `tripleMind-ppo`) appear in the summaries but not in the
 search and rollout plots.
 
@@ -164,6 +172,29 @@ A setting only takes effect if the agent's run script reads it from the environm
 (`export VAR="${VAR:-default}"`, as the tripleMind scripts do for the `TRIPLEA_MCTS_*` settings). The
 tournament warns about a variable the script sets itself, such as `TRIPLEA_AGENT_LOG`. Game records
 are still written to the base agent's own folder, shared by its variants.
+
+## Maps with four players (seating)
+
+A spec plays every pair of its agents on two seats. On a map with more players, set `"seating"` in
+the spec (or in one entry of its `maps`), see `specs/4p_maps.json`. A map with two seats ignores it and is always played pairwise, so one spec-wide
+`seating` can cover 2- and 4-player maps:
+
+| `seating` | Configurations |
+|---|---|
+| `"pairwise"` (default) | Two seats: every ordered pair of agents. Other factions need `otherAgents`. |
+| `"cyclic"` | Every seat gets an agent, so you need at least as many agents as seats. Configuration *i* puts agent *i* on the first seat, *i*+1 on the second, and so on, wrapping around. N agents give N configurations, and every agent plays every seat once. |
+| `"diagonal"` | Four seats: every ordered pair of agents, the first agent on seats 1 and 3 and the second on seats 2 and 4. |
+
+The seats are the map's players in the map's order, minus any `otherAgents`. Set `"factions"` to choose
+them or their order. For `diagonal`, list the four in order around the board, so that the 1st and 3rd
+are opposite corners. On Capture The Flag the map's order (Russians, Italians, Germans, Chinese) already
+does this: Russians + Germans play Italians + Chinese.
+
+In the report, an agent's two diagonal factions are one side. The agent wins when either faction wins
+(head-to-head `by seat` shows e.g. `as Germans+Russians`). In a cyclic game, head-to-head counts a game
+won by a third agent as `no winner` for that pair. Agents name their metrics folder after every faction
+not allied with theirs. So in a diagonal game an agent's folder includes its own ID (e.g.
+`vs-Hard-AI_tripleMind-mcts`), and in a cyclic game it lists all three opponents.
 
 ## Adding or changing a matchup
 

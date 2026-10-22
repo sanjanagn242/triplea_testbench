@@ -42,9 +42,17 @@ Several maps: replace "map"/"gameFolder" by a "maps" list, e.g.
 Every pairing is played on every map; an entry may override any shared key. The report then has a
 section per map and one over all maps.
 
-Optional: "factions" (the two seats; default the map's two players), "otherAgents" (faction ->
-agent for the remaining factions of a map with more than two), "selfPlay" (also pair each agent
-with itself; default false).
+Optional: "factions" (the seats; default the map's players), "otherAgents" (faction -> agent for
+the factions that are not seats), "selfPlay" (also pair each agent with itself; default false) and
+"seating", how the agents are put on the seats (a map with two seats is always pairwise):
+  "pairwise"  (default) two seats; every ordered pair of agents, one agent per seat.
+  "cyclic"    any number of seats and at least as many agents; configuration i puts agent i on the
+              first seat, agent i+1 on the second, ... (wrapping around), so with N agents there
+              are N configurations and every agent plays every seat once.
+  "diagonal"  four seats, in order around the board; every ordered pair of agents, the first on
+              seats 1 and 3, the second on seats 2 and 4 (on Capture The Flag the map's order,
+              Russians, Italians, Germans, Chinese, already goes around the board). The two
+              factions of one agent count as one side in the report (the configuration's "teams").
 
 Agent variants: the same agent with different settings (environment variables) is played as a
 separate agent, with its own ID, metrics folder and vs-<opponent> folders, and its own line in the
@@ -97,7 +105,9 @@ NO_WINNER = "no winner"
 # ---- running ---------------------------------------------------------------------------------
 
 # Spec keys that describe the tournament rather than a configuration setting.
-SPEC_KEYS = {"map", "maps", "gameFolder", "games", "agents", "factions", "otherAgents", "selfPlay"}
+SPEC_KEYS = {"map", "maps", "gameFolder", "games", "agents", "factions", "otherAgents", "selfPlay",
+             "seating"}
+SEATINGS = ("pairwise", "cyclic", "diagonal")
 
 
 def generate_configs(spec_path: Path, agents_override, games_override):
@@ -140,32 +150,59 @@ def generate_map_configs(spec_path: Path, spec, agents_override, games_override,
     factions = spec.get("factions") or map_players(game_dir, map_ref.get("gameName") or map_ref["name"])
     others = spec.get("otherAgents") or {}
     seats = [f for f in factions if f not in others]
-    if len(seats) != 2:
+    seating = spec.get("seating", "pairwise")
+    if seating not in SEATINGS:
+        raise SystemExit(f"unknown seating {seating!r}; use one of {', '.join(SEATINGS)}")
+    if len(seats) == 2:  # seating only matters with more seats; two seats are always pairwise
+        seating = "pairwise"
+    if seating == "pairwise" and len(seats) != 2:
         raise SystemExit(f"pairwise play needs two seats, got {seats}; set \"factions\" to the two "
-                         f"seats and \"otherAgents\" for the remaining factions")
+                         f"seats and \"otherAgents\" for the remaining factions, or set \"seating\"")
+    if seating == "diagonal" and len(seats) != 4:
+        raise SystemExit(f"diagonal seating needs four seats, got {seats}; set \"factions\" to four "
+                         f"in order around the board and \"otherAgents\" for the remaining factions")
+    if seating == "cyclic" and len(agents) < len(seats):
+        raise SystemExit(f"cyclic seating needs at least as many agents as seats ({len(seats)}: "
+                         f"{', '.join(seats)}), got {len(agents)}")
+    if seating == "cyclic" and spec.get("selfPlay"):
+        raise SystemExit("selfPlay does not apply to cyclic seating")
     games = games_override or int(spec.get("games", 1))
     settings = {k: v for k, v in spec.items() if k not in SPEC_KEYS}
 
-    pairs = [(a, b) for a, b in itertools.combinations(agents, 2) for a, b in ((a, b), (b, a))]
-    if spec.get("selfPlay"):
-        pairs += [(a, a) for a in agents]
+    if seating == "cyclic":
+        lineups = [[agents[(i + k) % len(agents)] for k in range(len(seats))]
+                   for i in range(len(agents))]
+    else:
+        pairs = [(a, b) for a, b in itertools.combinations(agents, 2) for a, b in ((a, b), (b, a))]
+        if spec.get("selfPlay"):
+            pairs += [(a, a) for a in agents]
+        lineups = [[a, b] if seating == "pairwise" else [a, b, a, b] for a, b in pairs]
     out = game_dir / "config" / "generated" / spec_path.stem  # per map: in that map's game folder
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("*.json"):
         old.unlink()
     short = lambda agent: re.sub(r"[^A-Za-z0-9._-]+", "-", agent).strip("-")
     configs = []
-    for i, (a, b) in enumerate(pairs, 1):
-        assignment = {seats[0]: a, seats[1]: b, **others}
+    for i, lineup in enumerate(lineups, 1):
+        assignment = {**dict(zip(seats, lineup)), **others}
         config = {"map": map_ref, "games": games, "roundLimit": 100, "aiMovePauseMs": 0,
                   "aiCombatStepPauseMs": 0, **settings, "agents": assignment}
+        if seating == "diagonal":  # read by the report (opposing); the engine ignores it
+            config["teams"] = [[seats[0], seats[2]], [seats[1], seats[3]]]
         config.setdefault("showObservations", False)
         config.setdefault("observationPlayers", {f: False for f in assignment})
-        path = out / f"{i}.{short(a)}-vs-{short(b)}.json"
+        named = lineup if seating == "cyclic" else lineup[:2]
+        path = out / f"{i}.{'-vs-'.join(short(a) for a in named)}.json"
         path.write_text(json.dumps(config, indent=2) + "\n")
         configs.append(path)
+    if seating == "cyclic":
+        sides = f"cyclic over {', '.join(seats)}"
+    elif seating == "diagonal":
+        sides = f"{seats[0]}+{seats[2]} vs {seats[1]}+{seats[3]}"
+    else:
+        sides = f"{seats[0]} vs {seats[1]}"
     print(f"Generated {len(configs)} configurations for {game_dir.name} in {out.relative_to(REPO)} "
-          f"({seats[0]} vs {seats[1]}, {games} games each)")
+          f"({sides}, {games} games each)")
     return configs
 
 
@@ -415,9 +452,31 @@ def read_results(path: Path):
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
+_teams = {}
+
+
+def config_teams(configuration):
+    """Faction -> team number from a configuration's "teams" (written by diagonal seating), {} when
+    it has none or is gone. A .tournament-*.json copy is looked up by its original's name."""
+    if configuration not in _teams:
+        path = Path(configuration)
+        if not path.exists() and path.name.startswith(".tournament-"):
+            path = path.with_name(path.name[len(".tournament-"):])
+        try:
+            teams = json.loads(path.read_text()).get("teams") or []
+        except (OSError, ValueError):
+            teams = []
+        _teams[configuration] = {f: i for i, team in enumerate(teams) for f in team}
+    return _teams[configuration]
+
+
 def opposing(game, a, b):
-    """True when factions a and b are on different sides (a faction without an alliance is alone)."""
+    """True when factions a and b are on different sides (a faction without an alliance is alone);
+    factions of one team of the configuration are on the same side."""
     alliances = game.get("alliances") or {}
+    teams = config_teams(game["configuration"])
+    if a in teams and teams.get(a) == teams.get(b):
+        return False
     return a != b and alliances.get(a, a) != alliances.get(b, b)
 
 
@@ -635,6 +694,10 @@ def main():
         for c in configs:
             if not c.is_file():
                 ap.error(f"no such configuration: {c}")
+            # checked before renumbering, which would write into the file
+            if not args.spec and isinstance(json.loads(c.read_text()).get("agents"), list):
+                ap.error(f"{c.name} is a tournament spec, not a configuration: run it with --spec "
+                         f"{c}, or several specs with tools/run_tournament.sh <spec> <spec> ...")
         if args.games is not None and args.games < 1:
             ap.error("--games must be at least 1")
         print("Numbering the configurations' games")

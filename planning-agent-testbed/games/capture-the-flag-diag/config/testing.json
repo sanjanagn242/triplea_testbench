@@ -7,12 +7,12 @@
       "CTF"
     ]
   },
-  "games": 2,
-  "roundLimit": 100,
+  "games": 1,
+  "roundLimit": 5,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "tripleMind-mcts-no-reward-heuristic",
+    "Russians": "tripleMind-mcts-with-opp-nodes",
     "Germans": "tripleMind-mcts"
   },
   "showObservations": false,

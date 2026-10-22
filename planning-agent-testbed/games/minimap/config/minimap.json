@@ -7,11 +7,11 @@
     "downloadUrl": "https://github.com/triplea-maps/minimap/archive/refs/heads/master.zip"
   },
   "games": 1,
-  "roundLimit": 10,
+  "roundLimit": 100,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "Hard (AI)",
+    "Russians": "roxo-ne-mcts",
     "Italians": "tripleMind-mcts"
   },
   "showObservations": false,

@@ -1,0 +1,17 @@
+{
+  "games": 1,
+  "seating": "diagonal",
+  "agents": [
+    "tripleMind-mcts TRIPLEA_MCTS_ROLLOUT=10",
+    "Hard (AI)"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag",
+      "map": {"name": "Capture The Flag", "gameName": "Capture The Flag", "aliases": ["capture_the_flag", "CTF"]}
+    }
+  ]
+}

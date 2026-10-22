@@ -11,6 +11,8 @@ must return exactly what it returns. The speed comes from:
 Build with scripts/build_cython.sh; generators.py picks this module when it is built.
 """
 
+import heapq
+
 import triplea_fm as fm
 
 
@@ -208,186 +210,255 @@ def _home_factory(game, player):
     return None
 
 
-# ---- live non-combat (called once per turn) ------------------------------------------------
+# ---- non-combat moves (the live turn and the rollouts play the same policy) ------------------
+
+# A stack's value weighs its unit count and its combat points (defence for my units, attack for
+# the enemy's), so a few strong units and many weak ones compare sensibly.
+COUNT_WEIGHT = 1.0
+POINT_WEIGHT = 0.5
+THREAT_COVER = 1.0   # defence value wanted per point of enemy threat on a territory
+HOME_COVER = 1.5     # the same on the home factory, whose loss costs the production
+HOME_KEEP = 0.08     # share of my army's value the home factory keeps regardless
+FRONTIER_MIN = 3.0   # value a frontier territory keeps regardless
+_EPS = 1e-9
+
+
+def defense_value(u):
+    return COUNT_WEIGHT + POINT_WEIGHT * u.defense
+
+
+def attack_value(u):
+    return COUNT_WEIGHT + POINT_WEIGHT * u.attack
+
+
+def _route_to(parent, t):
+    path = [t]
+    step = parent[t]
+    while step is not None:
+        path.append(step)
+        step = parent[step]
+    return tuple(reversed(path))
+
+
+def _air_routes(game, start, moves):
+    """{territory: route} within `moves` flights of start (see action_generators._air_routes)."""
+    cdef _MapFacts f = _facts(game.map)
+    cdef dict air = f.neighbors("air")
+    cdef set water = f.water
+    terrs = game.territories
+    parent = {start: None}
+    queue = [(start, 0)]
+    i = 0
+    while i < len(queue):
+        current, dist = queue[i]
+        i += 1
+        if dist >= moves:
+            continue
+        for n in air[current]:
+            if n in parent or (terrs[n].owner == "Neutral" and n not in water):
+                continue
+            parent[n] = current
+            queue.append((n, dist + 1))
+    return {t: _route_to(parent, t) for t in parent if t != start}
+
+
+def _landing_spots(game, definition, player):
+    """Territories where the player's air may end the phase (see action_generators._landing_spots)."""
+    cdef set water = _facts(game.map).water
+    me = definition.player_index[player]
+    conquered = getattr(game, "conquered", ())
+    return {name for name, t in game.territories.items()
+            if name not in water and name not in conquered and t.owner != "Neutral"
+            and definition.is_allied(me, definition.player_index[t.owner])}
+
+
+def _enemy_threat(game, definition, player, targets):
+    """{target: attack value of the enemy units that can reach it next turn} (see
+    action_generators._enemy_threat)."""
+    m = game.map
+    cdef set static = _facts(m).static_types
+    me = definition.player_index[player]
+    stacks = {}  # (territory, domain, reach) -> attack value
+    for name, terr in game.territories.items():
+        for u in terr.units:
+            if (u.owner == player or u.owner == "Neutral" or _domain(u) == "sea" or u.unit_type in static
+                    or not definition.is_at_war(me, definition.player_index[u.owner])):
+                continue
+            dom = _domain(u)
+            reach = u.range - 1 if dom == "air" else u.range
+            if reach > 0:
+                key = (name, dom, reach)
+                stacks[key] = stacks.get(key, 0.0) + attack_value(u)
+    threat = {t: 0.0 for t in targets}
+    for (src, domain, reach), value in stacks.items():
+        for t in targets:
+            d = m.distance(src, t, domain)
+            if d is not None and d <= reach:
+                threat[t] += value
+    return threat
+
 
 def noncombat_move(game, definition, player=None, objectives=None):
-    """Push units from the rear toward the frontier and fill territories up to a quota.
-    See action_generators.noncombat_move for the full description."""
+    """Non-combat moves for the live turn and the rollouts (see
+    action_generators.noncombat_move for the full description)."""
     m = game.map
     cdef _MapFacts f = _facts(m)
     cdef dict land = f.neighbors("land")
+    infra = f.infra_types
     player = player or game.whoAmI
     territories = game.territories
     objectives = objectives if objectives is not None else m.objectives()
-    victory_cities = f.victory_cities
-    capitals = f.capitals
-    infra = f.infra_types
 
-    # Unit counts change as moves are planned, so keep them outside the observation.
-    cdef dict strength = {name: sum(1 for u in t.units if u.unit_type not in infra)
-                          for name, t in territories.items()}
-    # Movable land/air units of mine, per territory (each unit is moved at most once).
-    my_territories = [t for t in territories.values() if t.owner == player]
-    cdef dict movable = {
-        t.name: [u for u in t.units if u.owner == player and u.unit_type not in infra
-                 and u.movement_left > 0 and _domain(u) in ("land", "air")]
-        for t in my_territories
-    }
-
-    my_names = {t.name for t in my_territories}
-    not_mine = set(territories) - my_names
-
-    my_frontier = {t.name for t in my_territories if any(n in not_mine for n in land[t.name])}
-
+    my_names = [name for name, t in territories.items() if t.owner == player]
+    mine = set(my_names)
+    landing = _landing_spots(game, definition, player)
+    frontier = {name for name in my_names
+                if any(nb not in mine for nb in land[name])}
     home_factory = _home_factory(game, player)
 
-    def has_enemy_neighbor(name):
-        return any(n in not_mine and n not in capitals for n in land[name])
+    # Values change as moves are planned, so keep them outside the observation.
+    strength = {name: sum(defense_value(u) for u in territories[name].units
+                          if u.owner == player and u.unit_type not in infra) for name in my_names}
+    total = sum(strength.values())
+    threat = _enemy_threat(game, definition, player, my_names)
 
-    staging_score = {t.name: sum(1 for nb in land[t.name] if nb in my_frontier)
-                     for t in my_territories}
-    factory_adj_score = {t.name: sum(1 for nb in land[t.name] if nb in victory_cities)
-                         for t in my_territories}
-
-    inf = float("inf")
-    dist_to_frontier = _bfs_distances(land, f.member_set("land"), my_frontier)
-    dist_to_objective = _bfs_distances(land, f.member_set("land"), objectives)
-
-    def territory_priority(name):
-        score = 0
-        if name in my_frontier:
-            score += 1000
-            if strength[name] == 0:
-                score += 500
-        score += staging_score.get(name, 0) * 200
-        score += factory_adj_score.get(name, 0) * 100
-        score += max(0, 5 - dist_to_objective.get(name, inf)) * 20
-        return score
-
-    targets = sorted(my_names, key=territory_priority, reverse=True)
-
-    # Noncombat: land units may only pass through my territories; air may overfly anything.
-    avoid = {"land": not_mine, "air": set()}
-    _reach_cache = {}
-
-    def reach(unit, src):
-        dom = _domain(unit)
-        key = (src, dom, unit.movement_left)
-        if key not in _reach_cache:
-            _reach_cache[key] = m.reachable(src, unit.movement_left, dom, avoid=avoid[dom])
-        return _reach_cache[key]
-
-    def can_reach(unit, src, dst):
-        return dst != src and dst in my_names and dst in reach(unit, src)
-
-    def best_step_toward_frontier(unit, from_name):
-        best, best_score = None, -10 ** 9
-        from_d = dist_to_frontier.get(from_name, inf)
-        for dest_name in targets:
-            if not can_reach(unit, from_name, dest_name):
-                continue
-            improvement = from_d - dist_to_frontier.get(dest_name, inf)
-            score = improvement * 100
-            if dest_name in my_frontier:
-                score += 50
-            score += staging_score.get(dest_name, 0) * 10
-            score += factory_adj_score.get(dest_name, 0) * 5
-            if score > best_score:
-                best_score, best = score, dest_name
-        return best, best_score
-
-    total_my_units = sum(strength[n] for n in my_names)
-
-    def quota(name):
+    def wanted(name):
+        value = THREAT_COVER * threat[name]
         if name == home_factory:
-            base = 0.08
-        elif name in my_frontier:
-            enemy_threat = sum(strength[n] for n in land[name] if n in not_mine)
-            return max(3, min(enemy_threat + 2, int(total_my_units * 0.15)))
-        elif staging_score.get(name, 0) > 0 or factory_adj_score.get(name, 0) > 0:
-            base = 0.03
-        elif name in objectives:
-            base = 0.02
-        else:
-            base = 0.01
-        return max(1, int(total_my_units * base))
+            value = max(HOME_COVER * threat[name], HOME_KEEP * total)
+        if name in frontier:
+            value = max(value, FRONTIER_MIN)
+        return value
 
-    def frontier_excess(name):
-        max_enemy_threat = max((strength[n] for n in land[name] if n in not_mine), default=0)
-        return max(0, strength[name] - (max_enemy_threat + 2))
+    want = {name: wanted(name) for name in my_names}
 
-    frontier_excess_map = {t: frontier_excess(t) for t in my_frontier}
+    # Movable land/air units of mine, wherever they are (each unit is moved at most once).
+    movable = {}
+    for name, t in territories.items():
+        units = [u for u in t.units if u.owner == player and u.unit_type not in infra
+                 and u.movement_left > 0 and _domain(u) in ("land", "air")]
+        if units:
+            movable[name] = units
 
-    planned = {}  # (from, to) -> [Unit], insertion-ordered
+    air_cache, dest_cache = {}, {}
 
-    def send(unit, src, dst):
-        movable[src].remove(unit)
-        strength[src] -= 1
-        strength[dst] += 1
-        planned.setdefault((src, dst), []).append(unit)
-        if src in frontier_excess_map:
-            frontier_excess_map[src] -= 1
+    def air_routes(u, src):
+        key = (src, u.movement_left)
+        if key not in air_cache:
+            air_cache[key] = _air_routes(game, src, u.movement_left)
+        return air_cache[key]
 
-    def can_donate(name):
-        if not movable.get(name):
-            return False
-        if name in my_frontier and name != home_factory:
-            return frontier_excess_map.get(name, 0) > 0
-        return True
+    def destinations(u, src):
+        """{territory of mine: route} the unit can end on this phase."""
+        dom = _domain(u)
+        key = (src, dom, u.movement_left)
+        if key not in dest_cache:
+            if dom == "air":
+                routes = air_routes(u, src)
+                dest_cache[key] = {t: r for t, r in routes.items() if t in mine and t in landing}
+            else:
+                routes = _reach_routes(game, player, src, u.movement_left, "land")
+                dest_cache[key] = {t: r for t, r in routes.items() if t in mine}
+        return dest_cache[key]
 
-    # ---------- PASS 0: evacuate home factory before placement ----------
-    if home_factory in movable:
-        keep_min = 2 if has_enemy_neighbor(home_factory) else 0
-        excess = max(0, strength[home_factory] - keep_min)
-        for unit in list(movable[home_factory]):
-            if excess <= 0:
-                break
-            dest, score = best_step_toward_frontier(unit, home_factory)
-            if dest is None or score <= 0:
+    planned = []  # (unit, route)
+
+    def send(u, src, route):
+        movable[src].remove(u)
+        value = defense_value(u)
+        if src in strength:
+            strength[src] -= value
+        dst = route[len(route) - 1]
+        if dst in strength:
+            strength[dst] += value
+        planned.append((u, route))
+
+    def can_spare(src, u):
+        return src not in want or strength[src] - defense_value(u) >= want[src] - _EPS
+
+    # ---------- 1: land the air the engine would destroy ----------
+    for src in list(movable):
+        if src in landing:
+            continue
+        for u in [u for u in movable[src] if _domain(u) == "air"]:
+            spots = [(t, r) for t, r in air_routes(u, src).items() if t in landing]
+            if not spots:
+                continue  # lost at the end of the phase, as in the engine
+            t, r = max(spots, key=lambda s: (want.get(s[0], 0.0) - strength.get(s[0], 0.0),
+                                             -len(s[1])))
+            send(u, src, r)
+
+    # ---------- 2: greedy marginal-value defensive reinforcement ----------
+    # Only actual arrivals count as defensive reinforcement.
+    def shortfall(name):
+        return max(0.0, want[name] - strength[name])
+
+    def priority(name):
+        production = f.production.get(name, 0) or 0
+        return (1.5 if name == home_factory else 1.0) * (1.0 + min(production, 10) / 10.0)
+
+    def defense_gain(dst, value):
+        return priority(dst) * min(value, shortfall(dst))
+
+    def donor_loss(src, value):
+        before = max(0.0, want.get(src, 0.0) - strength.get(src, 0.0))
+        after = max(0.0, want.get(src, 0.0) - (strength.get(src, 0.0) - value))
+        return priority(src) * (after - before)
+
+    heap = [(-priority(t) * shortfall(t), t) for t in my_names if shortfall(t) > _EPS]
+    heapq.heapify(heap)
+    while heap:
+        _, target = heapq.heappop(heap)
+        if shortfall(target) <= _EPS:
+            continue
+        best = None
+        for src, units in movable.items():
+            if src == target:
                 continue
-            send(unit, home_factory, dest)
-            excess -= 1
+            for u in units:
+                if not can_spare(src, u):
+                    continue
+                route = destinations(u, src).get(target)
+                if route is None:
+                    continue
+                value = defense_value(u)
+                score = defense_gain(target, value) - donor_loss(src, value)
+                key = (score, -max(0.0, value - shortfall(target)), -len(route))
+                if best is None or key > best[0]:
+                    best = (key, u, src, route)
+        if best is None or best[0][0] <= _EPS:
+            continue
+        _, u, src, route = best
+        send(u, src, route)
+        if shortfall(target) > _EPS:
+            heapq.heappush(heap, (-priority(target) * shortfall(target), target))
 
-    # ---------- PASS 1: fill targets to quota (with step-to-frontier fallback) ----------
-    donors = [t.name for t in my_territories]
-    for target in targets:
-        for donor in donors:
-            if strength[target] >= quota(target):
-                break
-            if donor == target:
+    # ---------- 3: greedy positioning of spare units ----------
+    dist_to_frontier = _bfs_distances(land, f.member_set("land"), frontier) if frontier else {}
+    dist_to_objective = _bfs_distances(land, f.member_set("land"), objectives) if objectives else {}
+    inf = float("inf")
+    for src in sorted((n for n in my_names if n in movable),
+                      key=lambda n: -dist_to_frontier.get(n, inf)):
+        here = dist_to_frontier.get(src, inf)
+        for u in list(movable[src]):
+            if not can_spare(src, u):
                 continue
-            while strength[target] < quota(target) and can_donate(donor):
-                moved = False
-                for unit in list(movable[donor]):
-                    if can_reach(unit, donor, target):
-                        dest = target
-                    else:
-                        dest, score = best_step_toward_frontier(unit, donor)
-                        if dest is None or score <= 0:
-                            continue
-                    send(unit, donor, dest)
-                    moved = True
-                    break
-                if not moved:
-                    break
+            value = defense_value(u)
+            best = None
+            for dst, route in destinations(u, src).items():
+                advance = here - dist_to_frontier.get(dst, inf)
+                if advance <= 0 or advance == inf:
+                    continue
+                positioning_gain = advance + 0.2 * max(
+                    0.0, 5.0 - dist_to_objective.get(dst, inf))
+                score = defense_gain(dst, value) + positioning_gain - donor_loss(src, value)
+                key = (score, -len(route))
+                if best is None or key > best[0]:
+                    best = (key, route)
+            if best is not None and best[0][0] > _EPS:
+                send(u, src, best[1])
 
-    # ---------- encode as forward-model actions ----------
-    t_index = definition.territory_index
-    actions = []
-    for (src, dst), units in planned.items():
-        for group in _split_by_domain(units):
-            dom = _domain(group[0])
-            route = m.path(src, dst, dom, avoid=avoid[dom])
-            actions.append(fm.MoveAction(tuple(u.uid for u in group),
-                                         tuple(t_index[t] for t in route)))
-    return actions
-
-
-def _split_by_domain(units):
-    groups = {}
-    for u in units:
-        groups.setdefault(_domain(u), []).append(u)
-    return list(groups.values())
+    return _group_moves(definition, planned)
 
 
 # ---- shared helpers (ports of move_generator.pyx) --------------------------------------------
@@ -679,279 +750,3 @@ def combat_actions(game, definition, excluded, player=None):
 cdef object _cost_or_default(_MapFacts f, object u):
     c = f.cost(u.unit_type)
     return c if c is not None else 9999
-
-
-# ---- noncombat moves used in rollouts (heuristic_non_combat_legal_moves of the .pyx) ---------
-
-def noncombat_move_rollout(game, definition, player=None):
-    """Rollout noncombat policy. Returns [fm.MoveAction], one per (from, route)."""
-    m = game.map
-    cdef _MapFacts f = _facts(m)
-    cdef dict raw = f.neighbors(None)
-    player = player or game.whoAmI
-    cdef dict territories = game.territories
-    cdef list my_territories = [t for t in territories.values() if t.owner == player]
-    cdef set capitals = f.capitals
-    cdef set victory_cities = f.victory_cities
-    cdef set infra = f.infra_types
-    cdef set static = f.static_types
-
-    # ── quantity snapshot (the only thing mutated): {terr: {(unit_type, owner): qty}} ──
-    # plus count[t] = snapshot units in t that are not infrastructure (count_snap of the original)
-    cdef dict qty_snap = {}
-    cdef dict count = {}
-    cdef dict snap
-    cdef long long c
-    for name, terr in territories.items():
-        snap = {}
-        c = 0
-        for u in terr.units:
-            k = (u.unit_type, u.owner)
-            snap[k] = snap.get(k, 0) + 1
-            if u.unit_type not in infra:
-                c += 1
-        qty_snap[name] = snap
-        count[name] = c
-    # real units still free to move, per territory (each unit moves at most once)
-    cdef dict free_units = {t.name: [u for u in t.units if u.owner == player] for t in my_territories}
-
-    # ── frontier detection ──
-    cdef set my_frontier = set()
-    for terr in my_territories:
-        for n in raw[terr.name]:
-            if territories[n].owner != player:
-                my_frontier.add(terr.name)
-                break
-
-    home_factory = _home_factory(game, player)
-
-    # ── pre-compute scoring maps ──
-    cdef dict staging_score = {}
-    cdef dict factory_adj_score = {}
-    cdef long long score
-    for terr in my_territories:
-        score = 0
-        for nb in raw[terr.name]:
-            if nb in my_frontier:
-                score += 1
-        staging_score[terr.name] = score
-        score = 0
-        for nb in raw[terr.name]:
-            if nb == home_factory:
-                score += 3
-            elif nb in victory_cities:
-                score += 1
-        factory_adj_score[terr.name] = score
-
-    # ── BFS distance to frontier ──
-    cdef dict dist_to_frontier = _bfs_distances(raw, f.member_set(None), my_frontier)
-
-    cdef long long total_my_units = 0
-    for t in my_territories:
-        total_my_units += count[t.name]
-
-    cdef dict frontier_excess_map = {}
-    cdef long long max_threat, excess
-    for name in my_frontier:
-        max_threat = 0
-        for nb in raw[name]:
-            if territories[nb].owner != player and count[nb] > max_threat:
-                max_threat = count[nb]
-        excess = count[name] - (max_threat + 2)
-        frontier_excess_map[name] = excess if excess > 0 else 0
-
-    cdef dict prio = {}
-    cdef long long real
-    for t in my_territories:
-        score = 0
-        if t.name in my_frontier:
-            score += 1000
-            real = 0
-            for u in t.units:
-                if u.unit_type not in infra:
-                    real += 1
-            if real == 0:
-                score += 500
-        score += staging_score.get(t.name, 0) * 200
-        score += factory_adj_score.get(t.name, 0) * 100
-        prio[t.name] = score
-    cdef list targets = sorted(my_territories, key=lambda t: prio[t.name], reverse=True)
-
-    # ── donor list ──
-    cdef list donor_territories = []
-    for t in my_territories:
-        if count[t.name] <= 0:
-            continue
-        if t.name in my_frontier and t.name != home_factory:
-            if frontier_excess_map.get(t.name, 0) <= 0:
-                continue
-        donor_territories.append(t)
-    donor_territories.sort(
-        key=lambda t: count[t.name] - _rollout_quota(t.name, home_factory, my_frontier, raw,
-                                                     territories, player, count, staging_score,
-                                                     factory_adj_score, total_my_units),
-        reverse=True)
-
-    cdef dict route_cache = {}
-    cdef list moves = []  # (unit, route)
-    cdef long long keep_min, excess_units, sent, min_keep, donor_idx
-    cdef dict factory_snap
-
-    # ── PASS 0: evacuate home factory ──
-    if home_factory in free_units:
-        keep_min = 2 if _has_enemy_neighbor(home_factory, raw, territories, player, capitals) else 0
-        excess_units = count[home_factory] - keep_min
-        if excess_units < 0:
-            excess_units = 0
-        sent = 0
-        factory_snap = qty_snap[home_factory]
-        for u in list(free_units[home_factory]):
-            k = (u.unit_type, u.owner)
-            if u.unit_type in static or u.range <= 0 or factory_snap.get(k, 0) <= 0:
-                continue
-            if sent >= excess_units:
-                break
-            r = _rollout_reach(f, route_cache, territories, player, u, home_factory)
-            dest, step_score = _best_step(u, home_factory, r, targets, dist_to_frontier,
-                                          my_frontier, staging_score, factory_adj_score)
-            if dest is None or step_score <= 0:
-                continue
-            free_units[home_factory].remove(u)
-            moves.append((u, r[dest]))
-            factory_snap[k] -= 1
-            count[home_factory] -= 1
-            sent += 1
-
-    # ── PASS 1: fill targets to quota ──
-    for terr in targets:
-        terr_name = terr.name
-        if count[terr_name] >= _rollout_quota(terr_name, home_factory, my_frontier, raw,
-                                              territories, player, count, staging_score,
-                                              factory_adj_score, total_my_units):
-            continue
-        donor_idx = 0
-        while count[terr_name] < _rollout_quota(terr_name, home_factory, my_frontier, raw,
-                                                territories, player, count, staging_score,
-                                                factory_adj_score, total_my_units):
-            if donor_idx >= len(donor_territories):
-                break
-            donor = donor_territories[donor_idx]
-            donor_name = donor.name
-
-            # drain guard
-            if donor_name in my_frontier:
-                if count[donor_name] <= frontier_excess_map.get(donor_name, 0):
-                    donor_idx += 1
-                    continue
-            else:
-                min_keep = 2 if _has_enemy_neighbor(donor_name, raw, territories, player,
-                                                    capitals) else 1
-                if count[donor_name] <= min_keep:
-                    donor_idx += 1
-                    continue
-
-            # pick first movable unit that still has snapshot qty > 0
-            picked = None
-            snap = qty_snap[donor_name]
-            for u in free_units.get(donor_name, []):
-                if u.unit_type in static or u.range <= 0:
-                    continue
-                if snap.get((u.unit_type, u.owner), 0) <= 0:
-                    continue
-                picked = u
-                break
-            if picked is None:
-                donor_idx += 1
-                continue
-
-            r = _rollout_reach(f, route_cache, territories, player, picked, donor_name)
-            dest = None
-            if terr_name in r:
-                dest = terr_name
-            else:
-                step, step_score = _best_step(picked, donor_name, r, targets, dist_to_frontier,
-                                              my_frontier, staging_score, factory_adj_score)
-                if step is not None and step_score > 0:
-                    dest = step
-            if dest is None:
-                donor_idx += 1
-                continue
-
-            free_units[donor_name].remove(picked)
-            moves.append((picked, r[dest]))
-            k = (picked.unit_type, picked.owner)
-            snap[k] -= 1
-            count[donor_name] -= 1
-            # also credit the destination so it counts toward quota
-            k = (picked.unit_type, player)
-            qty_snap[dest][k] = qty_snap[dest].get(k, 0) + 1
-            count[dest] += 1
-            if donor_name in my_frontier:
-                excess = frontier_excess_map.get(donor_name, 0) - 1
-                frontier_excess_map[donor_name] = excess if excess > 0 else 0
-
-    # Grouped by (from, route) like grouped_moves in heuristic_non_combat_legal_moves.
-    return _group_moves(definition, moves)
-
-
-cdef dict _rollout_reach(_MapFacts f, dict route_cache, dict territories, object player,
-                         object u, object from_name):
-    cdef str dom = _domain(u)
-    key = (from_name, u.range, dom)
-    r = route_cache.get(key)
-    if r is None:
-        r = _reach(f.neighbors(dom), territories, player, from_name, u.range, _NO_BLOCK)
-        route_cache[key] = r
-    return r
-
-
-cdef tuple _best_step(object u, object from_name, dict r, list targets, dict dist_to_frontier,
-                      set my_frontier, dict staging_score, dict factory_adj_score):
-    best = None
-    cdef long long best_score = -2147483647
-    cdef long long from_d = dist_to_frontier.get(from_name, INF_INT)
-    cdef long long improvement, score
-    for dest in targets:
-        dest_name = dest.name
-        if dest_name == from_name or dest_name not in r:
-            continue
-        improvement = from_d - <long long>dist_to_frontier.get(dest_name, INF_INT)
-        score = improvement * 100
-        if dest_name in my_frontier:
-            score += 50
-        score += <long long>staging_score.get(dest_name, 0) * 10
-        score += <long long>factory_adj_score.get(dest_name, 0) * 5
-        if score > best_score:
-            best_score = score
-            best = dest_name
-    return best, best_score
-
-
-cdef bint _has_enemy_neighbor(object name, dict raw, dict territories, object player,
-                              set capitals):
-    for n in raw[name]:
-        if territories[n].owner != player and n not in capitals:
-            return True
-    return False
-
-
-cdef long long _rollout_quota(object name, object home_factory, set my_frontier, dict raw,
-                              dict territories, object player, dict count, dict staging_score,
-                              dict factory_adj_score, long long total_my_units):
-    cdef long long enemy_threat, cap, v
-    if name == home_factory:
-        v = <long long>(total_my_units * 0.08)
-        return v if v > 1 else 1
-    if name in my_frontier:
-        enemy_threat = 0
-        for nb in raw[name]:
-            if territories[nb].owner != player:
-                enemy_threat += count[nb]
-        cap = <long long>(total_my_units * 0.15)
-        v = enemy_threat + 2 if enemy_threat + 2 < cap else cap
-        return v if v > 3 else 3
-    if staging_score.get(name, 0) > 0 or factory_adj_score.get(name, 0) > 0:
-        v = <long long>(total_my_units * 0.03)
-        return v if v > 1 else 1
-    v = <long long>(total_my_units * 0.01)
-    return v if v > 1 else 1

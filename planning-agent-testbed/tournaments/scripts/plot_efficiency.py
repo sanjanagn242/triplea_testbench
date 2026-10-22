@@ -3,7 +3,8 @@ one row per search, i.e. per combat move).
 
 For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-maps/:
   efficiency_iterations.png        iterations per search: distribution per agent (box; dots = each
-                                   game's mean) and mean per round
+                                   game's mean) and mean per round; searches beyond an agent's
+                                   1.5 IQR whiskers are left out of both plots (not the summary)
   efficiency_action_sequences.png  action sequences visited (root-to-leaf paths of the search tree)
                                    per search: distribution per agent and mean per round
   efficiency_summary.txt           per agent (and per opponent): games, searches, iterations, time,
@@ -34,13 +35,24 @@ for c in COLUMNS[2:]:
 colors = agent_colors(args.tournament)
 
 
+def without_outliers(searched, value):
+    """Rows within each agent's 1.5 IQR whisker range of value: the plots leave out the extreme
+    searches (their min and max are in the summary), so a few long endgame searches don't stretch
+    the axes."""
+    def keep(g):
+        q1, q3 = g[value].quantile([0.25, 0.75])
+        return g[g[value].between(q1 - 1.5 * (q3 - q1), q3 + 1.5 * (q3 - q1))]
+    return searched.groupby("agent", group_keys=False).apply(keep)
+
+
 def compare(searched, value, label, title, path):
+    searched = without_outliers(searched, value)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), gridspec_kw={"width_ratios": [2, 3]})
     agents = sorted(searched["agent"].unique())
     boxes_by_agent(ax1, {a: searched.loc[searched["agent"] == a, value] for a in agents}, colors,
                    {a: searched[searched["agent"] == a].groupby(["map", "game"])[value].mean() for a in agents})
     ax1.set_ylabel(label, fontsize=12)
-    ax1.set_title(f"{title} per search (dots: each game's mean)", fontsize=12)
+    ax1.set_title(f"{title} per search (dots: each game's mean; outliers left out)", fontsize=12)
     mean_by_round(ax2, searched, value, colors)
     ax2.set_xlabel("Round", fontsize=12)
     ax2.set_ylabel(f"Mean {label.lower()}", fontsize=12)

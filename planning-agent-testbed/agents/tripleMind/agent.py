@@ -363,7 +363,7 @@ class TripleMindAgent:
                 response = self.encode("purchase", [move])
             self.log(f"round {game_state.round}: {self.whoAmI} purchase -> {response}")
         elif phase == "combatMove":
-            self.save_map_image(game_state, phase)
+            # self.save_map_image(game_state, phase)
             attacks = self.search.mcts_search(MCTSGameState(self.search, fm_state, self.whoAmI))
             moves = [mv for attack in attacks for mv in attack.moves]
             if moves:
@@ -372,7 +372,7 @@ class TripleMindAgent:
                      f"({self.search.iteration} iterations) {attacks}")
             self.log(f"round {game_state.round}: {self.whoAmI} combat move -> {response}")
         elif phase == "nonCombatMove":
-            self.save_map_image(game_state, phase)
+            # self.save_map_image(game_state, phase)
             moves = action_generators.noncombat_move(sim_game, self.definition)
             if moves:
                 response = self.encode("nonCombatMove", moves)
@@ -401,7 +401,7 @@ class TripleMindAgent:
 def main():
     agent = TripleMindAgent(float(os.environ.get("TRIPLEA_MCTS_SECONDS", "1.0")),
                   int(os.environ.get("TRIPLEA_MCTS_ITERS", "100000")),
-                  int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "2")),
+                  int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "10")),
                   float(os.environ.get("TRIPLEA_MCTS_EXP_CONST", "1.414")),
                   int(os.environ.get("TRIPLEA_MCTS_SEED", "0")))
     for line in sys.stdin:
