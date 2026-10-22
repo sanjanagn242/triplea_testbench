@@ -22,7 +22,7 @@ failed=()
 for spec in "${specs[@]}"; do
   name="$(date +%Y-%m-%d_%H-%M-%S)_$(basename "$spec" .json)"
   echo "=== $spec -> $tournaments/$name"
-  if python3 planning-agent-testbed/tools/tournament.py --spec "$spec" --out "$tournaments/$name" "$@" &&
+  if python3 planning-agent-testbed/tools/tournament.py --spec "$spec" --out "$tournaments/$name" --no-gui "$@" &&
      planning-agent-testbed/tournaments/scripts/generate_plots.sh "$tournaments/$name" &&
      (cd "$tournaments" && zip -qr "$name.zip" "$name"); then
     echo "Zipped to $tournaments/$name.zip"
