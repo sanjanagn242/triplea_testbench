@@ -1,0 +1,9 @@
+{
+  "id": "tripleMind-mcts-with-opp-nodes-remove-terr-sort",
+  "name": "TripleMind MCTS with opponent nodes",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind large-action-space optimized MCTS agent for the TripleA game.",
+  "outputDirectories": ["metrics", "logs", "trees", "records", "map_images"]
+}

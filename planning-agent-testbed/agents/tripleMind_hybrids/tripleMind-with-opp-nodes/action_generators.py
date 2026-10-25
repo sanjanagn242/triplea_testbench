@@ -481,15 +481,34 @@ def defender_strength(m, territory, player):
                         and m.unit_types[u.unit_type].is_infrastructure))
 
 
-def enemy_territories_reachable(game, player):
+def enemy_territories_by_priority(game, player):
     """MCTSGameState.set_terr_lists: enemy land territories bordering mine, most important first."""
     m = game.map
     terrs = game.territories
     victory_cities = set(m.victory_cities())
     mine = {name for name, t in terrs.items() if t.owner == player}
+
+    def territory_priority(name):
+        priority_score = 0
+        # Victory city = highest priority
+        if name in victory_cities:
+            priority_score += 1000
+        next_to_factory = sum(1 for n in m.neighbors(name) if n in victory_cities)
+        priority_score += next_to_factory * 500
+        # Production value
+        priority_score += m.G.nodes[name]["production"] * 100
+        # Number of bordering friendly territories (easier to attack/hold)
+        surrounded_by_me = sum(1 for n in m.neighbors(name) if n in mine)
+        priority_score += surrounded_by_me * 50
+        # Number of bordering territories of the same owner
+        enemy_neighbors = sum(1 for n in m.neighbors(name) if terrs[n].owner == terrs[name].owner)
+        priority_score -= enemy_neighbors * 30
+        return priority_score
+
     reachable = [name for name, t in terrs.items()
                  if t.owner != player and not m.is_water(name)
                  and any(n in mine for n in m.neighbors(name))]
+    reachable.sort(key=territory_priority, reverse=True)
     return reachable
 
 
@@ -534,7 +553,7 @@ def combat_actions(game, definition, excluded, player=None):
         c = m.unit_cost(u.unit_type)
         return c if c is not None else 9999
 
-    for enemy_territory_name in enemy_territories_reachable(game, player):
+    for enemy_territory_name in enemy_territories_by_priority(game, player):
         if enemy_territory_name in excluded:
             continue
         # ── gather attackers ──────────────────────────────────────────────
@@ -599,6 +618,6 @@ def combat_actions(game, definition, excluded, player=None):
 
         # skip move always included
         actions.append(CombatAction(to_terr=enemy_territory_name, moves=[], strength=0))
-        # excluded.add(enemy_territory_name)
-        # break
+        excluded.add(enemy_territory_name)
+        break
     return actions, excluded

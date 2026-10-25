@@ -24,8 +24,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
-from common import (ALL_MAPS, SURFACE, TEXT, agent_colors, by_map, load, parse_args, save, stats,
-                    style)
+from common import (ALL_MAPS, SURFACE, TEXT, agent_code, agent_colors, agent_legend, by_map,
+                    color_agent_ticks, load, parse_args, save, stats, style)
 
 COLUMNS = ["game", "player", "rounds_played", "won", "turn_position", "game_time"]
 # Reference sequential blue ramp (steps 100 -> 700) for the win-rate matrices.
@@ -73,8 +73,11 @@ def ink_on(rgba):
     return "#ffffff" if (1.05 / (luminance + 0.05)) >= ((luminance + 0.05) / 0.0545) else "#0b0b0b"
 
 
-def matrix(ax, table, counts, title, xlabel, column_label=str):
-    """Win-rate matrix (agents x columns): cell color = win rate, text = rate and wins/games."""
+def matrix(ax, table, counts, title, xlabel, column_label=None):
+    """Win-rate matrix (agents x columns): cell color = win rate, text = rate and wins/games. Agents
+    (rows, and opponent columns) are labelled by their code in their color; the figure legend names
+    them."""
+    column_label = column_label or (lambda c: agent_code(colors, c))
     im = ax.imshow(table.values.astype(float), cmap=WIN_RATE_CMAP, vmin=0, vmax=1, aspect="auto")
     for i, agent in enumerate(table.index):
         for j, col in enumerate(table.columns):
@@ -85,12 +88,14 @@ def matrix(ax, table, counts, title, xlabel, column_label=str):
             wins, n = counts[(agent, col)]
             ax.text(j, i, f"{100 * rate:.0f}%\n{wins}/{n}", ha="center", va="center", fontsize=10,
                     color=ink_on(WIN_RATE_CMAP(rate)))
-    ax.set_xticks(range(len(table.columns)), [column_label(c) for c in table.columns], rotation=15,
-                  ha="right")
-    ax.set_yticks(range(len(table.index)), table.index)
+    ax.set_xticks(range(len(table.columns)), [column_label(c) for c in table.columns])
+    ax.set_yticks(range(len(table.index)), [agent_code(colors, a) for a in table.index])
+    agent_legend(ax.figure, sorted(set(table.index) | (set(table.columns) & set(colors))), colors)
     ax.set_xlabel(xlabel, fontsize=12)
     ax.set_title(title, fontsize=12)
     ax.tick_params(colors=TEXT, labelsize=10, length=0)
+    color_agent_ticks(ax.get_xticklabels(), colors, table.columns)
+    color_agent_ticks(ax.get_yticklabels(), colors, table.index)
     for side in ax.spines.values():
         side.set_visible(False)
     return im
@@ -153,11 +158,12 @@ def length_plot(m, path):
                 patch.set_linewidth(1.5)
                 if won is False:
                     patch.set_hatch("//")
-        ax.set_xticks(range(1, len(agents) + 1), agents, rotation=15, ha="right")
+        ax.set_xticks([])
         ax.set_xlim(0.5, len(agents) + 0.5)
         ax.set_ylabel(label, fontsize=12)
         ax.set_title(f"{label} (left box: won, hatched right box: lost)", fontsize=12)
         style(ax)
+    agent_legend(fig, agents, colors)
     save(fig, path)
 
 

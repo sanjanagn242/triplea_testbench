@@ -1,0 +1,24 @@
+{
+  "games": 5,
+  "agents": [
+    "oep-greedy-turn-combat",
+    "oep-greedy-action-combat",
+    "tripleMind-mcts"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

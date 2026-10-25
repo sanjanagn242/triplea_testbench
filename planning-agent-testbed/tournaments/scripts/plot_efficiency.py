@@ -20,8 +20,10 @@ For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-map
 The last two plots need the num_of_terr_attacked and max_tree_depth columns; efficiency.csv files
 written before them only feed the other plots. Both are small integers, so no outliers are left out.
 
-Agents without a search (e.g. tripleMind-bc, tripleMind-ppo leave num_iterations blank) are listed in
-the summary but left out of the plots.
+Agents without a search (e.g. tripleMind-bc, tripleMind-ppo leave num_iterations and
+num_action_sequences blank) are listed in the summary but left out of the plots. A search agent that
+leaves only some columns blank (e.g. oep_paper greedy: no MCTS iterations, rollouts or tree) is left out
+of just those plots and summary lines.
 
 Usage (from planning-agent-testbed/):
   python3 tournaments/scripts/plot_efficiency.py tournaments/<date>_<time> [--map MAP ...] [--out DIR]
@@ -29,8 +31,8 @@ Usage (from planning-agent-testbed/):
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from common import (ALL_MAPS, agent_colors, boxes_by_agent, by_map, load, mean_by_round, parse_args, save,
-                    stats, style)
+from common import (ALL_MAPS, agent_colors, agent_legend, boxes_by_agent, by_map, load, mean_by_round,
+                    parse_args, save, stats, style)
 
 COLUMNS = ["player", "game", "round", "time_per_turn", "num_iterations", "root_value",
            "num_children_at_root", "max_rollout", "num_action_sequences"]
@@ -43,11 +45,18 @@ if df.empty:
 for c in COLUMNS[2:]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 # Newer columns, loaded apart so older efficiency.csv files still feed the plots above.
-TREE_COLUMNS = ["player", "game", "round", "num_iterations", "num_of_terr_attacked", "max_tree_depth"]
+TREE_COLUMNS = ["player", "game", "round", "num_iterations", "num_action_sequences", "num_of_terr_attacked",
+                "max_tree_depth"]
 tree_df = load(args.tournament, "efficiency.csv", TREE_COLUMNS)
 for c in TREE_COLUMNS[2:]:
     tree_df[c] = pd.to_numeric(tree_df[c], errors="coerce")
 colors = agent_colors(args.tournament)
+
+
+def searches(d):
+    """Rows of agents that searched: an MCTS agent logs num_iterations, a greedy one only
+    num_action_sequences."""
+    return d[d["num_iterations"].notna() | d["num_action_sequences"].notna()]
 
 
 def without_outliers(searched, value):
@@ -61,6 +70,9 @@ def without_outliers(searched, value):
 
 
 def compare(searched, value, label, title, path, drop_outliers=True):
+    searched = searched.dropna(subset=[value])
+    if searched.empty:
+        return
     if drop_outliers:
         searched = without_outliers(searched, value)
     note = "outliers left out" if drop_outliers else "all searches"
@@ -76,36 +88,37 @@ def compare(searched, value, label, title, path, drop_outliers=True):
     ax2.set_title(f"Mean {title.lower()} by round (band: +/- std across searches)", fontsize=12)
     for ax in (ax1, ax2):
         style(ax)
+    agent_legend(fig, agents, colors)
     save(fig, path)
 
 
 for map_name, m in by_map(df, args.maps):
     out = out_root / map_name
-    searched = m.dropna(subset=["num_iterations"])
+    searched = searches(m)
     if not searched.empty:
         compare(searched, "num_iterations", "Iterations", "Iterations",
                 out / "efficiency_iterations.png")
-        compare(searched.dropna(subset=["num_action_sequences"]), "num_action_sequences",
+        compare(searched, "num_action_sequences",
                 "Action sequences", "Action sequences visited", out / "efficiency_action_sequences.png")
     tree = tree_df[tree_df["map"] == map_name] if map_name != ALL_MAPS else tree_df
-    tree = tree.dropna(subset=["num_iterations"])
+    tree = searches(tree)
     if not tree.empty:
-        compare(tree.dropna(subset=["num_of_terr_attacked"]), "num_of_terr_attacked",
+        compare(tree, "num_of_terr_attacked",
                 "Territories attacked", "Territories attacked", out / "efficiency_terr_attacked.png",
                 drop_outliers=False)
-        compare(tree.dropna(subset=["max_tree_depth"]), "max_tree_depth", "Tree depth",
+        compare(tree, "max_tree_depth", "Tree depth",
                 "Search tree depth", out / "efficiency_tree_depth.png", drop_outliers=False)
 
     lines = [f"Search efficiency: {map_name}\n", "=" * 60 + "\n\n"]
     for agent, a in m.groupby("agent"):
         lines.append(f"{agent}\n" + "-" * len(agent) + "\n")
         for opponent, o in [("all opponents", a), *a.groupby("opponent")]:
-            s = o.dropna(subset=["num_iterations"])
+            s = searches(o)
             games = len(o[["map", "game"]].drop_duplicates())
             lines.append(f"  vs {opponent}: {games} games, {len(o)} searches\n")
             lines.append(f"    time per turn (s)      {stats(o['time_per_turn'])}\n")
             if s.empty:
-                lines.append("    no search (num_iterations blank)\n")
+                lines.append("    no search (num_iterations and num_action_sequences blank)\n")
                 continue
             lines.append(f"    iterations             {stats(s['num_iterations'])}\n")
             lines.append(f"    action sequences       {stats(s['num_action_sequences'])}\n")
@@ -119,7 +132,7 @@ for map_name, m in by_map(df, args.maps):
                 lines.append(f"    tree depth             {stats(t['max_tree_depth'])}\n")
         lines.append("\n")
 
-    searched = m.dropna(subset=["num_iterations"])
+    searched = searches(m)
     if not searched.empty:
         for value, label in [("num_iterations", "Mean iterations"),
                              ("num_action_sequences", "Mean action sequences")]:

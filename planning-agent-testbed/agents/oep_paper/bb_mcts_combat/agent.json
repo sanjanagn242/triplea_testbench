@@ -1,0 +1,9 @@
+{
+  "id": "oep-bb-mcts-combat",
+  "name": "OEP Bridge Burning MCTS (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "BB-MCTS of Justesen et al. (2018) for the combat move: vanilla action-based MCTS (UCT, epsilon-greedy rollouts to the end of the turn, transposition table) whose time budget is split into phases, each committing the most promising root action and pruning the rest. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": ["metrics", "logs"]
+}

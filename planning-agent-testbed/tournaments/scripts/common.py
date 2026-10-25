@@ -9,11 +9,13 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
 
 # Reference categorical palette (fixed order); an agent keeps its color in every plot of a run.
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948",
+          "#14a6c0", "#8c5a2b", "#7d7c78", "#a3a800"]
 WIN_COLOR, LOSS_COLOR = SERIES[0], SERIES[1]
 TEXT = "#52514e"
 GRID = "#e4e3df"
@@ -78,8 +80,8 @@ def by_map(df, maps=None):
 
 def agent_colors(tournament: Path):
     """Agent id -> color for every agent of the tournament (by sorted id), so an agent has the same
-    color in every plot of the run, whichever agents a plot shows. Past eight agents the colors
-    repeat; the agent names on the axes still tell them apart."""
+    color in every plot of the run, whichever agents a plot shows. Past twelve agents the colors
+    repeat; the codes of agent_code() still tell them apart."""
     return {a: SERIES[i % len(SERIES)] for i, a in enumerate(tournament_agents(tournament))}
 
 
@@ -98,8 +100,33 @@ def style(ax, grid_axis="y"):
     ax.yaxis.label.set_color(TEXT)
 
 
+def agent_code(colors, agent):
+    """Short id of an agent (A1, A2, ... in the order of agent_colors), the same in every plot of the
+    run; for axes where the color can't identify the agent (win-rate matrices, win/loss bars).
+    Anything not an agent of the run (e.g. "all opponents") is returned as is."""
+    return f"A{list(colors).index(agent) + 1}" if agent in colors else str(agent)
+
+
+def color_agent_ticks(labels, colors, agents):
+    """Color tick labels (as set from agent_code) in their agent's color."""
+    for label, a in zip(labels, agents):
+        if a in colors:
+            label.set_color(colors[a])
+            label.set_fontweight("bold")
+
+
+def agent_legend(fig, agents, colors, extra=()):
+    """One legend for the whole figure, right of the plots: a color and code (agent_code) per agent,
+    then any extra handles (e.g. line styles). Agent names are long, so the axes leave them out and
+    the color identifies the agent; save() widens the image to fit the legend."""
+    handles = [Line2D([], [], color=colors[a], linewidth=6, label=f"{agent_code(colors, a)}  {a}")
+               for a in agents] + list(extra)
+    fig.legend(handles=handles, loc="center left", bbox_to_anchor=(1.0, 0.5), frameon=False,
+               fontsize=10, labelcolor=TEXT, handlelength=2.5)
+
+
 def boxes_by_agent(ax, values_by_agent, colors, points_by_agent=None):
-    """One box per agent (the per-decision distribution) with the agent's name under it, and
+    """One box per agent (the per-decision distribution), colored by agent (see agent_legend), and
     optionally one dot per game (that game's mean) jittered over it."""
     agents = list(values_by_agent)
     bp = ax.boxplot([values_by_agent[a] for a in agents], widths=0.5, patch_artist=True,
@@ -116,11 +143,11 @@ def boxes_by_agent(ax, values_by_agent, colors, points_by_agent=None):
             if pts:
                 ax.scatter(i + rng.uniform(-0.15, 0.15, len(pts)), pts, s=36, color=colors[a],
                            edgecolor=SURFACE, linewidth=2, zorder=3)
-    ax.set_xticks(range(1, len(agents) + 1), agents, rotation=15, ha="right")
+    ax.set_xticks([])
 
 
 def mean_by_round(ax, df, value, colors):
-    """Mean of value per decision round, one line per agent (named in the legend), with a band of
+    """Mean of value per decision round, one line per agent (see agent_legend), with a band of
     +/- the standard deviation across that round's rows (turns)."""
     for agent, g in df.groupby("agent"):
         by_round = g.groupby("round")[value]
@@ -129,14 +156,13 @@ def mean_by_round(ax, df, value, colors):
                         linewidth=0)
         ax.plot(series.index, series.values, color=colors[agent], linewidth=2, label=agent)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, handlelength=4)
 
 
 def save(fig, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.patch.set_facecolor(SURFACE)
     fig.tight_layout()
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=150, bbox_inches="tight", pad_inches=0.2)  # keeps a legend right of the plots
     plt.close(fig)
     print(f"Plot written to {path}")
 

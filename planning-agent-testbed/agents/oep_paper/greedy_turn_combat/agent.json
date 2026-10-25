@@ -1,0 +1,9 @@
+{
+  "id": "oep-greedy-turn-combat",
+  "name": "OEP Greedy Turn (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Greedy Turn baseline of Justesen et al. (2018) for the combat move: depth-first search over every attack sequence of the turn with a transposition table, each scored with the forward model. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": ["metrics", "logs"]
+}

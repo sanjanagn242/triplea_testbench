@@ -1,0 +1,9 @@
+{
+  "id": "oep-ne-mcts-combat",
+  "name": "OEP Non-exploring MCTS (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Non-exploring MCTS of Justesen et al. (2018) for the combat move: action-based MCTS with C = 0, deterministic rollouts to the end of the turn (fixed dice per search), transposition table, descent-path backup. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": ["metrics", "logs"]
+}

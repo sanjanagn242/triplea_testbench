@@ -26,8 +26,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import MaxNLocator
 
-from common import (LOSS_COLOR, SURFACE, TEXT, WIN_COLOR, agent_colors, boxes_by_agent, load,
-                    by_map, mean_by_round, parse_args, save, stats, style, tournament_agents)
+from common import (LOSS_COLOR, SURFACE, TEXT, WIN_COLOR, agent_code, agent_colors, agent_legend, boxes_by_agent,
+                    color_agent_ticks, load, by_map, mean_by_round, parse_args, save, stats, style, tournament_agents)
 
 COLUMNS = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward", "is_terminal"]
 TURN = ["agent", "map", "opponent", "player", "game", "round"]
@@ -66,7 +66,7 @@ def terminal_plot(m, path):
     axes = axes[:, 0]
     overall = [outcome_pct(m[m["agent"] == a]) for a in agents]
     stacked(axes[0], range(len(agents)), [w for w, _ in overall], [l for _, l in overall], 0.5)
-    axes[0].set_xticks(range(len(agents)), agents)
+    axes[0].set_xticks(range(len(agents)), [agent_code(colors, a) for a in agents])
     axes[0].set_title("All rounds", fontsize=13)
     axes[0].legend(frameon=False, fontsize=10, loc="upper left", labelcolor=TEXT)
     axes[0].set_ylim(0, max(10.0, max(w + l for w, l in overall) * 1.2))
@@ -79,11 +79,13 @@ def terminal_plot(m, path):
         ax.set_xlim(rounds[0] - 0.6, rounds[-1] + 0.6)
         ax.set_ylim(0, max(10.0, max(w + l for w, l in by_round) * 1.2))
         ax.set_xlabel("Decision round", fontsize=12)
-        ax.set_title(agent, fontsize=13)
+        ax.set_title(f"{agent_code(colors, agent)}  {agent}", fontsize=13, color=colors[agent])
     for ax in axes:
         ax.set_ylabel("Rollouts reaching\nterminal (%)", fontsize=12)
         style(ax)
         ax.tick_params(labelsize=11)
+    # style() reset the tick colors; the codes are named in the per-agent row titles below
+    color_agent_ticks(axes[0].get_xticklabels(), colors, agents)
     save(fig, path)
 
 
@@ -100,6 +102,7 @@ def states_plot(turns, path):
     ax2.set_title("Mean states sampled per turn by round (band: +/- std across turns)", fontsize=12)
     for ax in (ax1, ax2):
         style(ax)
+    agent_legend(fig, agents, colors)
     save(fig, path)
 
 
@@ -113,15 +116,14 @@ def reward_plot(node_stats, path):
         by_round = g.groupby("round")[["avg_reward", "std_reward"]].mean()
         x, mean, sd = by_round.index.values, by_round["avg_reward"].values, by_round["std_reward"].fillna(0).values
         ax.fill_between(x, mean - sd, mean + sd, color=colors[agent], alpha=0.12, linewidth=0)
-        ax.plot(x, mean, color=colors[agent], linewidth=2, label=agent)
+        ax.plot(x, mean, color=colors[agent], linewidth=2)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xlabel("Decision round", fontsize=12)
     ax.set_ylabel("Rollout reward", fontsize=12)
     ax.set_title("Rollout reward per turn by round (line: mean of the turns' average reward; "
                  "band: +/- mean std of the rewards within a turn)", fontsize=12)
-    ax.legend(frameon=False, fontsize=10, labelcolor=TEXT, loc="upper left", bbox_to_anchor=(1.01, 1),
-              handlelength=4)
     style(ax)
+    agent_legend(fig, sorted(node_stats["agent"].unique()), colors)
     save(fig, path)
 
 

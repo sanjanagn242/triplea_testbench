@@ -201,7 +201,6 @@ class MCTS:
         new_state = node.state.clone()
         new_state.played_by = node.state.next_moves_by
         new_state.apply_combat_move([action])
-        new_state.excluded.add(action.to_terr)
         new_state.heuristic_combat_legal_moves()
         passes_turn = no_target(new_state)
         if passes_turn:
@@ -269,7 +268,6 @@ class MCTS:
             if mv.end_phase:
                 break
             current_state.apply_combat_move([mv])
-            current_state.excluded.add(mv.to_terr)
         return self.end_phase(current_state.sim)
 
     def _rollout_noncombat(self, current_state):

@@ -15,6 +15,10 @@
     "classical-mcts",
     "classical-combat-mcts",
     "hard-ai-game-recorder",
-    "roxo-ne-mcts"
+    "roxo-ne-mcts",
+    "oep-greedy-action-combat",
+    "oep-greedy-turn-combat",
+    "oep-ne-mcts-combat",
+    "oep-bb-mcts-combat"
   ]
 }

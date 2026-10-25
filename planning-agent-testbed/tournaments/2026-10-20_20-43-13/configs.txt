@@ -1,2 +1,0 @@
-/home/sanjana/Documents/Codex/2026-09-29/https-github-com-triplea-game-triplea-2/work/triplea/planning-agent-testbed/games/minimap/config/generated/2p_maps/1.tripleMind-mcts-MCTS_ROLLOUT-10-vs-Hard-AI.json
-/home/sanjana/Documents/Codex/2026-09-29/https-github-com-triplea-game-triplea-2/work/triplea/planning-agent-testbed/games/minimap/config/generated/2p_maps/2.Hard-AI-vs-tripleMind-mcts-MCTS_ROLLOUT-10.json

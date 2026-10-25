@@ -580,7 +580,7 @@ def defender_strength(m, territory, player):
                and u.unit_type not in infra)
 
 
-def enemy_territories_reachable(game, player):
+def enemy_territories_by_priority(game, player):
     """MCTSGameState.set_terr_lists: enemy land territories bordering mine, most important first."""
     cdef _MapFacts f = _facts(game.map)
     cdef dict raw = f.neighbors(None)
@@ -598,6 +598,26 @@ def enemy_territories_reachable(game, player):
         if not any(n in mine for n in nbs):
             continue
         reachable.append(name)
+        owner = t.owner
+        score = 0
+        if name in vc:
+            score += 1000
+        next_to_factory = 0
+        surrounded_by_me = 0
+        enemy_neighbors = 0
+        for n in nbs:
+            if n in vc:
+                next_to_factory += 1
+            if n in mine:
+                surrounded_by_me += 1
+            if terrs[n].owner == owner:
+                enemy_neighbors += 1
+        score += next_to_factory * 500
+        score += f.production[name] * 100
+        score += surrounded_by_me * 50
+        score -= enemy_neighbors * 30
+        priority[name] = score
+    reachable.sort(key=priority.__getitem__, reverse=True)
     return reachable
 
 
@@ -656,7 +676,7 @@ def combat_actions(game, definition, excluded, player=None):
     cdef double max_threshold = 3.5
     cdef Py_ssize_t n, j
 
-    for name in enemy_territories_reachable(game, player):
+    for name in enemy_territories_by_priority(game, player):
         if name in excluded:
             continue
         # ── gather attackers ──────────────────────────────────────────────
@@ -722,8 +742,8 @@ def combat_actions(game, definition, excluded, player=None):
 
         # skip move always included
         actions.append(CombatAction(to_terr=name, moves=[], strength=0))
-        # excluded.add(name)
-        # break
+        excluded.add(name)
+        break
     return actions, excluded
 
 

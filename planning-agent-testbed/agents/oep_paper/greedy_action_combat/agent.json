@@ -1,0 +1,9 @@
+{
+  "id": "oep-greedy-action-combat",
+  "name": "OEP Greedy Action (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Greedy Action baseline of Justesen et al. (2018) for the combat move: one-ply forward-model search per attack, repeated until ending the phase scores best. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": ["metrics", "logs"]
+}

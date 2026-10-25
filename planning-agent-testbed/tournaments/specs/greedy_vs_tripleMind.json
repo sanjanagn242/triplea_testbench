@@ -1,0 +1,26 @@
+{
+  "games": 1,
+  "agents": [
+    "tripleMind-mcts-with-opp-nodes TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=0 TRIPLEA_MCTS_ROLLOUT=2",
+    "tripleMind-mcts TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=0 TRIPLEA_MCTS_ROLLOUT=2",
+    "oep-ne-mcts-combat TRIPLEA_GREEDY_SECONDS=1.0",
+    "oep-greedy-action-combat TRIPLEA_GREEDY_SECONDS=1.0",
+    "oep-greedy-turn-combat TRIPLEA_GREEDY_SECONDS=1.0"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

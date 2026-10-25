@@ -29,7 +29,7 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
-from common import TEXT, agent_colors, by_map, load, parse_args, save, style, tournament_agents
+from common import TEXT, agent_colors, agent_legend, by_map, load, parse_args, save, style, tournament_agents
 
 COLUMNS = ["player", "game", "round", "tl", "chooser", "num_children", "visit_count",
            "second_visit_count", "mean_visits", "visit_z", "avg_value", "second_avg_value"]
@@ -90,13 +90,10 @@ def plot(m, path):
         ax.set_title(title, fontsize=12)
         style(ax)
     agents = sorted(m["agent"].unique())
-    handles = [Line2D([], [], color=colors[a], linewidth=2, label=a) for a in agents]
-    handles += [Line2D([], [], color=TEXT, linestyle=ls, linewidth=2,
-                       label="agent's own choice" if side == "self" else "opponent's choice (modelled)")
-                for side, ls in SIDES.items() if side in set(m["side"])]
-    # visits fall with depth, so the last panel's upper right is free for the legend
-    axes.flat[-1].legend(handles=handles, loc="upper right", frameon=False, fontsize=10,
-                         labelcolor=TEXT, handlelength=4)
+    sides = [Line2D([], [], color=TEXT, linestyle=ls, linewidth=2,
+                    label="agent's own choice" if side == "self" else "opponent's choice (modelled)")
+             for side, ls in SIDES.items() if side in set(m["side"])]
+    agent_legend(fig, agents, colors, sides)
     fig.suptitle("How clearly the chosen action stood out from its siblings, by tree level "
                  "(line: median, band: 25th-75th percentile; dotted: no differentiation)",
                  fontsize=13)
