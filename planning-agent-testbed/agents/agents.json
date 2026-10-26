@@ -7,8 +7,10 @@
     "tripleMind-bc",
     "tripleMind-ppo",
     "tripleMind-mcts-with-opp-nodes",
-    "tripleMind-mcts-no-reward-heuristic",
-    "tripleMind-mcts-no-terr-sorting-heuristic",
+    "tripleMind-with-macro-actions",
+    "tripleMind-with-macro-actions-with-opp-nodes",
+    "tripleMind-mcts-no-terr-sorting",
+    "tripleMind-mcts-with-opp-nodes-no-terr-sorting",
     "does-nothing-python",
     "hard-ai-python",
     "greedy-one-step-lookahead",
@@ -16,9 +18,11 @@
     "classical-combat-mcts",
     "hard-ai-game-recorder",
     "roxo-ne-mcts",
-    "oep-greedy-action-combat",
-    "oep-greedy-turn-combat",
-    "oep-ne-mcts-combat",
-    "oep-bb-mcts-combat"
+    "greedy-action-combat",
+    "greedy-turn-combat",
+    "ne-mcts-combat",
+    "bb-mcts-combat",
+    "roxo-oep",
+    "roxo-oep-with-purchase"
   ]
 }

@@ -1,9 +1,8 @@
 {
   "games": 1,
   "agents": [
-    "oep-bb-mcts-combat",
-    "oep-ne-mcts-combat",
-    "tripleMind-mcts"
+    "tripleMind-with-macro-actions TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2",
+    "roxo-oep-with-purchase ROXO_SECONDS=1.0 ROXO_OEP_PLAYOUT_ROUNDS=2"
   ],
   "roundLimit": 100,
   "aiMovePauseMs": 0,

@@ -1,5 +1,5 @@
 {
-  "id": "oep-ne-mcts-combat",
+  "id": "ne-mcts-combat",
   "name": "OEP Non-exploring MCTS (combat only)",
   "language": "Python 3.10+",
   "entrypoint": "agent.py",

@@ -26,6 +26,17 @@ from the previous one's games (1, 1 + N, 1 + 2N, ...), and with --games N every 
 to N first. A folder argument runs all *.json in it, in name order (numbers compared as numbers,
 so 2.x runs before 10.x).
 
+Parallel batches: --batch-size B cuts the tournament's games, in play order, into batches of B
+games, and plays all batches at once, each its games one after another (so 72 configurations of 10
+games with --batch-size 80 run as 9 engines in parallel; a configuration may be split between two
+batches, its games keeping their numbers). Without it, all games are one batch, played one at a
+time as above. Each batch writes its own results and engine output (batches/<k>.jsonl, .log), which
+are merged into games.jsonl after every configuration; agents write their shared metric CSVs under
+a file lock (helper.locked), and their other files are named by game number, which is unique. Each
+batch plays a configuration under a copy of its own (.tournament-b<k>-*.json), so suspended games
+are checkpointed per batch. Searches limited by wall-clock time get fewer iterations when the
+machine is overloaded, so keep the batches (two agent processes each) well under the CPU count.
+
 Instead of configurations, a tournament spec (--spec) can name the agents: every pair of them is
 played on the spec's map, once in each seat, `games` games each. The configurations are generated
 into games/<game>/config/generated/<spec name>/ (replacing what an earlier run generated there) and
@@ -75,6 +86,7 @@ Usage (from the repository root or planning-agent-testbed/):
       --spec planning-agent-testbed/games/capture-the-flag-diag/tournament.json
   python3 planning-agent-testbed/tools/tournament.py \\
       planning-agent-testbed/games/capture-the-flag-diag/config/tournament --games 10
+  python3 planning-agent-testbed/tools/tournament.py --spec <spec> --games 10 --batch-size 80
   python3 planning-agent-testbed/tools/tournament.py \\
       planning-agent-testbed/games/capture-the-flag-diag/config/evaluate-Russians.json \\
       planning-agent-testbed/games/capture-the-flag-diag/config/evaluate-Germans.json \\
@@ -93,8 +105,10 @@ import xml.etree.ElementTree as ET
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -104,6 +118,7 @@ AGENTS_DIR = TESTBED / "agents"
 TOURNAMENTS_DIR = TESTBED / "tournaments"
 SAVES_DIR = TESTBED / "saves"
 NO_WINNER = "no winner"
+BATCH_STAGGER_SECONDS = 15  # between the starts of parallel batches (run_batches)
 
 
 # ---- running ---------------------------------------------------------------------------------
@@ -275,47 +290,156 @@ def renumber_configs(configs, games, first_game):
         number += count
 
 
-def run_config(config: Path, results: Path, max_resumes, gradle_args, outputs: Path, gui=None) -> Path:
+def run_config(config: Path, results: Path, max_resumes, gradle_args, outputs: Path, gui=None,
+               batch=None, segment=None, log=None) -> Path:
     """Plays one configuration to the end; returns the path the engine knows it by (the
-    configuration itself, or a sibling .tournament-*.json copy when settings had to change)."""
+    configuration itself, or a sibling .tournament-*.json copy when settings had to change).
+    In a batch (see run_batches) it always plays a copy of its own, .tournament-b<batch>-*.json, so
+    its checkpoint folder is the batch's own; segment (first game number, games) then limits it to
+    those of its games, and the engine's output goes to the file log instead of the terminal."""
     data = json.loads(config.read_text())
-    changed = False
+    changed = batch is not None
+    say = print if batch is None else (lambda message: print(f"  [batch {batch}] {message.strip()}",
+                                                            flush=True))
     if data.get("clearAgentOutputs"):
         data["clearAgentOutputs"] = False
         changed = True
-        print(f"  clearAgentOutputs turned off for the tournament (use --clear-outputs)")
+        say(f"  clearAgentOutputs turned off for the tournament (use --clear-outputs)")
+    if segment:
+        data["firstGameNumber"], data["games"] = segment
     # Map lookup and mapXml are relative to the configuration's folder, so a copy stays beside it.
-    run_path = config.with_name(f".tournament-{config.name}") if changed else config
+    prefix = ".tournament-" if batch is None else f".tournament-b{batch}-"
+    run_path = config.with_name(f"{prefix}{config.name}") if changed else config
     if changed:
         run_path.write_text(json.dumps(data, indent=2) + "\n")
     planned = int(data.get("games", 1))
     checkpoint = checkpoint_dir(run_path) / "checkpoint.json"
     if checkpoint.exists():
-        print(f"  note: {checkpoint} exists, so the engine resumes that suspended run first")
+        say(f"  note: {checkpoint} exists, so the engine resumes that suspended run first")
     try:
         for attempt in range(max_resumes + 1):
             args = (f"triplea.testbench.config={run_path} triplea.testbench.autostart=true "
                     f"triplea.testbench.results={results} triplea.testbench.outputs={outputs}")
             if gui is not None:  # overrides each configuration's showGame
                 args += f" triplea.testbench.gui={str(gui).lower()}"
+            if batch is not None:  # the other batches' games are still writing their logs
+                args += " triplea.testbench.keepLogs=true"
             command = [str(REPO / "gradlew"), *gradle_args, engine_task(gui), f"--args={args}"]
-            code = subprocess.call(command, cwd=REPO)
+            if log:
+                log.write(f"\n=== {run_path.name}: {' '.join(command)}\n")
+                log.flush()
+            code = subprocess.call(command, cwd=REPO, stdout=log, stderr=log and subprocess.STDOUT)
             done = sum(1 for r in read_results(results) if r["configuration"] == str(run_path))
             if code != 0:
-                print(f"  engine exited with status {code} after {done}/{planned} games")
+                say(f"  engine exited with status {code} after {done}/{planned} games")
                 break
             if done == 0 and not checkpoint.exists():
-                print(f"  WARNING: the engine played no games of {config.name}. Check its map "
-                      f"(name, gameName, aliases) and agents by loading it in the testbench UI.")
+                say(f"  WARNING: the engine played no games of {config.name}. Check its map "
+                    f"(name, gameName, aliases) and agents by loading it in the testbench UI.")
                 break
             if done >= planned or not checkpoint.exists():
                 break
             # An agent asked to suspend (e.g. a time limit): running it again resumes the game.
-            print(f"  suspended after {done}/{planned} games; resuming ({attempt + 1}/{max_resumes})")
+            say(f"  suspended after {done}/{planned} games; resuming ({attempt + 1}/{max_resumes})")
     finally:
         if changed:
             run_path.unlink(missing_ok=True)
     return run_path
+
+
+def plan_batches(configs, batch_size):
+    """The tournament's games, in play order, cut into batches of batch_size games: per batch a list
+    of (configuration, first game number, games) segments. A configuration may be split between two
+    batches; its games keep their numbers."""
+    batches, segments, room = [], [], batch_size
+    for config in configs:
+        data = json.loads(config.read_text())
+        first, left = int(data["firstGameNumber"]), int(data.get("games", 1))
+        while left:
+            games = min(left, room)
+            segments.append((config, first, games))
+            first, left, room = first + games, left - games, room - games
+            if not room:
+                batches.append(segments)
+                segments, room = [], batch_size
+    return batches + [segments] if segments else batches
+
+
+def missing_maps(configs):
+    """Game folders of configurations whose map is not downloaded yet: the engine downloads it into
+    games/<game>/map on the first run, and engines in parallel would all download it at once."""
+    folders = {next((d.parent for d in c.parents if d.name == "config"
+                     and d.parent.parent == TESTBED / "games"), None) for c in configs}
+    return sorted(f.name for f in folders if f and not any((f / "map").glob("**/games/*.xml")))
+
+
+def merge_results(out: Path, files):
+    """Writes the batches' results into the tournament's games.jsonl, in game order, each line
+    naming the configuration it was copied from, as in a tournament without batches. Called under
+    run_batches' lock; the file is replaced in one step, so a reader never sees half of it."""
+    games = [dict(g, configuration=original_config(g["configuration"]))
+             for f in files for g in read_results(f)]
+    games.sort(key=lambda g: g.get("game", 0))
+    temporary = out / ".games.jsonl.tmp"
+    temporary.write_text("".join(json.dumps(g, separators=(",", ":")) + "\n" for g in games))
+    os.replace(temporary, out / "games.jsonl")
+
+
+def run_batches(batches, out: Path, args, labels):
+    """Plays all batches at once, each its segments one after another (a thread per batch, each
+    running its own engine). A batch has its own results file and engine log, batches/<k>.jsonl and
+    batches/<k>.log, so engines never write the same file; after every segment the batches' results
+    are merged into games.jsonl and the report is rewritten, one thread at a time."""
+    folder = out / "batches"
+    folder.mkdir(exist_ok=True)
+    files = [folder / f"{k}.jsonl" for k in range(1, len(batches) + 1)]
+    lock = threading.Lock()
+    stop = threading.Event()
+    # The engines keep their agents' logs (triplea.testbench.keepLogs), so the earlier runs' logs
+    # are deleted here once, as each engine run would otherwise.
+    for old in (TESTBED / "logs").glob("agent-*.txt"):
+        old.unlink(missing_ok=True)
+
+    def play(k, segments):
+        # Engines start BATCH_STAGGER_SECONDS apart: one at a time checks the Gradle build and
+        # unzips maps.
+        if stop.wait((k - 1) * BATCH_STAGGER_SECONDS):
+            return
+        with open(folder / f"{k}.log", "a") as log:
+            for i, (config, first, games) in enumerate(segments, 1):
+                if stop.is_set():
+                    return
+                name = config.relative_to(REPO) if REPO in config.parents else config
+                print(f"[batch {k}] ({i}/{len(segments)}) {name}: games {first}-{first + games - 1}",
+                      flush=True)
+                run_config(config, files[k - 1], args.max_resumes, args.gradle_arg, out / "agents",
+                           args.gui, k, (first, games), log)
+                with lock:
+                    labels[str(config)] = str(
+                        config.relative_to(TESTBED) if TESTBED in config.parents else config)
+                    merge_results(out, files)
+                    text = report(read_results(out / "games.jsonl"), labels,
+                                  f"Tournament {out.name}", read_timing(out))
+                    (out / "results.txt").write_text(text)
+        print(f"[batch {k}] done", flush=True)
+
+    with ThreadPoolExecutor(len(batches)) as pool:
+        futures = [pool.submit(play, k, segments) for k, segments in enumerate(batches, 1)]
+        try:
+            for future in futures:
+                future.result()
+        except BaseException:  # e.g. Ctrl-C: the engines get it too; start no further segments
+            stop.set()
+            raise
+    merge_results(out, files)
+
+
+def original_config(configuration: str) -> str:
+    """The configuration a .tournament-*.json or .tournament-b<batch>-*.json copy was made from;
+    any other configuration as it is."""
+    path = Path(configuration)
+    match = re.fullmatch(r"\.tournament-(?:b\d+-)?(.+)", path.name)
+    return str(path.with_name(match.group(1))) if match else configuration
 
 
 def has_display() -> bool:
@@ -470,9 +594,12 @@ def clear_outputs(agent_ids):
 # ---- report ----------------------------------------------------------------------------------
 
 def read_results(path: Path):
+    """The result lines of a games.jsonl; a last line without its newline is one the engine is
+    still writing (a parallel batch's), so it is left for the next read."""
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    lines = path.read_text().split("\n")[:-1]
+    return [json.loads(line) for line in lines if line.strip()]
 
 
 _teams = {}
@@ -483,8 +610,8 @@ def config_teams(configuration):
     it has none or is gone. A .tournament-*.json copy is looked up by its original's name."""
     if configuration not in _teams:
         path = Path(configuration)
-        if not path.exists() and path.name.startswith(".tournament-"):
-            path = path.with_name(path.name[len(".tournament-"):])
+        if not path.exists():
+            path = Path(original_config(configuration))
         try:
             teams = json.loads(path.read_text()).get("teams") or []
         except (OSError, ValueError):
@@ -658,8 +785,12 @@ def report(games, labels, title, timing=None):
         else:
             lines.append(f"so far      {duration(time.time() - timing['started'])} (still running)")
     in_games = sum(g.get("seconds") or 0 for g in games)
-    lines.append(f"in games    {duration(in_games)} over {len(games)} games "
-                 f"(the rest is engine start-up and map loading between configurations)")
+    if (timing.get("batches") or 1) > 1:
+        lines.append(f"in games    {duration(in_games)} over {len(games)} games (summed over "
+                     f"{timing['batches']} batches of up to {timing['batchSize']} games in parallel)")
+    else:
+        lines.append(f"in games    {duration(in_games)} over {len(games)} games "
+                     f"(the rest is engine start-up and map loading between configurations)")
     return "\n".join(lines) + "\n"
 
 
@@ -684,6 +815,10 @@ def main():
                     help="game number of the tournament's first game (default 1)")
     ap.add_argument("--clear-outputs", action="store_true",
                     help="empty the outputDirectories of all agents in the tournament once, first")
+    ap.add_argument("--batch-size", type=int,
+                    help="games per batch: the games are cut, in order, into batches of this many, "
+                         "which run in parallel, each its games one after another (default: all "
+                         "games in one batch, i.e. one game at a time)")
     ap.add_argument("--max-resumes", type=int, default=20,
                     help="times a suspended configuration is restarted to resume it (default 20)")
     ap.add_argument("--gradle-arg", action="append", default=[],
@@ -723,8 +858,16 @@ def main():
                          f"{c}, or several specs with tools/run_tournament.sh <spec> <spec> ...")
         if args.games is not None and args.games < 1:
             ap.error("--games must be at least 1")
+        if args.batch_size is not None and args.batch_size < 1:
+            ap.error("--batch-size must be at least 1")
         print("Numbering the configurations' games")
         renumber_configs(configs, args.games, args.first_game)
+        total = sum(int(json.loads(c.read_text()).get("games", 1)) for c in configs)
+        batches = plan_batches(configs, args.batch_size or total)
+        if len(batches) > 1 and missing_maps(configs):
+            ap.error(f"the map of {', '.join(missing_maps(configs))} is not downloaded yet, and parallel "
+                     f"batches would all download it at once: play one game of it first (e.g. this "
+                     f"tournament with --games 1 and without --batch-size)")
         out = (args.out or TOURNAMENTS_DIR / time.strftime("%Y-%m-%d_%H-%M-%S")).resolve()
         out.mkdir(parents=True, exist_ok=True)
         results = out / "games.jsonl"
@@ -735,25 +878,30 @@ def main():
             clear_outputs(agent_ids)
         labels = {}
         started = time.time()
-        write_timing(out, started=started, finished=None)
-        for i, config in enumerate(configs, 1):
-            print(f"\n[{i}/{len(configs)}] {config.relative_to(REPO) if REPO in config.parents else config}",
-                  flush=True)
-            run_path = run_config(config, results, args.max_resumes, args.gradle_arg, out / "agents", args.gui)
-            labels[str(run_path)] = labels[str(config)] = str(
-                config.relative_to(TESTBED) if TESTBED in config.parents else config)
-            # The report is rewritten after every configuration, so a stopped tournament keeps it.
-            text = report(read_results(results), labels, f"Tournament {out.name}", read_timing(out))
-            (out / "results.txt").write_text(text)
+        write_timing(out, started=started, finished=None, batches=len(batches),
+                     batchSize=args.batch_size or total)
+        if len(batches) > 1:
+            print(f"\n{total} games in {len(batches)} batches of up to {args.batch_size}, played in "
+                  f"parallel; engine output in {out / 'batches'}/<batch>.log")
+            run_batches(batches, out, args, labels)
+        else:
+            for i, config in enumerate(configs, 1):
+                print(f"\n[{i}/{len(configs)}] {config.relative_to(REPO) if REPO in config.parents else config}",
+                      flush=True)
+                run_path = run_config(config, results, args.max_resumes, args.gradle_arg, out / "agents", args.gui)
+                labels[str(run_path)] = labels[str(config)] = str(
+                    config.relative_to(TESTBED) if TESTBED in config.parents else config)
+                # The report is rewritten after every configuration, so a stopped tournament keeps it.
+                text = report(read_results(results), labels, f"Tournament {out.name}", read_timing(out))
+                (out / "results.txt").write_text(text)
         finished = time.time()
         write_timing(out, finished=finished)
         print(f"\nTournament finished in {duration(finished - started)}")
 
     games = read_results(results)
     for g in games:  # configurations run under a .tournament-*.json copy are shown by their name
-        name = Path(g["configuration"]).name
-        if g["configuration"] not in labels and name.startswith(".tournament-"):
-            labels[g["configuration"]] = str(Path(g["configuration"]).with_name(name[len(".tournament-"):]))
+        if g["configuration"] not in labels and original_config(g["configuration"]) != g["configuration"]:
+            labels[g["configuration"]] = original_config(g["configuration"])
     text = report(games, labels, f"Tournament {out.name}", read_timing(out))
     (out / "results.txt").write_text(text)
     print(text)

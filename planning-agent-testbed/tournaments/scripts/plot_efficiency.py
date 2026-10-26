@@ -13,9 +13,12 @@ For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-map
   efficiency_tree_depth.png        size of the search tree as its depth (deepest node, in edges
                                    from the root) per search: distribution per agent and mean per
                                    round
-  efficiency_summary.txt           per agent (and per opponent): games, searches, iterations, time,
+  efficiency_summary.txt           per agent (all opponents together): games, searches, iterations, time,
                                    action sequences, root children, rollout depth, territories
                                    attacked, tree depth
+  efficiency_by_agent/<agent>/     the four plots above for that agent alone, on its own y-axis
+                                   scale (agents' iterations differ by orders of magnitude, so in
+                                   the plots of all agents the smaller ones look flat)
 
 The last two plots need the num_of_terr_attacked and max_tree_depth columns; efficiency.csv files
 written before them only feed the other plots. Both are small integers, so no outliers are left out.
@@ -69,10 +72,16 @@ def without_outliers(searched, value):
     return searched.groupby("agent", group_keys=False).apply(keep)
 
 
-def compare(searched, value, label, title, path, drop_outliers=True):
+def compare(searched, value, label, title, path, drop_outliers=True, by_agent=True):
+    """Writes the plot of all agents to path and, with by_agent, one per agent to
+    efficiency_by_agent/<agent>/ next to it."""
     searched = searched.dropna(subset=[value])
     if searched.empty:
         return
+    if by_agent:
+        for a in searched["agent"].unique():
+            compare(searched[searched["agent"] == a], value, label, title,
+                    path.parent / "efficiency_by_agent" / a / path.name, drop_outliers, by_agent=False)
     if drop_outliers:
         searched = without_outliers(searched, value)
     note = "outliers left out" if drop_outliers else "all searches"
@@ -112,24 +121,22 @@ for map_name, m in by_map(df, args.maps):
     lines = [f"Search efficiency: {map_name}\n", "=" * 60 + "\n\n"]
     for agent, a in m.groupby("agent"):
         lines.append(f"{agent}\n" + "-" * len(agent) + "\n")
-        for opponent, o in [("all opponents", a), *a.groupby("opponent")]:
-            s = searches(o)
-            games = len(o[["map", "game"]].drop_duplicates())
-            lines.append(f"  vs {opponent}: {games} games, {len(o)} searches\n")
-            lines.append(f"    time per turn (s)      {stats(o['time_per_turn'])}\n")
-            if s.empty:
-                lines.append("    no search (num_iterations and num_action_sequences blank)\n")
-                continue
-            lines.append(f"    iterations             {stats(s['num_iterations'])}\n")
-            lines.append(f"    action sequences       {stats(s['num_action_sequences'])}\n")
-            lines.append(f"    children at root       {stats(s['num_children_at_root'])}\n")
-            lines.append(f"    max rollout            {stats(s['max_rollout'])}\n")
-            lines.append(f"    root value             {stats(s['root_value'])}\n")
-            t = tree[(tree["agent"] == agent) & ((tree["opponent"] == opponent) |
-                                                 (opponent == "all opponents"))]
-            if not t.empty:
-                lines.append(f"    territories attacked   {stats(t['num_of_terr_attacked'])}\n")
-                lines.append(f"    tree depth             {stats(t['max_tree_depth'])}\n")
+        s = searches(a)
+        games = len(a[["map", "game"]].drop_duplicates())
+        lines.append(f"  {games} games, {len(a)} searches\n")
+        lines.append(f"  time per turn (s)      {stats(a['time_per_turn'])}\n")
+        if s.empty:
+            lines.append("  no search (num_iterations and num_action_sequences blank)\n\n")
+            continue
+        lines.append(f"  iterations             {stats(s['num_iterations'])}\n")
+        lines.append(f"  action sequences       {stats(s['num_action_sequences'])}\n")
+        lines.append(f"  children at root       {stats(s['num_children_at_root'])}\n")
+        lines.append(f"  max rollout            {stats(s['max_rollout'])}\n")
+        lines.append(f"  root value             {stats(s['root_value'])}\n")
+        t = tree[tree["agent"] == agent]
+        if not t.empty:
+            lines.append(f"  territories attacked   {stats(t['num_of_terr_attacked'])}\n")
+            lines.append(f"  tree depth             {stats(t['max_tree_depth'])}\n")
         lines.append("\n")
 
     searched = searches(m)

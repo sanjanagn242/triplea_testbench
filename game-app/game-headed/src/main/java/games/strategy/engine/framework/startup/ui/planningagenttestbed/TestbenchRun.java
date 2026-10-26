@@ -130,8 +130,9 @@ final class TestbenchRun {
   /**
    * A run of the map in mapXml (already loaded into gameSelectorModel). With a checkpoint, whose
    * save game must already be loaded instead, the run continues the suspended one: it keeps its
-   * logs and agent outputs and continues its numbering. Otherwise earlier logs and checkpoints are
-   * deleted (and the agents' outputs, when settings ask for it).
+   * logs and agent outputs and continues its numbering. Otherwise earlier logs (unless
+   * triplea.testbench.keepLogs is true) and checkpoints are deleted (and the agents' outputs, when
+   * settings ask for it).
    */
   TestbenchRun(
       final GameSelectorModel gameSelectorModel,
@@ -151,7 +152,9 @@ final class TestbenchRun {
       firstGame = resumed.firstGame();
       previouslyElapsedMillis = resumed.elapsedMillis();
     } else {
-      deleteAgentLogs();
+      if (!Boolean.getBoolean(CliProperties.TRIPLEA_TESTBENCH_KEEP_LOGS)) {
+        deleteAgentLogs();
+      }
       if (settings.clearAgentOutputs()) {
         clearAssignedAgentOutputs();
       }

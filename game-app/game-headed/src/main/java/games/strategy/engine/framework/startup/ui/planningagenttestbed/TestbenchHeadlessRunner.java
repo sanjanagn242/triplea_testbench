@@ -3,6 +3,7 @@ package games.strategy.engine.framework.startup.ui.planningagenttestbed;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_AUTOSTART;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_CONFIG;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_GUI;
+import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_KEEP_LOGS;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_OUTPUTS;
 import static games.strategy.engine.framework.CliProperties.TRIPLEA_TESTBENCH_RESULTS;
 
@@ -64,7 +65,8 @@ public final class TestbenchHeadlessRunner implements TestbenchRun.Host {
           TRIPLEA_TESTBENCH_AUTOSTART,
           TRIPLEA_TESTBENCH_GUI,
           TRIPLEA_TESTBENCH_OUTPUTS,
-          TRIPLEA_TESTBENCH_RESULTS);
+          TRIPLEA_TESTBENCH_RESULTS,
+          TRIPLEA_TESTBENCH_KEEP_LOGS);
 
   private final GameSelectorModel gameSelectorModel = new GameSelectorModel();
   private final CompletableFuture<ExitStatus> finished = new CompletableFuture<>();

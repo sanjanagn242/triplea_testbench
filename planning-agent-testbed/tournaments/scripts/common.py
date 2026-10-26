@@ -167,11 +167,26 @@ def save(fig, path: Path):
     print(f"Plot written to {path}")
 
 
+def _stats_line(mean, median, p25, p75, lo, hi) -> str:
+    f = lambda v: f"{v:.3g}" if abs(v) < 1000 else f"{v:.0f}"
+    return f"mean {f(mean)}, median {f(median)}, p25-p75 {f(p25)} to {f(p75)}, min {f(lo)}, max {f(hi)}"
+
+
 def stats(series) -> str:
     """mean / median / p25-p75 / min-max of a numeric series, for the summaries."""
     s = pd.to_numeric(series, errors="coerce").dropna()
     if s.empty:
         return "-"
-    f = lambda v: f"{v:.3g}" if abs(v) < 1000 else f"{v:.0f}"
-    return (f"mean {f(s.mean())}, median {f(s.median())}, p25-p75 {f(s.quantile(0.25))} to "
-            f"{f(s.quantile(0.75))}, min {f(s.min())}, max {f(s.max())}")
+    return _stats_line(s.mean(), s.median(), s.quantile(0.25), s.quantile(0.75), s.min(), s.max())
+
+
+def stats_from_counts(counts) -> str:
+    """stats() of the values a value -> count series stands for (e.g. summed value_counts() of
+    files too big to hold together); quantiles are the lower of two values at a tie."""
+    counts = counts[counts > 0].sort_index()
+    if counts.empty:
+        return "-"
+    values, cum = counts.index.to_numpy(dtype=float), counts.cumsum().to_numpy()
+    q = lambda p: values[np.searchsorted(cum, p * (cum[-1] - 1), side="right")]
+    return _stats_line((values * counts.to_numpy()).sum() / cum[-1], q(0.5), q(0.25), q(0.75),
+                       values[0], values[-1])

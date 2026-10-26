@@ -518,11 +518,45 @@ def combat_blocked(game):
     return game.conquered - game.blitzed
 
 
+def _can_land_here(game, player, t):
+    """rules.can_land_here with the view's owners: my land territory, not conquered this turn.
+    (The view has no alliances, so allied territories do not count.)"""
+    return (not game.map.is_water(t) and t not in game.conquered
+            and game.territories[t].owner == player)
+
+
+def _air_can_land(game, player, target, moves_left):
+    """AirMovementValidator.validateAirCanLand as rules.air_can_find_land: an air unit ending its
+    attack on `target` with `moves_left` must land on target or reach a landing territory, flying
+    over no neutral land."""
+    if _can_land_here(game, player, target):
+        return True
+    if moves_left <= 0:
+        return False
+    m = game.map
+    dist = {target: 0}
+    queue = [target]
+    while queue:
+        t = queue.pop(0)
+        if dist[t] >= moves_left:
+            continue
+        for n in m.neighbors(t, "air"):
+            if n in dist or (not m.is_water(n) and game.territories[n].owner == "Neutral"):
+                continue
+            if _can_land_here(game, player, n):
+                return True
+            dist[n] = dist[t] + 1
+            queue.append(n)
+    return False
+
+
 def get_reachable_units(game, target, player):
-    """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target."""
+    """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target;
+    an air unit only if it can still land after the attack."""
     m = game.map
     reachable = []
     routes = {}
+    landing = {}  # moves left at the target -> whether air can land
     blocked = combat_blocked(game)
     for terr in game.owned_by(player):
         for u in terr.units:
@@ -533,7 +567,14 @@ def get_reachable_units(game, target, player):
                 routes[key] = _reach_routes(game, player, terr.name, u.range, u.domain,
                                             blocked if u.domain == "land" else frozenset())
             if target in routes[key]:
-                reachable.append((u, terr.name, routes[key][target]))
+                route = routes[key][target]
+                if u.domain == "air":
+                    left = u.range - (len(route) - 1)
+                    if left not in landing:
+                        landing[left] = _air_can_land(game, player, target, left)
+                    if not landing[left]:
+                        continue
+                reachable.append((u, terr.name, route))
     return reachable
 
 

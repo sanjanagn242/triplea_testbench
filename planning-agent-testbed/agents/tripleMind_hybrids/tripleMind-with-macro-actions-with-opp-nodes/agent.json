@@ -1,0 +1,9 @@
+{
+  "id": "tripleMind-with-macro-actions-with-opp-nodes",
+  "name": "TripleMind with macro actions and opponent nodes",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind MCTS whose edges are whole combat moves (macro actions), with the opponents' combat moves as tree nodes.",
+  "outputDirectories": ["metrics", "logs", "trees", "records", "map_images"]
+}

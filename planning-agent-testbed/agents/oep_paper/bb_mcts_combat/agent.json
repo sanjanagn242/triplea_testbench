@@ -1,5 +1,5 @@
 {
-  "id": "oep-bb-mcts-combat",
+  "id": "bb-mcts-combat",
   "name": "OEP Bridge Burning MCTS (combat only)",
   "language": "Python 3.10+",
   "entrypoint": "agent.py",

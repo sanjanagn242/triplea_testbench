@@ -12,7 +12,7 @@ export TRIPLEMIND_RECORD=0
 # UCB1 exploration constant, and seed.
 export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-1.0}"
 export TRIPLEA_MCTS_ITERS="${TRIPLEA_MCTS_ITERS:-100000}"
-export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-10}"
+export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-2}"
 export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"
 export TRIPLEA_MCTS_SEED="${TRIPLEA_MCTS_SEED:-0}"
 # Live map window: 1 shows it, 0 hides it. PURE_PYTHON 1 skips the Cython action generators.

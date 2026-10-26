@@ -12,8 +12,8 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "tripleMind-mcts-with-opp-nodes",
-    "Germans": "tripleMind-mcts"
+    "Russians": "tripleMind-mcts-with-opp-nodes-no-terr-sorting",
+    "Germans": "tripleMind-mcts-no-terr-sorting"
   },
   "showObservations": false,
   "observationPlayers": {

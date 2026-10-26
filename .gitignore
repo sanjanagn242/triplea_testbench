@@ -39,3 +39,5 @@ planning-agent-testbed/agents/**/trees/
 planning-agent-testbed/trees/*
 # Tournament run folders stay local; zip one (e.g. 2026-10-22_15-27-49.zip) to commit it.
 planning-agent-testbed/tournaments/2026*/
+planning-agent-testbed/logs/**
+planning-agent-testbed/tournaments/*.zip

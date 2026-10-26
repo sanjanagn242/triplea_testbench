@@ -15,6 +15,9 @@ public class CliProperties {
   // folder path: agents write their outputs (metrics) to <folder>/<agent id>/ instead of their own
   // folder; passed to each agent process as TRIPLEA_TESTBENCH_OUTPUT_DIR (used by tournament.py)
   @NonNls public static final String TRIPLEA_TESTBENCH_OUTPUTS = "triplea.testbench.outputs";
+  // true/false: keep earlier agent logs (planning-agent-testbed/logs/agent-*.txt) when a run starts,
+  // so runs in parallel do not delete each other's (used by tournament.py with several batches)
+  @NonNls public static final String TRIPLEA_TESTBENCH_KEEP_LOGS = "triplea.testbench.keepLogs";
   @NonNls public static final String TRIPLEA_SERVER = "triplea.server"; // true/false
   @NonNls public static final String TRIPLEA_CLIENT = "triplea.client"; // true/false
   @NonNls public static final String TRIPLEA_HOST = "triplea.host";

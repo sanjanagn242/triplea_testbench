@@ -1,5 +1,5 @@
 {
-  "id": "oep-greedy-action-combat",
+  "id": "greedy-action-combat",
   "name": "OEP Greedy Action (combat only)",
   "language": "Python 3.10+",
   "entrypoint": "agent.py",

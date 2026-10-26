@@ -1,0 +1,9 @@
+{
+  "id": "roxo-oep",
+  "name": "Roxo OEP",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Online Evolutionary Planning with territory-based genomes, Weak AI playouts of 10 rounds and deterministic battles, after Roxo, MCTS-based Planning for Grand Strategy Games (IST thesis, 4.4).",
+  "outputDirectories": ["metrics"]
+}

@@ -1,0 +1,23 @@
+{
+  "games": 10,
+  "agents": [
+    "tripleMind-mcts TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2",
+    "tripleMind-mcts-no-terr-sorting TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

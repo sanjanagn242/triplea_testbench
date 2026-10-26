@@ -1,0 +1,9 @@
+{
+  "id": "roxo-oep-with-purchase",
+  "name": "Roxo OEP (greedy purchase)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Roxo OEP (territory-based genomes, Weak AI playouts, deterministic battles) that also buys units with TripleMind's deterministic greedy purchase; the engine places them.",
+  "outputDirectories": ["metrics"]
+}

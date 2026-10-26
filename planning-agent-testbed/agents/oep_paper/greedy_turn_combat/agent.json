@@ -1,5 +1,5 @@
 {
-  "id": "oep-greedy-turn-combat",
+  "id": "greedy-turn-combat",
   "name": "OEP Greedy Turn (combat only)",
   "language": "Python 3.10+",
   "entrypoint": "agent.py",

@@ -1,0 +1,9 @@
+{
+  "id": "tripleMind-with-macro-actions",
+  "name": "TripleMind with macro actions",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind large-action-space optimized MCTS agent for the TripleA game, with macro actions.",
+  "outputDirectories": ["metrics", "logs", "trees", "records", "map_images"]
+}

@@ -2,7 +2,9 @@
 # Runs one tournament per spec, in order; each is plotted and zipped in its own folder
 # planning-agent-testbed/tournaments/<date>_<time>_<spec name>:
 #   planning-agent-testbed/tools/run_tournament.sh [spec ...] [more tournament.py options]
-# The spec defaults to tournaments/specs/2p_maps_1s.json; the options are passed to every tournament.
+# The spec defaults to tournaments/specs/2p_maps_1s.json; the options are passed to every tournament,
+# e.g. --batch-size 80 plays each tournament's games in parallel batches of 80 (default: one batch of
+# all games, one game at a time; see tournament.py).
 # A tournament that fails is reported at the end and the next spec still runs. The folders are
 # git-ignored; commit the <folder>.zip next to each.
 set -uo pipefail

@@ -5,6 +5,10 @@ A turn is one search: the rollouts of one agent, as one player, in one game and 
 reached depth n sampled n states, so the states sampled in a turn are the sum of rollout_depth_reached
 over all its iterations.
 
+The rollout files of a long tournament together outgrow memory (one row per rollout), so each file is
+read on its own and reduced to one row per turn, plus counts of the rollout depths and rewards
+(rounded to 4 decimals) for the summary's distributions; every plot and summary comes from those.
+
 For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-maps/:
   rollout_terminal.png             % of rollouts that stopped in a terminal state (win / loss): all
                                    rounds per agent, then one row per agent by decision round
@@ -27,26 +31,78 @@ import pandas as pd
 from matplotlib.ticker import MaxNLocator
 
 from common import (LOSS_COLOR, SURFACE, TEXT, WIN_COLOR, agent_code, agent_colors, agent_legend, boxes_by_agent,
-                    color_agent_ticks, load, by_map, mean_by_round, parse_args, save, stats, style, tournament_agents)
+                    color_agent_ticks, by_map, mean_by_round, parse_args, save, stats, stats_from_counts, style,
+                    tournament_agents)
 
 COLUMNS = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward", "is_terminal"]
 TURN = ["agent", "map", "opponent", "player", "game", "round"]
+# rollout_turn_stats.csv: the turn and its rollouts' reward and depth
+NODE_STATS = [*TURN, "avg_reward", "var_reward", "std_reward", "avg_depth_reached", "depth_reached_std", "n_visits"]
+
+
+def load_turns(tournament):
+    """One row per turn of every rollout_stats.csv (TURN, states, iterations, the NODE_STATS columns,
+    wins and losses = rollouts ending in a terminal win / loss), and value counts (agent, map, value,
+    count) of the rollout depths and of the rewards."""
+    turns, depths, rewards = [], [], []
+    for path in sorted((tournament / "agents").glob("*/metrics/*/vs-*/rollout_stats.csv")):
+        r = pd.read_csv(path, usecols=lambda c: c in COLUMNS)
+        missing = [c for c in COLUMNS if c not in r.columns]
+        if missing:
+            print(f"skipping {path}: no column(s) {', '.join(missing)}")
+            continue
+        if r.empty:
+            continue
+        for c in COLUMNS[1:]:
+            r[c] = pd.to_numeric(r[c], errors="coerce")
+        terminal = r["is_terminal"] == 1
+        r["win"] = terminal & (r["reward"] > 0)
+        r["loss"] = terminal & ~r["win"]
+        t = r.groupby(TURN[3:]).agg(
+            states=("rollout_depth_reached", "sum"),
+            iterations=("iteration", "size"),
+            avg_reward=("reward", "mean"),
+            var_reward=("reward", "var"),
+            std_reward=("reward", "std"),
+            avg_depth_reached=("rollout_depth_reached", "mean"),
+            depth_reached_std=("rollout_depth_reached", "std"),
+            n_visits=("reward", "count"),
+            wins=("win", "sum"),
+            losses=("loss", "sum"),
+        ).reset_index()
+        keys = {"agent": path.parents[3].name, "map": path.parent.parent.name,
+                "opponent": path.parent.name[len("vs-"):]}
+        turns.append(t.assign(**keys))
+        for column, counts in [(r["rollout_depth_reached"], depths), (r["reward"].round(4), rewards)]:
+            vc = column.value_counts().rename_axis("value").reset_index(name="count")
+            counts.append(vc.assign(agent=keys["agent"], map=keys["map"]))
+    if not turns:
+        return None, None, None
+    return pd.concat(turns, ignore_index=True), pd.concat(depths), pd.concat(rewards)
+
 
 args = parse_args(__doc__.splitlines()[0]).parse_args()
 out_root = args.out or args.tournament / "plots"
-df = load(args.tournament, "rollout_stats.csv", COLUMNS)
-if df.empty:
+df, depth_counts, reward_counts = load_turns(args.tournament)
+if df is None:
     raise SystemExit(f"no rollouts in any rollout_stats.csv under {args.tournament / 'agents'}")
-for c in COLUMNS[1:]:
-    df[c] = pd.to_numeric(df[c], errors="coerce")
-df["terminal"] = df["is_terminal"] == 1
-df["outcome"] = np.select([df["terminal"] & (df["reward"] > 0), df["terminal"]], ["win", "loss"], "none")
+df["reward_sd"] = df["std_reward"]
+df["terminal"] = (df["wins"] + df["losses"]) / df["iterations"]
 colors = agent_colors(args.tournament)
 
 
-def outcome_pct(g):
-    n = len(g)
-    return (100 * (g["outcome"] == "win").sum() / n, 100 * (g["outcome"] == "loss").sum() / n) if n else (0, 0)
+def outcome_pct(turns):
+    """% of the turns' rollouts that ended in a terminal win, and in a terminal loss."""
+    n = turns["iterations"].sum()
+    return (100 * turns["wins"].sum() / n, 100 * turns["losses"].sum() / n) if n else (0, 0)
+
+
+def counts_of(counts, map_name, agent):
+    """value -> count of one agent's rollouts on a map (or all maps)."""
+    c = counts[counts["agent"] == agent]
+    if map_name in set(c["map"]):
+        c = c[c["map"] == map_name]
+    return c.groupby("value")["count"].sum()
 
 
 def stacked(ax, x, win, loss, width):
@@ -127,52 +183,38 @@ def reward_plot(node_stats, path):
     save(fig, path)
 
 
-for map_name, m in by_map(df, args.maps):
+for map_name, turns in by_map(df, args.maps):
     out = out_root / map_name
-    terminal_plot(m, out / "rollout_terminal.png")
-
-    turns = (m.groupby(TURN)
-             .agg(states=("rollout_depth_reached", "sum"), iterations=("iteration", "size"),
-                  reward_sd=("reward", "std"), terminal=("terminal", "mean"))
-             .reset_index())
+    terminal_plot(turns, out / "rollout_terminal.png")
     states_plot(turns, out / "rollout_states_per_turn.png")
-
-    node_stats = m.groupby(TURN).agg(
-        avg_reward=("reward", "mean"),
-        var_reward=("reward", "var"),
-        std_reward=("reward", "std"),
-        avg_depth_reached=("rollout_depth_reached", "mean"),
-        depth_reached_std=("rollout_depth_reached", "std"),
-        n_visits=("reward", "count"),
-    ).reset_index()
     out.mkdir(parents=True, exist_ok=True)
-    node_stats.to_csv(out / "rollout_turn_stats.csv", index=False)
-    reward_plot(node_stats, out / "rollout_reward.png")
+    turns[NODE_STATS].to_csv(out / "rollout_turn_stats.csv", index=False)
+    reward_plot(turns, out / "rollout_reward.png")
 
     lines = [f"Rollout statistics: {map_name}\n", "=" * 60 + "\n\n",
              "A turn is one search (agent, map, opponent, player, game, round). States sampled = sum of\n"
              "rollout_depth_reached over the turn's rollouts. Reward sd = standard deviation of the\n"
              "rollout rewards within a turn (lower = cleaner reward signal; compare agents with the\n"
              "same reward scale).\n\n"]
-    without = [a for a in tournament_agents(args.tournament) if a not in set(m["agent"])]
+    without = [a for a in tournament_agents(args.tournament) if a not in set(turns["agent"])]
     if without:
         lines.append(f"No rollouts (no search, or did not play this map): {', '.join(without)}\n\n")
-    for agent, a in m.groupby("agent"):
-        t = turns[turns["agent"] == agent]
-        win, loss = outcome_pct(a)
+    for agent, t in turns.groupby("agent"):
+        win, loss = outcome_pct(t)
         lines.append(f"{agent}\n" + "-" * len(agent) + "\n")
-        lines.append(f"  games {len(a[['map', 'game']].drop_duplicates())}, turns {len(t)}, rollouts {len(a)}\n")
+        lines.append(f"  games {len(t[['map', 'game']].drop_duplicates())}, turns {len(t)}, "
+                     f"rollouts {t['iterations'].sum()}\n")
         lines.append(f"  terminal {win + loss:.1f}% (win {win:.1f}%, loss {loss:.1f}%)\n")
-        lines.append(f"  rollout depth reached     {stats(a['rollout_depth_reached'])}\n")
+        lines.append(f"  rollout depth reached     {stats_from_counts(counts_of(depth_counts, map_name, agent))}\n")
         lines.append(f"  states sampled per turn   {stats(t['states'])}\n")
         lines.append(f"  iterations per turn       {stats(t['iterations'])}\n")
-        lines.append(f"  reward                    {stats(a['reward'])}\n")
+        lines.append(f"  reward                    {stats_from_counts(counts_of(reward_counts, map_name, agent))}\n")
         lines.append(f"  reward sd within a turn   {stats(t['reward_sd'])}\n")
-        for player, p in a.groupby("player"):
-            pt = t[t["player"] == player]
-            w, l = outcome_pct(p)
+        for player, pt in t.groupby("player"):
+            w, l = outcome_pct(pt)
+            mean_reward = (pt["avg_reward"] * pt["n_visits"]).sum() / pt["n_visits"].sum()
             lines.append(f"    as {player}: turns {len(pt)}, terminal {w + l:.1f}%, mean states/turn "
-                         f"{pt['states'].mean():.1f}, mean reward {p['reward'].mean():.3f}, "
+                         f"{pt['states'].mean():.1f}, mean reward {mean_reward:.3f}, "
                          f"mean reward sd {pt['reward_sd'].mean():.3f}\n")
         lines.append("\n")
 

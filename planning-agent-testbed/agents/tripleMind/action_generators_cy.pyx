@@ -621,12 +621,51 @@ def enemy_territories_by_priority(game, player):
     return reachable
 
 
+cdef bint _can_land_here(_MapFacts f, dict terrs, object player, object conquered, object t):
+    """rules.can_land_here with the view's owners: my land territory, not conquered this turn.
+    (The view has no alliances, so allied territories do not count.)"""
+    return t not in f.water and t not in conquered and terrs[t].owner == player
+
+
+cdef bint _air_can_land(_MapFacts f, dict terrs, object player, object conquered, object target,
+                        long long moves_left):
+    """AirMovementValidator.validateAirCanLand as rules.air_can_find_land: an air unit ending its
+    attack on `target` with `moves_left` must land on target or reach a landing territory, flying
+    over no neutral land."""
+    if _can_land_here(f, terrs, player, conquered, target):
+        return True
+    if moves_left <= 0:
+        return False
+    cdef dict adj = f.neighbors("air")
+    cdef dict dist = {target: 0}
+    cdef list queue = [target]
+    cdef Py_ssize_t head = 0
+    cdef long long dt
+    while head < len(queue):
+        t = queue[head]
+        head += 1
+        dt = dist[t]
+        if dt >= moves_left:
+            continue
+        for n in adj[t]:
+            if n in dist or (n not in f.water and terrs[n].owner == "Neutral"):
+                continue
+            if _can_land_here(f, terrs, player, conquered, n):
+                return True
+            dist[n] = dt + 1
+            queue.append(n)
+    return False
+
+
 cdef list _reachable_units(_MapFacts f, dict terrs, object player, object target, dict routes,
-                           object blocked):
-    """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target.
-    Land routes avoid `blocked` (territories conquered this turn without blitzing)."""
+                           object blocked, object conquered):
+    """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target;
+    an air unit only if it can still land after the attack. Land routes avoid `blocked`
+    (territories conquered this turn without blitzing)."""
     cdef list reachable = []
+    cdef dict landing = {}  # moves left at the target -> whether air can land
     cdef str dom
+    cdef long long left
     for terr in terrs.values():
         if terr.owner != player:
             continue
@@ -643,14 +682,23 @@ cdef list _reachable_units(_MapFacts f, dict terrs, object player, object target
                            blocked if dom == "land" else _NO_BLOCK)
                 routes[key] = r
             if target in r:
-                reachable.append((u, terr.name, r[target]))
+                route = r[target]
+                if dom == "air":
+                    left = u.range - (len(route) - 1)
+                    ok = landing.get(left)
+                    if ok is None:
+                        ok = _air_can_land(f, terrs, player, conquered, target, left)
+                        landing[left] = ok
+                    if not ok:
+                        continue
+                reachable.append((u, terr.name, route))
     return reachable
 
 
 def get_reachable_units(game, target, player):
     """[(unit, from, route)]: my unmoved mobile units, in my territories, that can reach target."""
     return _reachable_units(_facts(game.map), game.territories, player, target, {},
-                            game.conquered - game.blitzed)
+                            game.conquered - game.blitzed, game.conquered)
 
 
 def combat_actions(game, definition, excluded, player=None):
@@ -680,7 +728,7 @@ def combat_actions(game, definition, excluded, player=None):
         if name in excluded:
             continue
         # ── gather attackers ──────────────────────────────────────────────
-        reachable = _reachable_units(f, terrs, player, name, routes, blocked)
+        reachable = _reachable_units(f, terrs, player, name, routes, blocked, game.conquered)
         if not reachable:
             excluded.add(name)
             continue
