@@ -26,16 +26,17 @@ from the previous one's games (1, 1 + N, 1 + 2N, ...), and with --games N every 
 to N first. A folder argument runs all *.json in it, in name order (numbers compared as numbers,
 so 2.x runs before 10.x).
 
-Parallel batches: --batch-size B cuts the tournament's games, in play order, into batches of B
-games, and plays all batches at once, each its games one after another (so 72 configurations of 10
-games with --batch-size 80 run as 9 engines in parallel; a configuration may be split between two
-batches, its games keeping their numbers). Without it, all games are one batch, played one at a
-time as above. Each batch writes its own results and engine output (batches/<k>.jsonl, .log), which
-are merged into games.jsonl after every configuration; agents write their shared metric CSVs under
-a file lock (helper.locked), and their other files are named by game number, which is unique. Each
-batch plays a configuration under a copy of its own (.tournament-b<k>-*.json), so suspended games
-are checkpointed per batch. Searches limited by wall-clock time get fewer iterations when the
-machine is overloaded, so keep the batches (two agent processes each) well under the CPU count.
+Parallel batches: --num-batches N cuts the tournament's games, in play order, into N batches of
+(nearly) equal size, and plays all batches at once, each its games one after another (so 72
+configurations of 10 games with --num-batches 9 run as 9 engines in parallel, 80 games each; a
+configuration may be split between two batches, its games keeping their numbers). Without it, all
+games are one batch, played one at a time as above. Each batch writes its own results and engine
+output (batches/<k>.jsonl, .log), which are merged into games.jsonl after every configuration;
+agents write their shared metric CSVs under a file lock (helper.locked), and their other files are
+named by game number, which is unique. Each batch plays a configuration under a copy of its own
+(.tournament-b<k>-*.json), so suspended games are checkpointed per batch. Searches limited by
+wall-clock time get fewer iterations when the machine is overloaded, so keep the batches (two agent
+processes each) well under the CPU count.
 
 Instead of configurations, a tournament spec (--spec) can name the agents: every pair of them is
 played on the spec's map, once in each seat, `games` games each. The configurations are generated
@@ -86,7 +87,7 @@ Usage (from the repository root or planning-agent-testbed/):
       --spec planning-agent-testbed/games/capture-the-flag-diag/tournament.json
   python3 planning-agent-testbed/tools/tournament.py \\
       planning-agent-testbed/games/capture-the-flag-diag/config/tournament --games 10
-  python3 planning-agent-testbed/tools/tournament.py --spec <spec> --games 10 --batch-size 80
+  python3 planning-agent-testbed/tools/tournament.py --spec <spec> --games 10 --num-batches 9
   python3 planning-agent-testbed/tools/tournament.py \\
       planning-agent-testbed/games/capture-the-flag-diag/config/evaluate-Russians.json \\
       planning-agent-testbed/games/capture-the-flag-diag/config/evaluate-Germans.json \\
@@ -347,11 +348,15 @@ def run_config(config: Path, results: Path, max_resumes, gradle_args, outputs: P
     return run_path
 
 
-def plan_batches(configs, batch_size):
-    """The tournament's games, in play order, cut into batches of batch_size games: per batch a list
-    of (configuration, first game number, games) segments. A configuration may be split between two
-    batches; its games keep their numbers."""
-    batches, segments, room = [], [], batch_size
+def plan_batches(configs, num_batches):
+    """The tournament's games, in play order, cut into num_batches batches whose sizes differ by at
+    most one (fewer if there are fewer games): per batch a list of (configuration, first game
+    number, games) segments. A configuration may be split between two batches; its games keep
+    their numbers."""
+    total = sum(int(json.loads(c.read_text()).get("games", 1)) for c in configs)
+    num_batches = max(1, min(num_batches, total))
+    sizes = [total // num_batches + (k < total % num_batches) for k in range(num_batches)]
+    batches, segments, room = [], [], sizes[0]
     for config in configs:
         data = json.loads(config.read_text())
         first, left = int(data["firstGameNumber"]), int(data.get("games", 1))
@@ -361,7 +366,7 @@ def plan_batches(configs, batch_size):
             first, left, room = first + games, left - games, room - games
             if not room:
                 batches.append(segments)
-                segments, room = [], batch_size
+                segments, room = [], sizes[len(batches)] if len(batches) < num_batches else 0
     return batches + [segments] if segments else batches
 
 
@@ -787,7 +792,8 @@ def report(games, labels, title, timing=None):
     in_games = sum(g.get("seconds") or 0 for g in games)
     if (timing.get("batches") or 1) > 1:
         lines.append(f"in games    {duration(in_games)} over {len(games)} games (summed over "
-                     f"{timing['batches']} batches of up to {timing['batchSize']} games in parallel)")
+                     f"{timing['batches']} games in parallel, with a batch size of up to "
+                     f"{timing['batchSize']})")
     else:
         lines.append(f"in games    {duration(in_games)} over {len(games)} games "
                      f"(the rest is engine start-up and map loading between configurations)")
@@ -815,10 +821,10 @@ def main():
                     help="game number of the tournament's first game (default 1)")
     ap.add_argument("--clear-outputs", action="store_true",
                     help="empty the outputDirectories of all agents in the tournament once, first")
-    ap.add_argument("--batch-size", type=int,
-                    help="games per batch: the games are cut, in order, into batches of this many, "
-                         "which run in parallel, each its games one after another (default: all "
-                         "games in one batch, i.e. one game at a time)")
+    ap.add_argument("--num-batches", type=int,
+                    help="batches, i.e. games played in parallel: the games are cut, in order, into "
+                         "this many batches of (nearly) equal size, which run in parallel, each its "
+                         "games one after another (default 1: one game at a time)")
     ap.add_argument("--max-resumes", type=int, default=20,
                     help="times a suspended configuration is restarted to resume it (default 20)")
     ap.add_argument("--gradle-arg", action="append", default=[],
@@ -858,16 +864,17 @@ def main():
                          f"{c}, or several specs with tools/run_tournament.sh <spec> <spec> ...")
         if args.games is not None and args.games < 1:
             ap.error("--games must be at least 1")
-        if args.batch_size is not None and args.batch_size < 1:
-            ap.error("--batch-size must be at least 1")
+        if args.num_batches is not None and args.num_batches < 1:
+            ap.error("--num-batches must be at least 1")
         print("Numbering the configurations' games")
         renumber_configs(configs, args.games, args.first_game)
         total = sum(int(json.loads(c.read_text()).get("games", 1)) for c in configs)
-        batches = plan_batches(configs, args.batch_size or total)
+        batches = plan_batches(configs, args.num_batches or 1)
+        batch_size = max(sum(games for _, _, games in b) for b in batches)
         if len(batches) > 1 and missing_maps(configs):
             ap.error(f"the map of {', '.join(missing_maps(configs))} is not downloaded yet, and parallel "
                      f"batches would all download it at once: play one game of it first (e.g. this "
-                     f"tournament with --games 1 and without --batch-size)")
+                     f"tournament with --games 1 and without --num-batches)")
         out = (args.out or TOURNAMENTS_DIR / time.strftime("%Y-%m-%d_%H-%M-%S")).resolve()
         out.mkdir(parents=True, exist_ok=True)
         results = out / "games.jsonl"
@@ -879,10 +886,10 @@ def main():
         labels = {}
         started = time.time()
         write_timing(out, started=started, finished=None, batches=len(batches),
-                     batchSize=args.batch_size or total)
+                     batchSize=batch_size)
         if len(batches) > 1:
-            print(f"\n{total} games in {len(batches)} batches of up to {args.batch_size}, played in "
-                  f"parallel; engine output in {out / 'batches'}/<batch>.log")
+            print(f"\n{total} games, {len(batches)} in parallel, with a batch size of up to "
+                  f"{batch_size}; engine output in {out / 'batches'}/<batch>.log")
             run_batches(batches, out, args, labels)
         else:
             for i, config in enumerate(configs, 1):
