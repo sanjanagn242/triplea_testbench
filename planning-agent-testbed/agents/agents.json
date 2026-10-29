@@ -9,8 +9,10 @@
     "tripleMind-mcts-with-opp-nodes",
     "tripleMind-with-macro-actions",
     "tripleMind-with-macro-actions-with-opp-nodes",
+    "tripleMind-mcts-no-reward-function",
     "tripleMind-mcts-no-terr-sorting",
     "tripleMind-mcts-with-opp-nodes-no-terr-sorting",
+    "tripleMind-unitMove",
     "does-nothing-python",
     "hard-ai-python",
     "greedy-one-step-lookahead",
@@ -23,6 +25,11 @@
     "ne-mcts-combat",
     "bb-mcts-combat",
     "roxo-oep",
-    "roxo-oep-with-purchase"
+    "roxo-oep-with-purchase",
+    "emcts",
+    "ne-mcts-all-attacks",
+    "bb-mcts-all-attacks",
+    "all-phases-mcts",
+    "heterogeneous-mcts"
   ]
 }

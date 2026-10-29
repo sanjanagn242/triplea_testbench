@@ -12,7 +12,7 @@ lines only.
 
 Environment:
   TRIPLEA_BB_SECONDS       search time per combat-move decision (default 1.0)
-  TRIPLEA_BB_EXP_CONST     C of the UCT term 2C sqrt(2 ln n / n_j) (default 0.7071 = 1/sqrt 2)
+  TRIPLEA_BB_EXP_CONST     c of the UCT term c sqrt(ln n / n_j) (default 1.414, as TripleMind)
   TRIPLEA_BB_EPSILON       rollout: probability of the greedy action (default 0.5)
   TRIPLEA_BB_SEED          search seed (default 0)
   TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
@@ -32,6 +32,7 @@ import triplea_fm as fm  # noqa: E402
 from triplea_fm.testbench import PHASE_KINDS, LiveBridge  # noqa: E402
 
 from bb_mcts import BridgeBurningMCTS  # noqa: E402
+from edge_tree import save_edge_tree  # noqa: E402
 from helper import (GAME_RESULTS_HEADER, MetricLogger, log_game_result, metrics_dir,  # noqa: E402
                     output_folder, turn_position)
 import map_graph  # noqa: E402
@@ -46,6 +47,11 @@ METRICS_DIR = metrics_dir(HERE)
 GAME_RESULTS_CSV = "game_results.csv"  # one row per game this agent played
 # game_results.csv also names the winners (TripleMind's columns first, so its scripts still read it).
 GREEDY_GAME_RESULTS_HEADER = GAME_RESULTS_HEADER + ["winners"]
+# Debugging: after every combat-move search, draw its tree in logs/trees/ (edge_tree.py).
+SAVE_TREE = os.environ.get("TRIPLEA_BB_SAVE_TREE", "0") == "1"
+TREE_PNG = os.environ.get("TRIPLEA_BB_TREE_PNG", "1") == "1"  # also .png (needs Graphviz `dot`)
+TREE_MAX_NODES = int(os.environ.get("TRIPLEA_BB_TREE_MAX_NODES", "300"))
+TREE_RANKDIR = os.environ.get("TRIPLEA_BB_TREE_RANKDIR", "TB")  # TB: top to bottom, LR: left to right
 
 
 class Agent:
@@ -151,9 +157,24 @@ class Agent:
 
     def combat_move(self, sim) -> dict:
         attacks = self.search.search(sim)
+        if SAVE_TREE:
+            self.save_tree(sim)
         moves = [mv for attack in attacks for mv in attack.moves]
         self.log(f"round {sim.round} combat move: {self.search.last_stats} {attacks}")
         return self.encode("combatMove", moves) if moves else {}
+
+    def save_tree(self, sim):
+        """Draw the last search's tree to
+        logs/trees/<agent folder>-<player>-game-<n>-round-<r>.dot/.html (.png with TREE_PNG)."""
+        tree_dir = LOG_DIR / "trees"
+        tree_dir.mkdir(parents=True, exist_ok=True)
+        prefix = tree_dir / f"{HERE.name}-{self.player}-game-{self.game_number}-round-{sim.round}"
+        s = self.search
+        title = f"{HERE.name} {self.player} game {self.game_number} round {sim.round}: {s.last_stats}"
+        dot_path, png_path, html_path = save_edge_tree(
+            s.last_root, self.definition, str(prefix), s.last_path, s.last_phases, title,
+            TREE_MAX_NODES, TREE_RANKDIR, TREE_PNG)
+        self.log(f"  tree saved: {png_path or dot_path}, {html_path}")
 
     def non_combat_move(self, sim) -> dict:
         moves = action_generators.noncombat_move(self.view(sim), self.definition)
@@ -180,7 +201,7 @@ class Agent:
 
 def main():
     agent = Agent(float(os.environ.get("TRIPLEA_BB_SECONDS", "1.0")),
-                  float(os.environ.get("TRIPLEA_BB_EXP_CONST", "0.7071")),
+                  float(os.environ.get("TRIPLEA_BB_EXP_CONST", "1.414")),
                   float(os.environ.get("TRIPLEA_BB_EPSILON", "0.5")),
                   int(os.environ.get("TRIPLEA_BB_SEED", "0")))
     for line in sys.stdin:

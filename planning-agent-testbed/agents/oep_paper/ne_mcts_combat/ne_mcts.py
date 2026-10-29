@@ -112,6 +112,8 @@ class NonExploringMCTS:
         self.states_visited = 0
         self.iteration = 0
         self.last_stats = None
+        # The last search's tree, for edge_tree.save_edge_tree: root, chosen edges, phase nodes.
+        self.last_root, self.last_path, self.last_phases = None, [], []
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=NE_EFFICIENCY_HEADER)
@@ -320,6 +322,7 @@ class NonExploringMCTS:
                 break
             sequence.append(best.action)
             node = best.child
+        self.last_root, self.last_path, self.last_phases = root, [b for _, b in levels], []
         for tl, (n, best) in enumerate(levels, 1):
             self.log_level(game_number, round_, tl, n, best)
 

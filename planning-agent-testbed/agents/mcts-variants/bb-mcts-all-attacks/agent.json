@@ -1,0 +1,15 @@
+{
+  "id": "bb-mcts-all-attacks",
+  "name": "BB-MCTS, all attacks (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "oep_paper's Bridge Burning MCTS whose tree offers, at every level, every TripleMind attack set on every reachable enemy target (no territory ordering). UCT, epsilon-greedy rollouts, phases that commit the most visited root action. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": [
+    "metrics",
+    "logs"
+  ]
+}

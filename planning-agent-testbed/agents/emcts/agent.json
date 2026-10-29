@@ -1,0 +1,9 @@
+{
+  "id": "emcts",
+  "name": "Evolutionary MCTS (combat)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Evolutionary MCTS (Baier and Cowling 2018) for the combat move over roxo-oep-with-purchase's territory genomes; TripleMind's purchase, noncombat move and place.",
+  "outputDirectories": ["metrics"]
+}

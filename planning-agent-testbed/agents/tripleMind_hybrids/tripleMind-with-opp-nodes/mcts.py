@@ -150,7 +150,7 @@ class MCTSNode:
 
 class MCTS:
     def __init__(self, definition, map_graph_, whoAmI, time_budget, depth_budget,
-                 exploration_constant, metrics_dir="metrics"):
+                 exploration_constant, opp_epsilon=0.0, metrics_dir="metrics"):
         self.d = definition
         self.map = map_graph_
         self.whoAmI = whoAmI
@@ -160,6 +160,9 @@ class MCTS:
         self.time_budget = time_budget  # seconds per move
         self.depth_budget = depth_budget  # Maximum playout depth (rounds)
         self.exploration_constant = exploration_constant  # UCB1 exploration parameter
+        # Chance an opponent's node picks a random child instead of its UCT best: the opponent
+        # does not always play its best move.
+        self.opp_epsilon = opp_epsilon
 
         self.iteration = 0
         self.max_depth = 0
@@ -228,6 +231,15 @@ class MCTS:
             state.heuristic_combat_legal_moves()
             if not no_target(state):
                 return
+
+    def select_child(self, node):
+        """UCT child of node, except at an opponent's node: there a random child with probability
+        opp_epsilon."""
+        if (self.opp_epsilon > 0 and node.children
+                and self.sign_of(node.state.next_moves_by) < 0
+                and random.random() < self.opp_epsilon):
+            return random.choice(node.children)
+        return node.best_child_uct(self.exploration_constant)
 
     def pick_rollout_move_adversarial(self, actions, topk=3, epsilon=0.10):
         real = [a for a in actions if not getattr(a, "end_phase", False)]
@@ -412,7 +424,7 @@ class MCTS:
             node = root
             while True:
                 while node.is_fully_expanded() and not node.is_terminal():
-                    best = node.best_child_uct(self.exploration_constant)
+                    best = self.select_child(node)
                     if best is None:
                         break
                     node = best

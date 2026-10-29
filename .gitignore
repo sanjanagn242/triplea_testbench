@@ -41,3 +41,4 @@ planning-agent-testbed/trees/*
 planning-agent-testbed/tournaments/2026*/
 planning-agent-testbed/logs/**
 planning-agent-testbed/tournaments/*.zip
+planning-agent-testbed/sensitivity_of_win_rate/*

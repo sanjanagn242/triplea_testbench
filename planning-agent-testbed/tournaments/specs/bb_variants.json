@@ -1,0 +1,25 @@
+{
+  "games": 20,
+  "agents": [
+    "bb-mcts-combat TRIPLEA_BB_SECONDS=1.0 TRIPLEA_BB_EXP_CONST=1.414 TRIPLEA_BB_EPSILON=0.5",
+    "bb-mcts-combat TRIPLEA_BB_SECONDS=1.0 TRIPLEA_BB_EXP_CONST=1.414 TRIPLEA_BB_EPSILON=0.2",
+    "bb-mcts-all-attacks TRIPLEA_BB_SECONDS=1.0 TRIPLEA_BB_EXP_CONST=1.414 TRIPLEA_BB_EPSILON=0.5 TRIPLEA_BB_PHASES=4",
+    "bb-mcts-all-attacks TRIPLEA_BB_SECONDS=1.0 TRIPLEA_BB_EXP_CONST=1.414 TRIPLEA_BB_EPSILON=0.5 TRIPLEA_BB_PHASES=8"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

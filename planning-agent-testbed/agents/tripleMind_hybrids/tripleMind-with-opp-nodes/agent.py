@@ -13,6 +13,8 @@ Environment:
   TRIPLEA_MCTS_ITERS       iteration budget (default 100000; unused, the search is time-bounded)
   TRIPLEA_MCTS_ROLLOUT     rollout horizon in rounds (default 2)
   TRIPLEA_MCTS_EXP_CONST   UCB1 exploration constant (default 1.414)
+  TRIPLEA_MCTS_OPP_EPSILON chance an opponent's tree node picks a random child instead of its UCT
+                           best (default 0.1)
   TRIPLEA_MCTS_SEED        search seed (default 0)
   TRIPLEMIND_VIEW          1 (default) shows the live map window, 0 hides it
   TRIPLEMIND_SAVE_MAP      1 saves a map image before each combat-move search in
@@ -127,7 +129,8 @@ class GameRecorder:
 
 
 class TripleMindAgent:
-    def __init__(self, time_budget, iter_budget, depth_budget, exploration_constant, seed=0):
+    def __init__(self, time_budget, iter_budget, depth_budget, exploration_constant, seed=0,
+                 opp_epsilon=0.0):
         self.whoAmI = None
         self.log_path = None
         self.definition = None
@@ -143,6 +146,7 @@ class TripleMindAgent:
         self.iter_budget = iter_budget
         self.depth_budget = depth_budget
         self.exploration_constant = exploration_constant
+        self.opp_epsilon = opp_epsilon
         self.seed = seed
         self.search = None
     
@@ -196,6 +200,7 @@ class TripleMindAgent:
                 "iter_budget": self.iter_budget,
                 "depth_budget": self.depth_budget,
                 "exploration_constant": self.exploration_constant,
+                "opp_epsilon": self.opp_epsilon,
                 "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
             }, state)
         if not report.supported:
@@ -209,6 +214,7 @@ class TripleMindAgent:
         random.seed(self.seed)
         self.search = MCTS(definition, self.map, self.whoAmI, self.time_budget,
                            self.depth_budget, self.exploration_constant,
+                           opp_epsilon=self.opp_epsilon,
                            metrics_dir=METRICS_DIR / self.output_folder)
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
 
@@ -406,7 +412,8 @@ def main():
                   int(os.environ.get("TRIPLEA_MCTS_ITERS", "100000")),
                   int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "10")),
                   float(os.environ.get("TRIPLEA_MCTS_EXP_CONST", "1.414")),
-                  int(os.environ.get("TRIPLEA_MCTS_SEED", "0")))
+                  int(os.environ.get("TRIPLEA_MCTS_SEED", "0")),
+                  float(os.environ.get("TRIPLEA_MCTS_OPP_EPSILON", "0.1")))
     for line in sys.stdin:
         line = line.strip()
         if not line:

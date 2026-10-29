@@ -1,0 +1,23 @@
+{
+  "games": 20,
+  "agents": [
+    "ne-mcts-combat TRIPLEA_NE_SECONDS=1.0",
+    "ne-mcts-all-attacks TRIPLEA_NE_SECONDS=1.0"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

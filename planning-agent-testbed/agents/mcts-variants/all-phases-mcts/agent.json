@@ -1,0 +1,18 @@
+{
+  "id": "all-phases-mcts",
+  "name": "All-phases MCTS (copy of TripleMind unit-move MCTS)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "TripleMind MCTS with opponent nodes for both the combat move and the non-combat move.",
+  "outputDirectories": [
+    "metrics",
+    "logs",
+    "trees",
+    "records",
+    "map_images"
+  ]
+}

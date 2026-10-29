@@ -14,7 +14,7 @@ export TRIPLEA_CLASSIC_MCTS_MAX_ITERATIONS=100000
 export TRIPLEA_CLASSIC_MCTS_ROLLOUT=100
 # Search trees in logs/trees/: 1 saves a .dot after every search, TREE_PNG 1 also renders a
 # .png (needs Graphviz `dot`); TREE_MAX_NODES caps the nodes drawn.
-export TRIPLEA_CLASSIC_MCTS_SAVE_TREE=1
+export TRIPLEA_CLASSIC_MCTS_SAVE_TREE=0
 export TRIPLEA_CLASSIC_MCTS_TREE_PNG=1
 export TRIPLEA_CLASSIC_MCTS_TREE_MAX_NODES=500
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python

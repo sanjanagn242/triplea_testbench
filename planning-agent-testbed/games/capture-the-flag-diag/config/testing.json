@@ -8,12 +8,12 @@
     ]
   },
   "games": 1,
-  "roundLimit": 5,
+  "roundLimit": 2,
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "tripleMind-mcts-with-opp-nodes-no-terr-sorting",
-    "Germans": "tripleMind-mcts-no-terr-sorting"
+    "Russians": "tripleMind-unitMove",
+    "Germans": "all-phases-mcts"
   },
   "showObservations": false,
   "observationPlayers": {

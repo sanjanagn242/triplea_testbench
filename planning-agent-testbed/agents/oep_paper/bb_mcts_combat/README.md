@@ -18,7 +18,7 @@ the time budget into a number of sequential phases equal to the number of action
 During each phase, the search functions as an ordinary MCTS search. However, in the end of each
 phase, all but the most promising node from the root are pruned and will never be added again …
 treat the most promising child node as the root of the tree in the following phase." Vanilla MCTS
-there: UCT `X + 2C sqrt(2 ln n / n_j)` with `C = 1/sqrt 2`, ε-greedy rollouts (ε = 0.5) limited
+there: UCT `X + 2C sqrt(2 ln n / n_j)` with `C = 1/sqrt 2` on [0, 1] rewards, ε-greedy rollouts (ε = 0.5) limited
 to one turn and rated with the heuristic, transposition table with values on edges and
 descent-path-only backpropagation.
 
@@ -31,8 +31,8 @@ repeat (one phase per committed action):
     actions at the root = [END] + attacks; no attacks → stop (END)
     phase time = remaining time / number of attacks at the root
     until the phase time is used, MCTS iterations below the root:
-        selection:  while every action of the node has an edge: UCT-best edge
-                    (mean reward mapped from [-1, 1] to [0, 1]); stop at an END edge
+        selection:  while every action of the node has an edge: UCT-best edge,
+                    mean + c sqrt(ln n / n_j); stop at an END edge
         expansion:  the node's next untried action (END first, then TripleMind priority order)
         rollout:    unless END: ε-greedy until END — with probability ε the greedy action (the
                     highest-priority attack with strength > 1.5 × defence, else END), otherwise
@@ -48,7 +48,7 @@ repeat (one phase per committed action):
   phases left, so a turn never runs out of phases. When END is committed early, the rest of the
   budget is unused.
 - **Settings** (`run-agent.sh`): `TRIPLEA_BB_SECONDS` per combat move (1.0), `TRIPLEA_BB_EXP_CONST`
-  C (0.7071 = 1/√2), `TRIPLEA_BB_EPSILON` probability of the greedy rollout action (0.5),
+  c (1.414), `TRIPLEA_BB_EPSILON` probability of the greedy rollout action (0.5),
   `TRIPLEA_BB_SEED` (0).
 - **Other phases** are TripleMind's deterministic policy: first `purchase_actions` option,
   `noncombat_move`, engine placement (`{}`), `fightAll`.
@@ -67,6 +67,27 @@ and tournament plot scripts work):
 | `sibling_values.csv` | per root edge per phase | `samples` visits, `mean_value`, `std_value`, `diff_to_best` (relative to the committed edge, so it can be negative when a less visited edge has a higher mean) |
 
 Phases where END is the only option (nothing left to attack) are not searched or logged.
+
+## Drawing the search tree
+
+With `TRIPLEA_BB_SAVE_TREE=1` (set in `run-agent.sh` or the environment), every combat-move search is
+drawn by `edge_tree.py` to `planning-agent-testbed/logs/trees/<agent folder>-<player>-game-<n>-round-<r>`
+as `.dot`, `.html` (a collapsible outline) and `.png` (with Graphviz's `dot`), after the search, so
+its time is not counted in the budget. The search is a DAG (the transposition table shares a plan
+between every order of the same attacks), so a plan is one box with an arrow from each parent that
+reached it. Arrows are labelled with the action (target, strength, units), visits `N` and mean `Q`,
+coloured red (worst `Q`) to green (best); END arrows end in an oval; grey dashed stubs are actions
+never expanded; the chosen sequence is bold blue.
+BB-MCTS draws the whole search from the first root: at each phase's root (marked "phase k") the
+edges it did not commit are dashed red (burnt, frozen as they were when the phase ended), and the
+committed branch shows the later phases' search below it.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `TRIPLEA_BB_SAVE_TREE` | 0 | 1 draws every combat-move search |
+| `TRIPLEA_BB_TREE_PNG` | 1 | also render a `.png` (needs `dot`) |
+| `TRIPLEA_BB_TREE_MAX_NODES` | 300 | plans drawn (breadth first, plus the chosen path) |
+| `TRIPLEA_BB_TREE_RANKDIR` | TB | `TB`: top to bottom; `LR`: left to right |
 
 ## Running it
 

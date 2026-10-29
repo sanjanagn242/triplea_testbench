@@ -65,6 +65,24 @@ and tournament plot scripts work):
 
 Levels where END is the only option are not logged, as in the greedy agents.
 
+## Drawing the search tree
+
+With `TRIPLEA_NE_SAVE_TREE=1` (set in `run-agent.sh` or the environment), every combat-move search is
+drawn by `edge_tree.py` to `planning-agent-testbed/logs/trees/<agent folder>-<player>-game-<n>-round-<r>`
+as `.dot`, `.html` (a collapsible outline) and `.png` (with Graphviz's `dot`), after the search, so
+its time is not counted in the budget. The search is a DAG (the transposition table shares a plan
+between every order of the same attacks), so a plan is one box with an arrow from each parent that
+reached it. Arrows are labelled with the action (target, strength, units), visits `N` and mean `Q`,
+coloured red (worst `Q`) to green (best); END arrows end in an oval; grey dashed stubs are actions
+never expanded; the chosen sequence is bold blue.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `TRIPLEA_NE_SAVE_TREE` | 0 | 1 draws every combat-move search |
+| `TRIPLEA_NE_TREE_PNG` | 1 | also render a `.png` (needs `dot`) |
+| `TRIPLEA_NE_TREE_MAX_NODES` | 300 | plans drawn (breadth first, plus the chosen path) |
+| `TRIPLEA_NE_TREE_RANKDIR` | TB | `TB`: top to bottom; `LR`: left to right |
+
 ## Running it
 
 ```bash

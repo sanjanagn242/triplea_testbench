@@ -9,17 +9,19 @@ export TRIPLEA_AGENT_LOG=0
 export TRIPLEMIND_RECORD=0
 # Search: time per combat-move decision (s), iteration budget (unused; the search is
 # time-bounded), rollout horizon in rounds (a playout still running then has no winner),
-# UCB1 exploration constant, and seed.
+# UCB1 exploration constant, seed, and the chance an opponent's tree node picks a random
+# child instead of its UCT best.
 export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-1.0}"
 export TRIPLEA_MCTS_ITERS="${TRIPLEA_MCTS_ITERS:-100000}"
 export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-10}"
 export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"
 export TRIPLEA_MCTS_SEED="${TRIPLEA_MCTS_SEED:-0}"
+export TRIPLEA_MCTS_OPP_EPSILON="${TRIPLEA_MCTS_OPP_EPSILON:-0.1}"
 # Live map window: 1 shows it, 0 hides it. PURE_PYTHON 1 skips the Cython action generators.
 export TRIPLEMIND_VIEW="${TRIPLEMIND_VIEW:-0}"
 export TRIPLEMIND_PURE_PYTHON="${TRIPLEMIND_PURE_PYTHON:-0}"
 # Map image before each combat-move search, in map_images/<game>/vs-<opponent>/: 1 on, 0 off.
-export TRIPLEMIND_SAVE_MAP="${TRIPLEMIND_SAVE_MAP:-1}"
+export TRIPLEMIND_SAVE_MAP="${TRIPLEMIND_SAVE_MAP:-0}"
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
 # also works; this keeps the repository copy importable without installation).
 

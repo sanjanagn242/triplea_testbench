@@ -1,0 +1,9 @@
+{
+  "id": "tripleMind-unitMove",
+  "name": "TripleMind unit-move MCTS (combat and non-combat) with opponent nodes",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "TripleMind MCTS with opponent nodes for both the combat move and the non-combat move.",
+  "outputDirectories": ["metrics", "logs", "trees", "records", "map_images"]
+}

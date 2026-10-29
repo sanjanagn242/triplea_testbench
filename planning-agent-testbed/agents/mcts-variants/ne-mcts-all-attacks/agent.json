@@ -1,0 +1,15 @@
+{
+  "id": "ne-mcts-all-attacks",
+  "name": "NE-MCTS, all attacks (combat only)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "oep_paper's Non-exploring MCTS whose tree offers, at every level, every TripleMind attack set on every reachable enemy target (no territory ordering). C = 0, deterministic rollouts to the end of the turn, transposition table. Other phases use TripleMind's deterministic greedy policy.",
+  "outputDirectories": [
+    "metrics",
+    "logs"
+  ]
+}

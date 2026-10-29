@@ -19,7 +19,7 @@ export TRIPLEA_MCTS_SEED="${TRIPLEA_MCTS_SEED:-0}"
 export TRIPLEMIND_VIEW="${TRIPLEMIND_VIEW:-0}"
 export TRIPLEMIND_PURE_PYTHON="${TRIPLEMIND_PURE_PYTHON:-0}"
 # Map image before each combat-move search, in map_images/<game>/vs-<opponent>/: 1 on, 0 off.
-export TRIPLEMIND_SAVE_MAP="${TRIPLEMIND_SAVE_MAP:-1}"
+export TRIPLEMIND_SAVE_MAP="${TRIPLEMIND_SAVE_MAP:-0}"
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
 # also works; this keeps the repository copy importable without installation).
 

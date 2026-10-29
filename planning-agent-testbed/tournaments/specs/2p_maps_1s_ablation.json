@@ -1,7 +1,8 @@
 {
-  "games": 10,
+  "games": 100,
   "agents": [
     "tripleMind-mcts TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2",
+    "tripleMind-mcts-no-reward-function TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414",
     "tripleMind-mcts-no-terr-sorting TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2"
   ],
   "roundLimit": 100,

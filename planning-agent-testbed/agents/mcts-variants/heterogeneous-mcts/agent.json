@@ -1,0 +1,18 @@
+{
+  "id": "heterogeneous-mcts",
+  "name": "Heterogeneous MCTS (one tree over purchase, combat and non-combat moves)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "One MCTS tree whose nodes are the purchase, combat-move and non-combat-move decisions of every player, all valued by the same reward; place is not searched.",
+  "outputDirectories": [
+    "metrics",
+    "logs",
+    "trees",
+    "records",
+    "map_images"
+  ]
+}

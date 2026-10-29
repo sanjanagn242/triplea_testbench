@@ -1,8 +1,8 @@
 {
-  "games": 1,
+  "games": 20,
   "agents": [
-    "tripleMind-with-macro-actions TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2",
-    "roxo-oep-with-purchase ROXO_SECONDS=1.0 ROXO_OEP_PLAYOUT_ROUNDS=2"
+    "tripleMind-mcts TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=1.414 TRIPLEA_MCTS_ROLLOUT=2",
+    "bb-mcts-all-attacks TRIPLEA_BB_SECONDS=1.0 TRIPLEA_BB_EXP_CONST=1.414 TRIPLEA_BB_EPSILON=0.5 TRIPLEA_BB_PHASES=4"
   ],
   "roundLimit": 100,
   "aiMovePauseMs": 0,

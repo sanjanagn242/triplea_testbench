@@ -2,8 +2,8 @@
 Evolutionary Planning Versus Tree Search", IEEE ToG 2018, Sec. V and VI) for the TripleA combat
 move.
 
-The paper's BB-MCTS is its vanilla MCTS (action-based: one ply = one action; UCT tree policy
-X + 2C sqrt(2 ln n / n_j) with C = 1/sqrt(2); epsilon-greedy rollouts with epsilon = 0.5, depth-limited
+The paper's BB-MCTS is its vanilla MCTS (action-based: one ply = one action; UCT tree policy, the
+paper's X + 2C sqrt(2 ln n / n_j); epsilon-greedy rollouts with epsilon = 0.5, depth-limited
 to one turn and rated with the heuristic; transposition table with values and visits on edges and
 descent-path-only backpropagation) plus the bridge burning strategy: the time budget is split into
 as many phases as the turn has actions, and at the end of each phase every root child but the
@@ -14,8 +14,10 @@ target, target territory), for each enemy territory not attacked yet, plus END. 
 
   * a node is a plan (its attacks), shared by every order of the same attacks (transposition
     table on where my moved units stand); an edge is (node, action) with its visits and value;
-  * selection: while every action of the node has an edge, the UCT-best edge (values in [-1, 1]
-    are mapped to [0, 1] for UCT); END edges end the descent;
+  * selection: while every action of the node has an edge, the UCT-best edge, with the UCT
+    formula every MCTS agent of the testbed uses: mean + c sqrt(ln n / n_j), c the exploration
+    constant as given (the paper's weight 2C sqrt 2 on [0, 1] rewards is c = 4 on these [-1, 1]
+    rewards); END edges end the descent;
   * expansion: the node's next untried action ([END] + attacks in TripleMind priority order);
   * rollout: from the reached plan, epsilon-greedy until END: with probability epsilon the greedy
     action (the highest-priority attack whose strength beats the defence by TripleMind's 1.5
@@ -110,12 +112,15 @@ class BridgeBurningMCTS:
         self.whoAmI = whoAmI
         self.me = definition.player_index[whoAmI]
         self.time_budget = time_budget  # seconds per combat move
-        self.c = exploration_constant  # C of X + 2C sqrt(2 ln n / n_j)
+        self.c = exploration_constant  # c of mean + c sqrt(ln n / n_j)
         self.epsilon = epsilon  # rollout: probability of the greedy action
         self.rnd = random.Random(seed)
         self.states_visited = 0
         self.iteration = 0
         self.last_stats = None
+        # The last search's tree, for edge_tree.save_edge_tree: the first root (the burnt
+        # parts stay reachable from it), the committed edges and each phase's root.
+        self.last_root, self.last_path, self.last_phases = None, [], []
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=BB_EFFICIENCY_HEADER)
@@ -240,9 +245,8 @@ class BridgeBurningMCTS:
     # ---- tree policy ---------------------------------------------------------------------
 
     def uct(self, edge, parent_visits):
-        """X + 2C sqrt(2 ln n / n_j), X the edge's mean reward mapped from [-1, 1] to [0, 1]."""
-        x = (edge.mean + 1.0) / 2.0
-        return x + 2.0 * self.c * math.sqrt(2.0 * math.log(parent_visits) / edge.visits)
+        """mean + c sqrt(ln n / n_j): the UCT formula of every MCTS agent in the testbed."""
+        return edge.mean + self.c * math.sqrt(math.log(parent_visits) / edge.visits)
 
     def iterate(self, root, table, move_rng, game_number, round_, stats):
         """One MCTS iteration below `root`."""
@@ -303,7 +307,7 @@ class BridgeBurningMCTS:
         self.iteration = 0
         move_rng = self.new_rng()  # moves roll no dice
 
-        root = Node(root_sim.clone(), 0, frozenset())
+        root = first_root = Node(root_sim.clone(), 0, frozenset())
         table = {self.state_key(root.sim): root}
         stats = {"transpositions": 0, "max_depth": 0}
         sequence, levels = [], []  # levels: (root, committed edge, iterations, seconds, states)
@@ -336,6 +340,9 @@ class BridgeBurningMCTS:
                 break
             sequence.append(best.action)
             root = best.child
+        self.last_root = first_root
+        self.last_path = [b for _, b, _, _, _ in levels]
+        self.last_phases = [n for n, _, _, _, _ in levels]
         for tl, (node, best, _, seconds, states) in enumerate(levels, 1):
             self.log_level(game_number, round_, tl, node, best, states, seconds)
 

@@ -30,6 +30,7 @@ import triplea_fm as fm  # noqa: E402
 from triplea_fm.testbench import PHASE_KINDS, LiveBridge  # noqa: E402
 
 from ne_mcts import NonExploringMCTS  # noqa: E402
+from edge_tree import save_edge_tree  # noqa: E402
 from helper import (GAME_RESULTS_HEADER, MetricLogger, log_game_result, metrics_dir,  # noqa: E402
                     output_folder, turn_position)
 import map_graph  # noqa: E402
@@ -44,6 +45,11 @@ METRICS_DIR = metrics_dir(HERE)
 GAME_RESULTS_CSV = "game_results.csv"  # one row per game this agent played
 # game_results.csv also names the winners (TripleMind's columns first, so its scripts still read it).
 GREEDY_GAME_RESULTS_HEADER = GAME_RESULTS_HEADER + ["winners"]
+# Debugging: after every combat-move search, draw its tree in logs/trees/ (edge_tree.py).
+SAVE_TREE = os.environ.get("TRIPLEA_NE_SAVE_TREE", "0") == "1"
+TREE_PNG = os.environ.get("TRIPLEA_NE_TREE_PNG", "1") == "1"  # also .png (needs Graphviz `dot`)
+TREE_MAX_NODES = int(os.environ.get("TRIPLEA_NE_TREE_MAX_NODES", "300"))
+TREE_RANKDIR = os.environ.get("TRIPLEA_NE_TREE_RANKDIR", "TB")  # TB: top to bottom, LR: left to right
 
 
 class Agent:
@@ -148,9 +154,24 @@ class Agent:
 
     def combat_move(self, sim) -> dict:
         attacks = self.search.search(sim)
+        if SAVE_TREE:
+            self.save_tree(sim)
         moves = [mv for attack in attacks for mv in attack.moves]
         self.log(f"round {sim.round} combat move: {self.search.last_stats} {attacks}")
         return self.encode("combatMove", moves) if moves else {}
+
+    def save_tree(self, sim):
+        """Draw the last search's tree to
+        logs/trees/<agent folder>-<player>-game-<n>-round-<r>.dot/.html (.png with TREE_PNG)."""
+        tree_dir = LOG_DIR / "trees"
+        tree_dir.mkdir(parents=True, exist_ok=True)
+        prefix = tree_dir / f"{HERE.name}-{self.player}-game-{self.game_number}-round-{sim.round}"
+        s = self.search
+        title = f"{HERE.name} {self.player} game {self.game_number} round {sim.round}: {s.last_stats}"
+        dot_path, png_path, html_path = save_edge_tree(
+            s.last_root, self.definition, str(prefix), s.last_path, s.last_phases, title,
+            TREE_MAX_NODES, TREE_RANKDIR, TREE_PNG)
+        self.log(f"  tree saved: {png_path or dot_path}, {html_path}")
 
     def non_combat_move(self, sim) -> dict:
         moves = action_generators.noncombat_move(self.view(sim), self.definition)
