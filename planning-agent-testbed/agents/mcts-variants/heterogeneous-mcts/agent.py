@@ -139,7 +139,7 @@ class GameRecorder:
 
 class TripleMindAgent:
     def __init__(self, time_budget, iter_budget, depth_budget, exploration_constant, seed=0,
-                 rollout_epsilon=0.1):
+                 rollout_epsilon=0.1, combat_rollout="epsilon_greedy"):
         self.whoAmI = None
         self.log_path = None
         self.definition = None
@@ -156,6 +156,7 @@ class TripleMindAgent:
         self.depth_budget = depth_budget
         self.exploration_constant = exploration_constant
         self.rollout_epsilon = rollout_epsilon
+        self.combat_rollout = combat_rollout
         self.seed = seed
         self.search = None
 
@@ -210,6 +211,7 @@ class TripleMindAgent:
                 "depth_budget": self.depth_budget,
                 "exploration_constant": self.exploration_constant,
                 "rollout_epsilon": self.rollout_epsilon,
+                "combat_rollout": self.combat_rollout,
                 "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
             }, state)
         if not report.supported:
@@ -226,7 +228,8 @@ class TripleMindAgent:
                                         self.depth_budget, self.exploration_constant,
                                         metrics_dir=METRICS_DIR / self.output_folder,
                                         trees_dir=trees_dir,
-                                        rollout_epsilon=self.rollout_epsilon)
+                                        rollout_epsilon=self.rollout_epsilon,
+                                        combat_rollout=self.combat_rollout)
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
 
     def game_end(self, request):
@@ -265,20 +268,25 @@ class TripleMindAgent:
         node with no children or at the node that passes the phase on (its state is the next
         searched decision, ours or an opponent's; its children are that decision's options)."""
         path = []
-        node, action = root, None
+        node, edge = root, None
         while node is not None:
-            entry = self.node_json(node, action)
-            entry["children"] = [self.node_json(c, node.action_to(c)) for c in node.children]
-            best = max(node.children, key=lambda c: c.visits) if node.children else None
-            entry["chosen"] = node.children.index(best) if best is not None else None
+            entry = self.node_json(node, edge)
+            entry["children"] = [self.node_json(e.child, e) for e in node.edges]
+            best = max(node.edges, key=lambda e: e.visits) if node.edges else None
+            entry["chosen"] = node.edges.index(best) if best is not None else None
             path.append(entry)
-            if best is None or node.passes_phase:
+            if best is None or (edge is not None and edge.passes_phase):
                 break
-            node, action = best, node.action_to(best)
+            node, edge = best.child, best
         return path
 
-    def node_json(self, node, action):
-        """node as a record entry; action is the edge it was reached by on this path."""
+    def node_json(self, node, edge):
+        """node as a record entry, with the statistics of the edge it was reached by on this
+        path (the root's: its edges' totals)."""
+        action = edge.action if edge is not None else None
+        visits = edge.visits if edge is not None else node.visits()
+        value = (edge.mean() if edge is not None else
+                 sum(e.value for e in node.edges) / visits if visits else 0)
         return {
             "level": node.tree_level,
             "played_by": node.state.played_by,  # whose move led here; value is from their view
@@ -288,10 +296,10 @@ class TripleMindAgent:
                        {"buy": action.unit_type, "end_phase": action.end_phase}
                        if hasattr(action, "unit_type") else
                        self.combat_action_json(action, node.state.sim)),
-            "visits": node.visits,
-            "value": node.value / node.visits if node.visits > 0 else 0,
+            "visits": visits,
+            "value": value,
             "state": self.observation(node.state.sim),
-            "terminal_reason": None if node.children else self.terminal_reason(node),
+            "terminal_reason": None if node.edges else self.terminal_reason(node),
         }
 
     @staticmethod
@@ -421,7 +429,8 @@ def main():
                             int(os.environ.get("TRIPLEA_MCTS_ROLLOUT", "2")),
                             float(os.environ.get("TRIPLEA_MCTS_EXP_CONST", "1.414")),
                             int(os.environ.get("TRIPLEA_MCTS_SEED", "0")),
-                            float(os.environ.get("TRIPLEA_MCTS_EPSILON", "0.1")))
+                            float(os.environ.get("TRIPLEA_MCTS_EPSILON", "0.1")),
+                            os.environ.get("TRIPLEA_MCTS_COMBAT_ROLLOUT", "epsilon_greedy"))
     for line in sys.stdin:
         line = line.strip()
         if not line:

@@ -90,6 +90,14 @@ Both seats of a matchup share one folder. The `player` column (and `turn_positio
 trees are still written in the agent's own folder. Games played outside a tournament still write
 metrics to the agent's own `metrics/`.
 
+`rollout_stats.csv` (and `rollout_stats_noncombat.csv` / `rollout_stats_purchase.csv`) has one row
+per search, not per rollout (that filled tens of GB per tournament): the search's `phase`, its
+number of `rollouts`, their `reward_mean`, `reward_m2` (sum of squared deviations from the mean, so
+the reward variance within the search is `reward_m2 / (rollouts - 1)`), `reward_min` / `reward_max`,
+`terminal_wins` / `terminal_losses`, and `depth_counts` (`depth:count` pairs joined by `;`). The
+agents keep running totals during the search and write the row once it is over. The plot scripts
+also read the one-row-per-rollout files of earlier tournaments.
+
 To plot one agent's tournament metrics, pass the folder to its `scripts/generate_plots.sh`, for
 example `agents/tripleMind/scripts/generate_plots.sh planning-agent-testbed/tournaments/<date>_<time>/agents/tripleMind-mcts/metrics`.
 It makes a set of plots for each `vs-*` folder. Without an argument it plots the agent's own
@@ -124,11 +132,23 @@ The same `--map` (and `--out DIR`) options work on each script on its own.
   search, per agent (box; dots are each game's mean) and by round, plus `efficiency_summary.txt`.
   The last two need the `num_of_terr_attacked` and `max_tree_depth` columns of `efficiency.csv`.
 - `plot_rollout_stats.py`: % of rollouts reaching a terminal state (win / loss) per agent and by
-  round; states sampled per turn (the sum of `rollout_depth_reached` over a search's rollouts) per
+  round; states sampled per turn (the sum of the rollout depths over a turn's rollouts) per
   agent and by round; `rollout_reward.png`, every agent in one plot (one line each, both seats together): the mean reward
   per turn by round with a band of the reward spread within a turn (a wide band means a noisy
   reward); `rollout_turn_stats.csv`, one row per turn (`avg_reward`, `var_reward`, `std_reward`,
   `avg_depth_reached`, `depth_reached_std`, `n_visits`); plus `rollout_stats_summary.txt`.
+- `plot_rollout_flatness.py`: how flat the rollouts are in the purchase, combat and non-combat
+  searches: the spread (std, the square root of the variance) of the rollout rewards over a search's
+  leaf nodes. `rollout_flatness.png` has one row per phase: the spread per agent (box; dots are each
+  game's mean), its mean by round, and the % of flat searches (std below `--flat-std`, default
+  0.001). A flat search (leaves all valued alike) hints that the rollout is too short to tell the
+  moves apart; a wide spread means the leaves differ, really or through a noisy rollout policy
+  (compare variants such as `MCTS_ROLLOUT-2` vs `MCTS_ROLLOUT-10`). The phase is each row's `phase`;
+  in files of earlier tournaments it comes from the file (`rollout_stats_purchase.csv`,
+  `rollout_stats.csv` (combat) and `rollout_stats_noncombat.csv`), and an agent logging several
+  phases to `rollout_stats.csv` (`roxo-oep-with-purchase`) is split with the `phase` column of its
+  `efficiency.csv`. An agent appears only in the phases it logs. Plus `rollout_flatness_by_search.csv` (one row per search) and
+  `rollout_flatness_summary.txt`.
 
 - `plot_action_selection.py`: how clearly the chosen (most-visited) child stood out from its
   siblings at each tree level of the chosen action sequence, from `action_seq_stats.csv`
@@ -137,6 +157,11 @@ The same `--map` (and `--out DIR`) options work on each script on its own.
   agent's own and the modelled opponent's choices; plus `action_selection_by_tl.csv` and
   `action_selection_summary.txt`. Only agents that write `action_seq_stats.csv`
   (`tripleMind-with-opp-nodes` so far) appear.
+- `plot_unique_plans.py`: distinct legal plans each EMCTS agent evaluated per search (the
+  `unique_plans` column of `efficiency.csv`), per agent (box; dots are each game's mean) and by
+  round (line = mean, band = min to max across searches), one row per searched phase
+  (`emcts-segmented` also searches purchase and nonCombatMove), plus `unique_plans_summary.txt`.
+  Only the EMCTS variants write the column; efficiency.csv files from before it are skipped.
 
 Agents without a search (`tripleMind-bc`, `tripleMind-ppo`) appear in the summaries but not in the
 search and rollout plots.

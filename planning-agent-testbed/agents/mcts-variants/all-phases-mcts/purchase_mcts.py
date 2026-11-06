@@ -4,7 +4,9 @@ A node's children buy one unit each (one production rule, count 1) that the play
 afford. Buying the same units in another order reaches the same state, so the tree is a DAG: a
 transposition table maps (the node where that player's purchase started, units bought so far) to
 one shared node, whose visits and value every path through it updates. Backpropagation follows
-the path the iteration took, not parent links. When nothing is affordable any more, the phase
+the path the iteration took, not parent links. Each parent also counts the visits of its own edge
+to the node: UCT's exploration term and the final choice use those, so a node visited a lot from
+other parents is not taken as well explored from this one; its mean value stays shared. When nothing is affordable any more, the phase
 ends and the tree passes on to the next player's purchase (opponent nodes); the phases in between
 are played by the rollout policies. Rollouts buy epsilon-greedily, one unit at a time: a random
 affordable unit with probability rollout_epsilon, else the one with the most attack + defense per
@@ -86,9 +88,13 @@ class PurchaseNode(MCTSNode):
         super().__init__(state, parent, action, sign)
         self.anchor = self
         self.child_actions = {}  # id(child) -> the unit this node buys to reach it
+        self.edge_visits = {}  # id(child) -> iterations that went from this node to child
 
     def action_to(self, child):
         return self.child_actions[id(child)]
+
+    def visits_to(self, child):
+        return self.edge_visits[id(child)]
 
 
 class PurchaseMCTS(MCTS):
@@ -184,6 +190,7 @@ class PurchaseMCTS(MCTS):
         if child is not None:
             node.children.append(child)
             node.child_actions[id(child)] = action
+            node.edge_visits[id(child)] = 0
             return child, False
         new_state.legal_moves()
         passes_turn = no_target(new_state)
@@ -197,6 +204,7 @@ class PurchaseMCTS(MCTS):
         self.table[key] = child
         node.children.append(child)
         node.child_actions[id(child)] = action
+        node.edge_visits[id(child)] = 0
         return child, True
 
     def mcts_search(self, initial_state):
@@ -240,9 +248,12 @@ class PurchaseMCTS(MCTS):
             for n in path:
                 n.visits += 1
                 n.value += n.sign * value
+            for parent, child in zip(path, path[1:]):
+                parent.edge_visits[id(child)] += 1
 
         search_time = time.time() - start_time
-        self.rollout_stats_metric.flush()
+        self.rollout_stats_metric.write(self.whoAmI, initial_state.sim.game_number,
+                                        initial_state.sim.round)
         self.last_root = root
         self.last_stats = {
             "iterations": self.iteration,
@@ -263,7 +274,7 @@ class PurchaseMCTS(MCTS):
         units = []
         node = root
         while node.children:
-            best_child = max(node.children, key=lambda c: c.visits)
+            best_child = max(node.children, key=node.visits_to)
             self.log_choice_stats(initial_state, node, best_child)
             units.append(node.action_to(best_child))
             if best_child.passes_turn:

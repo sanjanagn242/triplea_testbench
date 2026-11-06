@@ -3,6 +3,7 @@ import fcntl
 import html
 import itertools
 import json
+import math
 import os
 import re
 import subprocess
@@ -94,10 +95,59 @@ EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations
                      "num_children_at_root", "max_rollout", "num_action_sequences",
                      "num_of_terr_attacked", "max_tree_depth"]
 
-# One row per rollout in rollout_stats.csv: the rounds it advanced, the reward it backed up and
-# whether it stopped in a terminal (game over) state.
-ROLLOUT_STATS_HEADER = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward",
-                        "is_terminal"]
+# One row per search in rollout_stats.csv (one per rollout filled tens of GB per tournament), from
+# RolloutStats: phase (purchase, combat or noncombat), the number of rollouts, the mean of their
+# rewards and reward_m2, the sum of the rewards' squared deviations from that mean (the reward
+# variance within the search is reward_m2 / (rollouts - 1), and searches combine exactly), the
+# reward range, the rollouts that stopped in a terminal win (reward > 0) or loss, and depth_counts,
+# "depth:count" pairs joined by ";" of the rounds the rollouts advanced.
+ROLLOUT_STATS_HEADER = ["player", "game", "round", "phase", "rollouts", "reward_mean", "reward_m2",
+                        "reward_min", "reward_max", "terminal_wins", "terminal_losses",
+                        "depth_counts"]
+
+
+class RolloutStats:
+    """Running totals of one search's rollouts, written as one rollout_stats.csv row at its end (see
+    ROLLOUT_STATS_HEADER). add() is a few additions per rollout and keeps nothing per rollout, so
+    the search keeps its time budget; write(), after the search, is the only file access."""
+
+    def __init__(self, filename, phase="combat"):
+        self.logger = MetricLogger(filename, header=ROLLOUT_STATS_HEADER)
+        self.phase = phase
+        self.reset()
+
+    def reset(self):
+        self.n = 0
+        self.mean = self.m2 = 0.0
+        self.lo, self.hi = math.inf, -math.inf
+        self.wins = self.losses = 0
+        self.depths = defaultdict(int)
+
+    def add(self, reward, depth, terminal):
+        """One rollout: its reward, the rounds it advanced and whether it reached a terminal state.
+        Mean and m2 are updated as in Welford's algorithm, stable for any number of rollouts."""
+        self.n += 1
+        delta = reward - self.mean
+        self.mean += delta / self.n
+        self.m2 += delta * (reward - self.mean)
+        if reward < self.lo:
+            self.lo = reward
+        if reward > self.hi:
+            self.hi = reward
+        if terminal:
+            if reward > 0:
+                self.wins += 1
+            else:
+                self.losses += 1
+        self.depths[depth] += 1
+
+    def write(self, player, game, round_, phase=None):
+        """Log the search's row (none when it ran no rollout) and start over for the next one."""
+        if self.n:
+            self.logger.log(player, game, round_, phase or self.phase, self.n, f"{self.mean:.6g}",
+                            f"{self.m2:.6g}", f"{self.lo:.6g}", f"{self.hi:.6g}", self.wins,
+                            self.losses, ";".join(f"{d}:{c}" for d, c in sorted(self.depths.items())))
+        self.reset()
 
 # One row per tree level of the chosen action sequence in action_seq_stats.csv: how the chosen
 # (most-visited) child compared to its siblings. visit_count / var / std_dev are over the visit
@@ -260,7 +310,7 @@ def save_mcts_tree_html(root, whoAmI, html_path, edge_label):
                    f'tl={n.tree_level} played_by={html.escape(n.state.played_by)} '
                    f'next_moves_by={html.escape(n.state.next_moves_by)} '
                    f'actions={n.state.num_actions}</span></summary>\n')
-        kids = sorted(n.children, key=lambda c: c.visits, reverse=True)
+        kids = sorted(n.children, key=n.visits_to, reverse=True)
         for i, ch in enumerate(kids):
             write(ch, edge_label(n.action_to(ch), n.state) or "(root)", i == 0, is_open)
         for act in unplayed_actions(n):
@@ -296,7 +346,9 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
                 parent_id[id(ch)] = node_id[id(n)]
                 nodes.append(ch)
                 q.append(ch)
-            edges.append((node_id[id(n)], node_id[id(ch)], n.action_to(ch), n.state))
+            # a DAG (purchase_mcts) edge's own visits; a tree edge's are its child's
+            edges.append((node_id[id(n)], node_id[id(ch)], n.action_to(ch), n.state,
+                          n.visits_to(ch) if hasattr(n, "edge_visits") else None))
 
     dot_path = out_prefix + ".dot"
     png_path = out_prefix + ".png"
@@ -332,8 +384,9 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
                 el = f"{act.to_terr} | s={act.strength:g} | {attack_summary(act, parent_state)}"
             return _safe(el, 60)
 
-        for a, b, act, parent_state in edges:
-            f.write(f'  n{a} -> n{b} [label="{edge_label(act, parent_state)}"];\n')
+        for a, b, act, parent_state, visits in edges:
+            label = edge_label(act, parent_state) + (f" | n={visits}" if visits is not None else "")
+            f.write(f'  n{a} -> n{b} [label="{label}"];\n')
 
         # Actions the search never expanded: an arrowless dashed edge to a small point each, so
         # the unexplored options are still visible.

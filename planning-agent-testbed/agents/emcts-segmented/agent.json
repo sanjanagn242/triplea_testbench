@@ -1,0 +1,9 @@
+{
+  "id": "emcts-segmented",
+  "name": "Segmented Evolutionary MCTS (purchase, combat, noncombat)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "emcts-fh with a genome of this player's purchase, combat and noncombat segments (each marked with its phase, turn and player; heterogeneous-mcts's atomic actions as genes) up to EMCTS_HORIZON turns ahead; other players' turns are greedy markers. Searched at all three phases.",
+  "outputDirectories": ["metrics"]
+}

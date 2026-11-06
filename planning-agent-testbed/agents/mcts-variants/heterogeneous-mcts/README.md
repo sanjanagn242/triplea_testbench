@@ -12,6 +12,12 @@ purchased units); battles are fought with `fightAll`.
   Battles, place and end of turn in between are played by the rollout policies.
 - **One reward**: every node is valued by `evaluate_state` (TUV share and income share, or the
   win/loss value), kept from the view of the player who chose its edge.
+- **Statistics on edges**: visits and value live on the `Edge` (action → child), the same for every
+  phase; a node holds only its state and its edges. UCT and the final choice read the edges.
+- **Deterministic battles**: every battle the search fights, in the tree and in rollouts, is
+  resolved by the Fast AI's most likely outcome (`fast_battle.py`, copied from emcts; `hmcts.py`
+  installs it on import) instead of dice. Fly-over AA and bombing raids still roll dice. The real
+  game's battles are fought by the engine with dice.
 - **Rollout horizon** (`TRIPLEA_MCTS_ROLLOUT`) is in rounds: 1 ends a rollout when the round the
   leaf is in is over.
 - Purchase units are offered in candidate order from the last unit bought, so each set of units

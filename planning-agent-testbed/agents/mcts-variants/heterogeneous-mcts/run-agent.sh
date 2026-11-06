@@ -18,6 +18,9 @@ export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"
 # Epsilon-greedy combat-move and purchase rollouts: probability of a random move / unit, else
 # the strongest attack / the most attack + defense per PU.
 export TRIPLEA_MCTS_EPSILON="${TRIPLEA_MCTS_EPSILON:-0.5}"
+# Combat-move rollout policy: epsilon_greedy (above) or evaluate (the attack whose resulting
+# state evaluate_state scores highest for the mover).
+export TRIPLEA_MCTS_COMBAT_ROLLOUT="${TRIPLEA_MCTS_COMBAT_ROLLOUT:-epsilon_greedy}"
 export TRIPLEA_MCTS_SEED="${TRIPLEA_MCTS_SEED:-0}"
 # Live map window: 1 shows it, 0 hides it. PURE_PYTHON 1 skips the Cython action generators.
 export TRIPLEMIND_VIEW="${TRIPLEMIND_VIEW:-0}"

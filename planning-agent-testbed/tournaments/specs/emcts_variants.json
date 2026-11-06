@@ -1,0 +1,33 @@
+{
+  "games": 20,
+  "agents": [
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=0",
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=0.5",
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=1.414",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=0",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=0.5",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=2 EMCTS_EXP_CONST=1.414",
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=0",
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=0.5",
+    "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=1.414",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=0",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=0.5",
+    "emcts-fh EMCTS_SECONDS=1.0 EMCTS_HORIZON=4 EMCTS_EXP_CONST=1.414"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

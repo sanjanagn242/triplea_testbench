@@ -3,6 +3,7 @@ import fcntl
 import html
 import itertools
 import json
+import math
 import os
 import re
 import subprocess
@@ -94,10 +95,59 @@ EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations
                      "num_children_at_root", "max_rollout", "num_action_sequences",
                      "num_of_terr_attacked", "max_tree_depth"]
 
-# One row per rollout in rollout_stats.csv: the rounds it advanced, the reward it backed up and
-# whether it stopped in a terminal (game over) state.
-ROLLOUT_STATS_HEADER = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward",
-                        "is_terminal"]
+# One row per search in rollout_stats.csv (one per rollout filled tens of GB per tournament), from
+# RolloutStats: phase (purchase, combat or noncombat), the number of rollouts, the mean of their
+# rewards and reward_m2, the sum of the rewards' squared deviations from that mean (the reward
+# variance within the search is reward_m2 / (rollouts - 1), and searches combine exactly), the
+# reward range, the rollouts that stopped in a terminal win (reward > 0) or loss, and depth_counts,
+# "depth:count" pairs joined by ";" of the rounds the rollouts advanced.
+ROLLOUT_STATS_HEADER = ["player", "game", "round", "phase", "rollouts", "reward_mean", "reward_m2",
+                        "reward_min", "reward_max", "terminal_wins", "terminal_losses",
+                        "depth_counts"]
+
+
+class RolloutStats:
+    """Running totals of one search's rollouts, written as one rollout_stats.csv row at its end (see
+    ROLLOUT_STATS_HEADER). add() is a few additions per rollout and keeps nothing per rollout, so
+    the search keeps its time budget; write(), after the search, is the only file access."""
+
+    def __init__(self, filename, phase="combat"):
+        self.logger = MetricLogger(filename, header=ROLLOUT_STATS_HEADER)
+        self.phase = phase
+        self.reset()
+
+    def reset(self):
+        self.n = 0
+        self.mean = self.m2 = 0.0
+        self.lo, self.hi = math.inf, -math.inf
+        self.wins = self.losses = 0
+        self.depths = defaultdict(int)
+
+    def add(self, reward, depth, terminal):
+        """One rollout: its reward, the rounds it advanced and whether it reached a terminal state.
+        Mean and m2 are updated as in Welford's algorithm, stable for any number of rollouts."""
+        self.n += 1
+        delta = reward - self.mean
+        self.mean += delta / self.n
+        self.m2 += delta * (reward - self.mean)
+        if reward < self.lo:
+            self.lo = reward
+        if reward > self.hi:
+            self.hi = reward
+        if terminal:
+            if reward > 0:
+                self.wins += 1
+            else:
+                self.losses += 1
+        self.depths[depth] += 1
+
+    def write(self, player, game, round_, phase=None):
+        """Log the search's row (none when it ran no rollout) and start over for the next one."""
+        if self.n:
+            self.logger.log(player, game, round_, phase or self.phase, self.n, f"{self.mean:.6g}",
+                            f"{self.m2:.6g}", f"{self.lo:.6g}", f"{self.hi:.6g}", self.wins,
+                            self.losses, ";".join(f"{d}:{c}" for d, c in sorted(self.depths.items())))
+        self.reset()
 
 # One row per tree level of the chosen action sequence in action_seq_stats.csv: how the chosen
 # (most-visited) child compared to its siblings. visit_count / var / std_dev are over the visit
@@ -231,6 +281,15 @@ function filter() { const m = +document.getElementById('minv').value;
 """
 
 
+def edge_stats(n, edge):
+    """(visits, mean value) shown for node n: those of the edge it is reached by (the statistics
+    live on edges, hmcts.Edge); the root's are its edges' totals."""
+    if edge is not None:
+        return edge.visits, edge.mean()
+    visits = n.visits()
+    return visits, (sum(e.value for e in n.edges) / visits if visits else 0.0)
+
+
 def unplayed_actions(n):
     """The node's generated actions the search never expanded into a child."""
     return list(n.state.actions[n.state.actionIndex:])
@@ -241,33 +300,27 @@ def save_mcts_tree_html(root, whoAmI, html_path, edge_label):
     visits, the most-visited path opened by default, unplayed actions listed in gray."""
     out = [_TREE_HTML_HEAD]
     counter = itertools.count()
-    written = {}  # id(node) -> its number; a DAG's shared node (purchase_mcts) is written once
 
-    def write(n, act_label, best, parent_open):
-        if id(n) in written:
-            out.append(f'<div class="unexp">{html.escape(act_label)} -> #{written[id(n)]} '
-                       f'(transposition)</div>\n')
-            return
+    def write(n, edge, act_label, best, parent_open):
         nid = next(counter)
-        written[id(n)] = nid
-        avg = (n.value / n.visits) if n.visits else 0.0
+        visits, avg = edge_stats(n, edge)
         cls = "me" if n.state.played_by == whoAmI else "opp"
         is_open = parent_open and (best or nid == 0)
-        out.append(f'<details data-v="{n.visits}" class="{"best" if best else ""}"'
+        out.append(f'<details data-v="{visits}" class="{"best" if best else ""}"'
                    f'{" open" if is_open else ""}><summary>'
                    f'<span class="act">{html.escape(act_label)}</span> '
-                   f'<span class="node {cls}">#{nid} vis={n.visits} avg={avg:.3f} '
+                   f'<span class="node {cls}">#{nid} vis={visits} avg={avg:.3f} '
                    f'tl={n.tree_level} played_by={html.escape(n.state.played_by)} '
                    f'next_moves_by={html.escape(n.state.next_moves_by)} '
                    f'actions={n.state.num_actions}</span></summary>\n')
-        kids = sorted(n.children, key=lambda c: c.visits, reverse=True)
-        for i, ch in enumerate(kids):
-            write(ch, edge_label(n.action_to(ch), n.state) or "(root)", i == 0, is_open)
+        kids = sorted(n.edges, key=lambda e: e.visits, reverse=True)
+        for i, e in enumerate(kids):
+            write(e.child, e, edge_label(e.action, n.state) or "(root)", i == 0, is_open)
         for act in unplayed_actions(n):
             out.append(f'<div class="unexp">- {html.escape(edge_label(act, n.state))}</div>\n')
         out.append("</details>\n")
 
-    write(root, "(root)", True, True)
+    write(root, None, "(root)", True, True)
     out.append("</div></body></html>\n")
     with open(html_path, "w") as f:
         f.write("".join(out))
@@ -285,18 +338,20 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
     q = deque([root])
     node_id = {id(root): 0}
     parent_id = {id(root): -1}
+    in_edge = {id(root): None}  # the edge each node is reached by
     nodes = [root]
     edges = []
 
     while q and len(nodes) < max_nodes:
         n = q.popleft()
-        for ch in n.children:
-            if id(ch) not in node_id:
-                node_id[id(ch)] = len(nodes)
-                parent_id[id(ch)] = node_id[id(n)]
-                nodes.append(ch)
-                q.append(ch)
-            edges.append((node_id[id(n)], node_id[id(ch)], n.action_to(ch), n.state))
+        for e in n.edges:
+            ch = e.child
+            node_id[id(ch)] = len(nodes)
+            parent_id[id(ch)] = node_id[id(n)]
+            in_edge[id(ch)] = e
+            nodes.append(ch)
+            q.append(ch)
+            edges.append((node_id[id(n)], node_id[id(ch)], e.action, n.state))
 
     dot_path = out_prefix + ".dot"
     png_path = out_prefix + ".png"
@@ -311,8 +366,8 @@ def save_mcts_tree_png(root, whoAmI, out_prefix, max_nodes=500, render_img=False
         for n in nodes:
             nid = node_id[id(n)]
             pid = parent_id[id(n)]
-            avg = (n.value / n.visits) if n.visits else 0.0 
-            label = f"#{nid}\\nvis={n.visits}\\navg={avg:.3f}\\ntl={n.tree_level}\\nplayed_by={n.state.played_by}\\nnext_moves_by={n.state.next_moves_by}\\nactions={n.state.num_actions}"
+            visits, avg = edge_stats(n, in_edge[id(n)])
+            label = f"#{nid}\\nvis={visits}\\navg={avg:.3f}\\ntl={n.tree_level}\\nplayed_by={n.state.played_by}\\nnext_moves_by={n.state.next_moves_by}\\nactions={n.state.num_actions}"
             # fill by the player whose move led to the node (its value's point of view): whoAmI
             # blue, any other player red
             fill = "lightblue" if n.state.played_by == whoAmI else "lightpink"

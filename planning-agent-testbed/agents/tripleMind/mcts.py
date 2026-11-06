@@ -19,10 +19,13 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
                               RETREAT_D)
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
-from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger,
+from helper import (EFFICIENCY_HEADER, ACTION_SEQ_HEADER, MetricLogger, RolloutStats,
                     DebugLogger,
                     save_mcts_tree_png)
+
+fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, no dice
 
 
 class MCTSGameState:
@@ -148,9 +151,9 @@ class MCTS:
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=EFFICIENCY_HEADER)
-        # Buffered during a search and written once at its end, to keep file I/O out of the loop.
-        self.rollout_stats_metric = MetricLogger(
-            os.path.join(metrics_dir, "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
+        # Totals of a search's rollouts, written as one row once the search is over, to keep
+        # file I/O and per-rollout rows out of the loop.
+        self.rollout_stats_metric = RolloutStats(os.path.join(metrics_dir, "rollout_stats.csv"))
         self.debug_logger = DebugLogger("logs/debug.log", False)
         self.action_seq_stats_metric = MetricLogger(
             os.path.join(metrics_dir, "action_seq_stats.csv"), header=ACTION_SEQ_HEADER)
@@ -306,8 +309,7 @@ class MCTS:
             # Evaluate final state
             reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
                                                  self.depth_budget)
-        self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
-                                         self.iteration, depth, reward, 1 if is_terminal else 0)
+        self.rollout_stats_metric.add(reward, depth, is_terminal)
         return reward, depth
 
     def backpropagate(self, node, reward):
@@ -356,7 +358,8 @@ class MCTS:
             self.backpropagate(node, value)
 
         search_time = time.time() - start_time
-        self.rollout_stats_metric.flush()
+        self.rollout_stats_metric.write(self.whoAmI, initial_state.sim.game_number,
+                                        initial_state.sim.round)
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
         self.last_stats = {

@@ -19,10 +19,13 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
                               RETREAT_D)
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
-from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger,
+from helper import (EFFICIENCY_HEADER, ACTION_SEQ_HEADER, MetricLogger, RolloutStats,
                     DebugLogger,
                     save_mcts_tree_png)
+
+fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, no dice
 
 
 class MCTSGameState:
@@ -131,6 +134,13 @@ class MCTSNode:
         parent's edge."""
         return child.action
 
+    def visits_to(self, child):
+        """Visits of the edge from this node to child: the child's own visits in a tree. A
+        purchase DAG node (purchase_mcts.PurchaseNode) counts each parent's edge separately, so
+        UCT explores and the final choice picks by how often this parent took the edge, while
+        the child's mean value stays shared."""
+        return child.visits
+
     def is_fully_expanded(self):
         return self.untried_actions is not None and len(self.untried_actions) == 0
 
@@ -141,13 +151,14 @@ class MCTSNode:
 
     def best_child_uct(self, c_param=1.414):
         # in case there is still an unvisited child, prioritize it to ensure exploration
-        unvisited = [child for child in self.children if child.visits == 0]
+        unvisited = [child for child in self.children if self.visits_to(child) == 0]
         if unvisited:
             return random.choice(unvisited)
 
         bestNode = None
         choices_weights = [
-            (child.value / child.visits) + c_param * math.sqrt(math.log(self.visits) / child.visits)
+            (child.value / child.visits)
+            + c_param * math.sqrt(math.log(self.visits) / self.visits_to(child))
             for child in self.children
         ]
         if choices_weights != []:
@@ -192,10 +203,11 @@ class MCTS:
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, f"efficiency{metrics_suffix}.csv"), header=EFFICIENCY_HEADER)
-        # Buffered during a search and written once at its end, to keep file I/O out of the loop.
-        self.rollout_stats_metric = MetricLogger(
+        # Totals of a search's rollouts, written as one row once the search is over, to keep
+        # file I/O and per-rollout rows out of the loop.
+        self.rollout_stats_metric = RolloutStats(
             os.path.join(metrics_dir, f"rollout_stats{metrics_suffix}.csv"),
-            header=ROLLOUT_STATS_HEADER)
+            metrics_suffix.lstrip("_") or "combat")  # "", "_noncombat", "_purchase"
         self.debug_logger = DebugLogger("logs/debug.log", False)
         self.action_seq_stats_metric = MetricLogger(
             os.path.join(metrics_dir, f"action_seq_stats{metrics_suffix}.csv"),
@@ -450,8 +462,7 @@ class MCTS:
             # Evaluate final state
             reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
                                                  self.depth_budget)
-        self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
-                                         self.iteration, depth, reward, 1 if is_terminal else 0)
+        self.rollout_stats_metric.add(reward, depth, is_terminal)
         return reward, depth
 
     def backpropagate(self, node, reward):
@@ -501,7 +512,8 @@ class MCTS:
             self.backpropagate(node, value)
 
         search_time = time.time() - start_time
-        self.rollout_stats_metric.flush()
+        self.rollout_stats_metric.write(self.whoAmI, initial_state.sim.game_number,
+                                        initial_state.sim.round)
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
         self.last_stats = {
@@ -525,7 +537,7 @@ class MCTS:
         action_seq = []
         node = root
         while node.children != []:
-            best_child = max(node.children, key=lambda c: c.visits)
+            best_child = max(node.children, key=node.visits_to)
             self.log_choice_stats(initial_state, node, best_child)
             if best_child.action.moves and best_child.action.strength != 0:
                 action_seq.append(best_child.action)
@@ -550,7 +562,7 @@ class MCTS:
     def log_choice_stats(self, initial_state, node, chosen):
         """Buffers one action_seq_stats row: how `chosen` stood out among node's children."""
         kids = node.children
-        visits = [c.visits for c in kids]
+        visits = [node.visits_to(c) for c in kids]
         avgs = [c.value / c.visits if c.visits else 0.0 for c in kids]
         i = kids.index(chosen)
         second = max((k for k in range(len(kids)) if k != i), key=lambda k: visits[k], default=None)

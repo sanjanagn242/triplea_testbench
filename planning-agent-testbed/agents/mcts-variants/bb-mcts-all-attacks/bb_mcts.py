@@ -51,14 +51,13 @@ from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
 import map_graph
-from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
+from helper import EFFICIENCY_HEADER, ACTION_SEQ_HEADER, MetricLogger, RolloutStats
 
 # TripleMind's columns first (the plot scripts read them by name), then the columns the other OEP
 # agents share, then this agent's own.
 BB_EFFICIENCY_HEADER = EFFICIENCY_HEADER + ["reached_end_of_turn", "num_actions_per_level",
                                             "best_value_per_level", "states_visited",
                                             "transpositions", "iterations_per_level"]
-BB_ROLLOUT_STATS_HEADER = ROLLOUT_STATS_HEADER + ["tl", "rollout_attacks"]
 # One row per phase (level of the committed sequence): the root's edges at the end of the phase;
 # the committed edge is the most visited, "second" the second-best edge by mean value.
 BB_ACTION_SEQ_HEADER = ACTION_SEQ_HEADER + ["value_gap", "end_phase_value", "states_visited",
@@ -133,9 +132,9 @@ class BridgeBurningMCTS:
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=BB_EFFICIENCY_HEADER)
-        # Buffered during a search and written once at its end, to keep file I/O out of the loop.
-        self.rollout_stats_metric = MetricLogger(
-            os.path.join(metrics_dir, "rollout_stats.csv"), header=BB_ROLLOUT_STATS_HEADER)
+        # Totals of a search's rollouts, written as one row once the search is over, to keep file
+        # I/O and per-rollout rows out of the loop.
+        self.rollout_stats_metric = RolloutStats(os.path.join(metrics_dir, "rollout_stats.csv"))
         self.action_seq_stats_metric = MetricLogger(
             os.path.join(metrics_dir, "action_seq_stats.csv"), header=BB_ACTION_SEQ_HEADER)
         self.sibling_metric = MetricLogger(
@@ -221,7 +220,6 @@ class BridgeBurningMCTS:
         sim = node.sim.clone()
         attacked = set(node.attacked)
         rng = self.new_rng()
-        attacks = 0
         while not ended:
             actions = self.candidate_actions(sim, attacked)
             if not actions:
@@ -233,11 +231,9 @@ class BridgeBurningMCTS:
             if action.end_phase or not self.apply_attack(sim, action, rng):
                 break
             attacked.add(action.to_terr)
-            attacks += 1
         reward, terminal = self.evaluate(sim, rng)
         self.states_visited += 1
-        self.rollout_stats_metric.buffer(self.whoAmI, game_number, round_, self.iteration, 0, reward,
-                                         1 if terminal else 0, node.depth + 1, attacks)
+        self.rollout_stats_metric.add(reward, 0, terminal)
         return reward
 
     def evaluate(self, plan_sim, rng):
@@ -383,7 +379,7 @@ class BridgeBurningMCTS:
             self.log_level(game_number, round_, tl, node, best, states, seconds)
 
         search_time = time.time() - started
-        self.rollout_stats_metric.flush()
+        self.rollout_stats_metric.write(self.whoAmI, game_number, round_)
         self.action_seq_stats_metric.flush()
         self.sibling_metric.flush()
         first = levels[0][0] if levels else None

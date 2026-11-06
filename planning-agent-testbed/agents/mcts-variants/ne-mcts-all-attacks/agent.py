@@ -49,7 +49,7 @@ GAME_RESULTS_CSV = "game_results.csv"  # one row per game this agent played
 GREEDY_GAME_RESULTS_HEADER = GAME_RESULTS_HEADER + ["winners"]
 # Debugging: after every combat-move search, draw its tree in logs/trees/ (edge_tree.py).
 SAVE_TREE = os.environ.get("TRIPLEA_NE_SAVE_TREE", "0") == "1"
-TREE_PNG = os.environ.get("TRIPLEA_NE_TREE_PNG", "1") == "1"  # also .png (needs Graphviz `dot`)
+TREE_PNG = os.environ.get("TRIPLEA_NE_TREE_PNG", "0") == "1"  # also .png (needs Graphviz `dot`)
 TREE_MAX_NODES = int(os.environ.get("TRIPLEA_NE_TREE_MAX_NODES", "300"))
 TREE_RANKDIR = os.environ.get("TRIPLEA_NE_TREE_RANKDIR", "TB")  # TB: top to bottom, LR: left to right
 

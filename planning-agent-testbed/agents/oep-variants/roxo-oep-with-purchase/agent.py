@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))  # this agent's modules (helper.py: a copy of Trip
 import triplea_fm as fm  # noqa: E402
 from triplea_fm.testbench import LiveBridge  # noqa: E402
 
-from helper import (EFFICIENCY_HEADER, GAME_RESULTS_HEADER, ROLLOUT_STATS_HEADER,  # noqa: E402
+from helper import (EFFICIENCY_HEADER, GAME_RESULTS_HEADER, RolloutStats,  # noqa: E402
                     MetricLogger, log_game_result, metrics_dir, output_folder, turn_position)
 from oep import RoxoOEP, move_phases_per_round  # noqa: E402
 from oep_tree import save_oep_tree  # noqa: E402
@@ -50,7 +50,7 @@ PLAYOUT_ROUNDS = int(os.environ.get("ROXO_OEP_PLAYOUT_ROUNDS", "10"))
 SEED = int(os.environ.get("ROXO_SEED", "0"))
 # Debugging: after every search, draw the genealogy of its genomes in logs/trees/ (oep_tree.py).
 SAVE_TREE = os.environ.get("ROXO_OEP_SAVE_TREE", "0") == "1"
-TREE_PNG = os.environ.get("ROXO_OEP_TREE_PNG", "1") == "1"  # also render .png (needs Graphviz `dot`)
+TREE_PNG = os.environ.get("ROXO_OEP_TREE_PNG", "0") == "1"  # also render .png (needs Graphviz `dot`)
 TREE_MAX_NODES = int(os.environ.get("ROXO_OEP_TREE_MAX_NODES", "300"))
 TREE_RANKDIR = os.environ.get("ROXO_OEP_TREE_RANKDIR", "LR")  # LR: horizontal, TB: vertical
 METRICS_DIR = metrics_dir(HERE)
@@ -58,6 +58,8 @@ METRICS_DIR = metrics_dir(HERE)
 BEST_PER_GENERATION_SAVED = 100  # best_value_per_generation keeps the first 100 generations
 OEP_EFFICIENCY_HEADER = EFFICIENCY_HEADER +["phase", "evaluations", "duplicates",
                                              "best_value_per_generation"]
+# rollout_stats.csv phase of each move phase this agent searches
+ROLLOUT_PHASE = {"combatMove": "combat", "nonCombatMove": "noncombat"}
 
 
 class Agent:
@@ -125,7 +127,7 @@ class Agent:
                               MUTATION_RATE, PLAYOUT_ROUNDS, SEED, trace=SAVE_TREE)
         folder = METRICS_DIR / self.output_folder
         self.efficiency = MetricLogger(str(folder / "efficiency.csv"), header=OEP_EFFICIENCY_HEADER)
-        self.rollout_stats = MetricLogger(str(folder / "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
+        self.rollout_stats = RolloutStats(str(folder / "rollout_stats.csv"))
         self.log(f"ready as {self.player}; {SECONDS}s per move phase, population {POPULATION}, "
                  f"survival {SURVIVAL_RATE}, mutation {MUTATION_RATE}, {PLAYOUT_ROUNDS}-round playouts")
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
@@ -229,10 +231,9 @@ class Agent:
                             phase, st.evaluations, st.duplicates,
                             ";".join(f"{v:.4f}" for v in
                                      st.best_per_generation[:BEST_PER_GENERATION_SAVED]))
-        for i, (rounds, reward, terminal) in enumerate(st.rollouts):
-            self.rollout_stats.buffer(self.player, self.game_number, state.round, i, rounds,
-                                      round(reward, 4), 1 if terminal else 0)
-        self.rollout_stats.flush()
+        for rounds, reward, terminal in st.rollouts:
+            self.rollout_stats.add(reward, rounds, terminal)
+        self.rollout_stats.write(self.player, self.game_number, state.round, ROLLOUT_PHASE[phase])
 
 
 def main():

@@ -13,8 +13,11 @@ later.
 Every agent's `run-agent.sh` ends with `exec "${TRIPLEA_TESTBENCH_PYTHON:-python3}" -u agent.py`.
 `collect_selfplay.py` plays the agent as a tournament variant that sets `TRIPLEA_TESTBENCH_PYTHON`
 to [tap.py](tap.py). The tap starts the real interpreter and relays the protocol lines unchanged in
-both directions. It keeps the observation from each `turn_request` and, on `game_end`, labels them
-with the faction's reward and writes `records/<faction>-game-<n>.json`.
+both directions. It keeps the observation from each `turn_request`, reduced to its abstract state
+(see below). On `game_end` it labels them with the faction's reward and writes
+`records/<faction>-game-<n>.json`. It writes this file before passing `game_end` on, because the
+engine stops the agent as soon as it answers. Set `EVAL_REWARD_RAW=1` to record the full
+observations instead, which are about 10 to 20 times larger.
 
 | Outcome for the faction | Reward    |
 |-------------------------|-----------|
@@ -56,8 +59,8 @@ about 20 µs.
 
 Each entry holds `count`, `wins`, `losses`, `reward_mean`, `reward_var` (a running mean and variance,
 by Welford's method), `rounds_to_end_mean`, the `games` it came from, and the abstract `state`. With
-`--raw`, it also keeps the first raw observation seen of it (`raw_state`). The records folders keep
-every raw observation either way.
+`--raw` and records made with `EVAL_REWARD_RAW=1`, it also keeps the first raw observation seen of
+it (`raw_state`).
 
 The database is updated in place. Games that are already counted, by their `game_id`
 (`<run>/<faction>-game-<n>`), are skipped, so merging a records folder again does not count it
@@ -65,19 +68,48 @@ twice.
 
 ## Usage
 
+Edit [selfplay.json](selfplay.json) to choose which agents to collect samples from, then run:
+
 ```bash
-python3 planning-agent-testbed/evaluate-reward/collect_selfplay.py --games 20
-python3 planning-agent-testbed/evaluate-reward/collect_selfplay.py --games 100 --num-batches 4 \
-    --env TRIPLEA_MCTS_SECONDS=1.0
+python3 planning-agent-testbed/evaluate-reward/collect_selfplay.py
+python3 planning-agent-testbed/evaluate-reward/collect_selfplay.py --games 100 --num-batches 4
+python3 planning-agent-testbed/evaluate-reward/collect_selfplay.py --config other-agents.json
 ```
 
-The default is `tripleMind-mcts` against itself on `capture-the-flag-diag`, with a round limit of
-100. Every run merges its games into `database.json` in this folder (or the file given by
-`--database`), so the statistics build up across runs. A run's own files go in `runs/<timestamp>/`:
+```json
+{
+  "agents": [
+    "tripleMind-mcts",
+    {"agent": "tripleMind-mcts", "id": "tm-fast-evalrec", "env": {"TRIPLEA_MCTS_SECONDS": "0.3"}}
+  ],
+  "games": 10,
+  "gameFolder": "capture-the-flag-diag",
+  "map": {"name": "Capture The Flag", "gameName": "Capture The Flag", "aliases": ["capture_the_flag", "CTF"]},
+  "roundLimit": 100,
+  "phases": "combatMove",
+  "env": {},
+  "gui": false
+}
+```
 
-- `evaluate-reward-selfplay.json`: the tournament spec.
-- `records/`: one file per faction and won or lost game, holding its states, result and final state.
-- `tournament/`: the tournament's `games.jsonl`, `results.txt` and agent metrics.
+- `agents`: each agent plays only against itself, in its own tournament, `games` games each.
+  - A plain string is an agent ID.
+  - An object adds settings for that agent only.
+  - It plays as a variant with the ID `<agent>-evalrec`, so its metrics stay apart from normal
+    tournaments. If the same agent is listed twice, give each entry its own `id`.
+- `env`: settings for every agent.
+- `gui`: `false` (the default) plays without a game window; `true` shows it.
+- `--agents`, `--games`, `--round-limit`, `--phases` and `--env` override the config.
+
+Every run merges its games into `database.json` in this folder (or the file given by `--database`),
+so the statistics build up across runs. A run's own files go in `runs/<timestamp>/`:
+
+- `selfplay.json`: a copy of the config used.
+- `records/`: one file per agent, faction and won or lost game (`<agent id>-<faction>-game-<n>.json`),
+  holding its states, result and final state.
+- `tournament/<agent id>/`: that agent's tournament spec, `games.jsonl` and `results.txt`. The
+  agent still writes its metric CSVs, because that can't be turned off without changing the agent.
+  The runner deletes them (`agents/`) after the run unless you pass `--keep-metrics`.
 
 To merge existing records, or to build a fresh database from them:
 
@@ -85,6 +117,41 @@ To merge existing records, or to build a fresh database from them:
 python3 planning-agent-testbed/evaluate-reward/build_database.py runs/<a>/records runs/<b>/records --out fresh.json
 ```
 
-The agent plays under the ID `<agent>-evalrec`, so its metrics stay apart from normal tournaments.
-The variant's manifest in `agents/generated-variants/` names one run's records folder, so run one
+The variants' manifests in `agents/generated-variants/` name one run's records folder, so run one
 collection at a time.
+
+## Comparing an agent's reward function
+
+[compare_reward.py](compare_reward.py) runs an agent's own reward function on every state in the
+database and compares it with the environment's reward, round by round. The default is tripleMind's
+`mcts.evaluate_state`.
+
+```bash
+python3 planning-agent-testbed/evaluate-reward/compare_reward.py
+python3 planning-agent-testbed/evaluate-reward/compare_reward.py --agent-dir agents/tripleMind_hybrids/tripleMind-with-opp-nodes --min-count 2
+```
+
+The agent is not changed. The script imports the function from the agent's folder and calls it on
+each state, rebuilt as the observation the agent would have been shown. The abstract state keeps
+everything `evaluate_state` reads: territory owners and unit types and owners. Production and unit
+costs come from the map XML. On the 93 states recorded in full, the rebuilt and full observations
+gave identical values.
+
+The two rewards are on different scales:
+
+- The environment's reward is 1 or -1 per game, so a state's mean is in [-1, 1].
+- `evaluate_state` gives `score - 0.5`, in [-0.5, 0.5], for a state that hasn't ended the game.
+
+The script multiplies the agent's value by `--scale` (default 2) and clips it to [-1, 1]. Every
+number is per sample, meaning a state counted once for each game it came up in, from the faction's
+own point of view.
+
+It writes these files to `comparisons/<agent folder>/`:
+
+- `reward_vs_round.png`:
+  - Top row: per faction, the mean actual reward and the mean scaled agent value by round.
+  - Bottom row: the mean absolute error `|agent - outcome|`, and the share of samples where the
+    agent's sign matches the winner (0 counts as half).
+- `rounds.csv`: the numbers behind the plot, one row per faction and round.
+- `states.csv`: one row per database state, with its count, wins, losses, actual mean and the
+  agent's raw and scaled values.

@@ -314,7 +314,7 @@ class TripleMindAgent:
         while node is not None:
             entry = self.node_json(node, action)
             entry["children"] = [self.node_json(c, node.action_to(c)) for c in node.children]
-            best = max(node.children, key=lambda c: c.visits) if node.children else None
+            best = max(node.children, key=node.visits_to) if node.children else None
             entry["chosen"] = node.children.index(best) if best is not None else None
             path.append(entry)
             if best is None or node.passes_turn:

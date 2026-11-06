@@ -4,14 +4,18 @@
 The agents' run-agent.sh ends with `exec "${TRIPLEA_TESTBENCH_PYTHON:-python3}" -u agent.py`.
 Pointing TRIPLEA_TESTBENCH_PYTHON at this script puts it between the engine and the agent: it starts
 the real interpreter with the same arguments and relays every protocol line unchanged, both ways.
-On the way it keeps each turn_request's observation, and when the engine sends game_end it labels
-them with the game's reward for this agent's faction and writes one JSON file for the game.
+On the way it keeps each turn_request's observation, reduced to its abstract state
+(abstract_state.py), and when the engine sends game_end it labels them with the game's reward for
+this agent's faction and writes one JSON file for the game, before passing game_end on: the engine
+stops the agent as soon as it answers game_end.
 
 Environment:
-  EVAL_REWARD_OUT      folder for the game files (default evaluate-reward/records)
+  EVAL_REWARD_OUT      folder for the game files, named <agent>-<faction>-game-<n>.json (default
+                       evaluate-reward/records)
   EVAL_REWARD_PHASES   comma-separated phases to keep, or "all" (default combatMove: the state
                        before the agent's combat moves, the root of its search tree)
   EVAL_REWARD_PYTHON   the real interpreter (default python3)
+  EVAL_REWARD_RAW      1 keeps the raw observations instead of the abstract states (about 10x larger)
 
 A game that is stopped before game_end has no reward, and one without a winner (a draw, the round
 limit) is discarded: neither writes anything.
@@ -26,10 +30,13 @@ import threading
 import time
 from pathlib import Path
 
+from abstract_state import abstract
+
 HERE = Path(__file__).resolve().parent
 OUT = Path(os.environ.get("EVAL_REWARD_OUT") or HERE / "records")
 PHASES = {p.strip() for p in os.environ.get("EVAL_REWARD_PHASES", "combatMove").split(",") if p.strip()}
 PYTHON = os.environ.get("EVAL_REWARD_PYTHON") or "python3"
+RAW = os.environ.get("EVAL_REWARD_RAW", "0") == "1"
 
 
 def reward(result):
@@ -56,7 +63,7 @@ class Recorder:
                 "round": state.get("round"),
                 "step": state.get("step"),
                 "phase": message.get("phase"),
-                "state": state,
+                "state": state if RAW else abstract(state),
             })
         elif kind == "game_end":
             self.finish(message)
@@ -75,6 +82,7 @@ class Recorder:
                 "map_name": state.get("mapName"),
                 "run_started_at_millis": message.get("runStartedAtMillis"),
                 "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "abstract": not RAW,
             }, "records": []}
         return self.games[key]
 
@@ -92,13 +100,25 @@ class Recorder:
             if rounds_played is not None and record["round"] is not None:
                 record["rounds_to_end"] = rounds_played - record["round"]
         game["result"] = {**result, "reward": value}
-        game["final_state"] = message.get("state")
+        final_state = message.get("state")
+        game["final_state"] = final_state if RAW or final_state is None else abstract(final_state)
         OUT.mkdir(parents=True, exist_ok=True)
-        target = OUT / f"{meta['player']}-game-{meta['game_number']}.json"
+        # The agent's ID keeps apart the games of agents recorded into one folder (game numbers
+        # start again at 1 in every tournament).
+        prefix = f"{meta['agent']}-" if meta["agent"] else ""
+        target = OUT / f"{prefix}{meta['player']}-game-{meta['game_number']}.json"
         partial = target.with_suffix(".json.tmp")
         partial.write_text(json.dumps(game), encoding="utf-8")
         partial.replace(target)
         del self.games[(meta["player"], meta["game_number"])]
+
+
+def see(recorder, line):
+    """A recording failure never reaches the game."""
+    try:
+        recorder.see(line)
+    except Exception as e:  # noqa: BLE001
+        print(f"evaluate-reward tap: {e!r}", file=sys.stderr)
 
 
 def relay(source, sink):
@@ -115,17 +135,18 @@ def main():
     replies.start()
     recorder = Recorder()
     for line in sys.stdin:
+        # game_end is recorded before it is forwarded (the engine stops the agent once it answers);
+        # anything else after, so the agent's clock is not charged for it.
+        ending = '"game_end"' in line
+        if ending:
+            see(recorder, line)
         try:
             child.stdin.write(line)
             child.stdin.flush()
         except BrokenPipeError:
             break
-        # Recorded after forwarding, so the agent's clock is not charged for it; a recording
-        # failure never reaches the game.
-        try:
-            recorder.see(line)
-        except Exception as e:  # noqa: BLE001
-            print(f"evaluate-reward tap: {e!r}", file=sys.stderr)
+        if not ending:
+            see(recorder, line)
     try:
         child.stdin.close()
     except BrokenPipeError:

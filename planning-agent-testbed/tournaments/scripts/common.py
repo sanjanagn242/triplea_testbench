@@ -59,6 +59,92 @@ def load(tournament: Path, filename: str, columns) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+# Columns of the rollout_stats*.csv files of earlier tournaments, one row per rollout; the agents
+# now write one row per search (ROLLOUT_STATS_HEADER of their helper.py).
+PER_ROLLOUT_COLUMNS = ["player", "game", "round", "iteration", "rollout_depth_reached", "reward",
+                       "is_terminal"]
+ROLLOUT_TOTALS = ["rollouts", "reward_sum", "reward_sq_sum", "reward_m2", "terminal_wins",
+                  "terminal_losses", "depth_sum", "depth_sq_sum"]
+
+
+def rollout_searches(path: Path):
+    """(searches, depth counts) of one rollout_stats*.csv. searches has one row per search, in file
+    order: player, game, round, phase (None in a file of one row per rollout), rollouts,
+    reward_mean, reward_m2 (sum of the rewards' squared deviations from their mean), reward_min,
+    reward_max, terminal_wins, terminal_losses, depth_sum and depth_sq_sum (of the rounds each
+    rollout advanced). depth counts is depth -> rollouts over the file. A file of one row per
+    rollout (earlier tournaments) is reduced to the same: a search is consecutive rows of one player
+    and game until the iteration number starts over, and its round is the lowest of its rows.
+    (None, None) for an empty file or one of neither layout."""
+    columns = list(pd.read_csv(path, nrows=0).columns)
+    if "rollouts" in columns:
+        s = pd.read_csv(path)
+        if s.empty:
+            return None, None
+        pairs = s["depth_counts"].astype(str).str.split(";").explode().str.split(":", expand=True)
+        depth, count = pd.to_numeric(pairs[0]), pd.to_numeric(pairs[1])
+        s["depth_sum"] = (depth * count).groupby(level=0).sum()
+        s["depth_sq_sum"] = (depth * depth * count).groupby(level=0).sum()
+        return s.drop(columns="depth_counts"), count.groupby(depth).sum()
+
+    missing = [c for c in PER_ROLLOUT_COLUMNS if c not in columns]
+    if missing:
+        print(f"skipping {path}: no column(s) {', '.join(missing)}")
+        return None, None
+    r = pd.read_csv(path, usecols=PER_ROLLOUT_COLUMNS)
+    if r.empty:
+        return None, None
+    for c in PER_ROLLOUT_COLUMNS[1:]:
+        r[c] = pd.to_numeric(r[c], errors="coerce")
+    new = ((r["iteration"].diff() <= 0) | (r["game"] != r["game"].shift())
+           | (r["player"] != r["player"].shift()))
+    terminal = r["is_terminal"] == 1
+    r = r.assign(search=new.cumsum(), win=terminal & (r["reward"] > 0),
+                 loss=terminal & (r["reward"] <= 0), depth_sq=r["rollout_depth_reached"] ** 2)
+    s = r.groupby("search").agg(
+        player=("player", "first"),
+        game=("game", "first"),
+        round=("round", "min"),
+        rollouts=("reward", "count"),
+        reward_mean=("reward", "mean"),
+        reward_var=("reward", "var"),
+        reward_min=("reward", "min"),
+        reward_max=("reward", "max"),
+        terminal_wins=("win", "sum"),
+        terminal_losses=("loss", "sum"),
+        depth_sum=("rollout_depth_reached", "sum"),
+        depth_sq_sum=("depth_sq", "sum"),
+    ).reset_index(drop=True)
+    s["reward_m2"] = s.pop("reward_var").fillna(0) * (s["rollouts"] - 1)
+    s["phase"] = None
+    return s, r["rollout_depth_reached"].value_counts()
+
+
+def combine_rollouts(df, keys):
+    """Rows of rollout totals (rollout_searches() rows, or rows this returned) combined per keys:
+    rollouts, reward_mean, reward_m2 (pooled exactly: the rows' m2 plus their means' spread),
+    reward_min, reward_max, terminal wins and losses, depth_sum, depth_sq_sum, plus searches (rows
+    combined)."""
+    d = df.assign(reward_sum=df["reward_mean"] * df["rollouts"],
+                  reward_sq_sum=df["reward_mean"] ** 2 * df["rollouts"])
+    out = d.groupby(keys).agg(**{c: (c, "sum") for c in ROLLOUT_TOTALS},
+                              reward_min=("reward_min", "min"), reward_max=("reward_max", "max"),
+                              searches=("rollouts", "size")).reset_index()
+    out["reward_mean"] = out["reward_sum"] / out["rollouts"]
+    between = out["reward_sq_sum"] - out["reward_sum"] ** 2 / out["rollouts"]
+    out["reward_m2"] = out["reward_m2"] + between.clip(lower=0)
+    return out.drop(columns=["reward_sum", "reward_sq_sum"])
+
+
+def rollout_spread(df):
+    """(reward variance, reward std, mean depth, depth std) of rows of rollout totals; NaN variance
+    and std for a row of one rollout."""
+    n = df["rollouts"]
+    var = df["reward_m2"] / (n - 1)
+    depth_var = (df["depth_sq_sum"] - df["depth_sum"] ** 2 / n).clip(lower=0) / (n - 1)
+    return var, np.sqrt(var), df["depth_sum"] / n, np.sqrt(depth_var)
+
+
 def tournament_agents(tournament: Path):
     """Ids of every agent with a metrics folder in the tournament, sorted."""
     return sorted(p.parent.name for p in (tournament / "agents").glob("*/metrics") if p.is_dir())

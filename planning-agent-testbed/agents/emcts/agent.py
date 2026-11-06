@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))  # this agent's modules (helper.py: a copy of Trip
 import triplea_fm as fm  # noqa: E402
 from triplea_fm.testbench import LiveBridge  # noqa: E402
 
-from helper import (EFFICIENCY_HEADER, GAME_RESULTS_HEADER, ROLLOUT_STATS_HEADER,  # noqa: E402
+from helper import (EFFICIENCY_HEADER, GAME_RESULTS_HEADER, RolloutStats,  # noqa: E402
                     MetricLogger, log_game_result, metrics_dir, output_folder, turn_position)
 from emcts import EMCTS  # noqa: E402
 from emcts_tree import save_emcts_tree  # noqa: E402
@@ -44,14 +44,14 @@ SEED = int(os.environ.get("EMCTS_SEED", "0"))
 ROLLOUT = int(os.environ.get("EMCTS_ROLLOUT", "1"))  # turns of ours evaluated; 1: no rollout
 # Debugging: after every search, draw its tree in logs/trees/ (emcts_tree.py).
 SAVE_TREE = os.environ.get("EMCTS_SAVE_TREE", "0") == "1"
-TREE_PNG = os.environ.get("EMCTS_TREE_PNG", "1") == "1"  # also render .png (needs Graphviz `dot`)
+TREE_PNG = os.environ.get("EMCTS_TREE_PNG", "0") == "1"  # also render .png (needs Graphviz `dot`)
 TREE_MAX_NODES = int(os.environ.get("EMCTS_TREE_MAX_NODES", "300"))
 TREE_MAX_DEPTH = int(os.environ.get("EMCTS_TREE_MAX_DEPTH", "3"))  # levels drawn below the path
 TREE_RANKDIR = os.environ.get("EMCTS_TREE_RANKDIR", "LR")  # LR: horizontal, TB: vertical
 METRICS_DIR = metrics_dir(HERE)
 # TripleMind's columns first (its plot scripts read them by name), then this agent's own.
 EMCTS_EFFICIENCY_HEADER = EFFICIENCY_HEADER + ["evaluations", "cache_hits", "greedy_value",
-                                               "best_value", "phases", "tree_nodes"]
+                                               "best_value", "phases", "tree_nodes", "unique_plans"]
 
 
 class Agent:
@@ -116,7 +116,7 @@ class Agent:
         self.search = EMCTS(self.game, self.map, SECONDS, PHASES, EXP_CONST, SEED, ROLLOUT)
         folder = METRICS_DIR / self.output_folder
         self.efficiency = MetricLogger(str(folder / "efficiency.csv"), header=EMCTS_EFFICIENCY_HEADER)
-        self.rollout_stats = MetricLogger(str(folder / "rollout_stats.csv"), header=ROLLOUT_STATS_HEADER)
+        self.rollout_stats = RolloutStats(str(folder / "rollout_stats.csv"))
         self.log(f"ready as {self.player}; {SECONDS}s per combat move, {PHASES} phases, C={EXP_CONST}, "
                  f"rollout {ROLLOUT} turn(s)")
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
@@ -227,11 +227,10 @@ class Agent:
                             len(plan),  # num_of_terr_attacked
                             st.max_depth,  # max_tree_depth: mutations from the first root
                             st.evaluations, st.cache_hits, round(st.greedy_value, 4),
-                            round(st.best_value, 4), st.phases, st.nodes)
-        for i, (rounds, reward, terminal) in enumerate(st.rollouts):
-            self.rollout_stats.buffer(self.player, self.game_number, state.round, i, rounds,
-                                      round(reward, 4), 1 if terminal else 0)
-        self.rollout_stats.flush()
+                            round(st.best_value, 4), st.phases, st.nodes, st.unique_plans)
+        for rounds, reward, terminal in st.rollouts:
+            self.rollout_stats.add(reward, rounds, terminal)
+        self.rollout_stats.write(self.player, self.game_number, state.round)
 
 
 def main():

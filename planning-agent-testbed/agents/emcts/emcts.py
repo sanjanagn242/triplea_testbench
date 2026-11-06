@@ -64,6 +64,7 @@ class SearchStats:
     seconds: float = 0.0
     iterations: int = 0
     evaluations: int = 0  # distinct genomes evaluated
+    unique_plans: int = 0  # distinct legal plans (phenotypes) evaluated; every genome is legal
     cache_hits: int = 0
     territories: int = 0
     root_mutations: int = 0  # children the first root can have
@@ -298,6 +299,7 @@ class EMCTS:
         stats.seconds = time.time() - started
         stats.best_value = self.evaluate(root.genes)
         stats.nodes, stats.leaves = count_nodes(first_root)
+        stats.unique_plans = len(self.values)  # keyed by phenotype
         return [a for a in root.genes if a.kind == TERRITORY]
 
 

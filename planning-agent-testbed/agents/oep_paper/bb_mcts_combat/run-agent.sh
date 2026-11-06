@@ -17,7 +17,7 @@ export TRIPLEA_BB_SEED="${TRIPLEA_BB_SEED:-0}"
 # TREE_MAX_NODES caps the nodes drawn, TREE_RANKDIR lays the tree out top to bottom (TB) or left
 # to right (LR).
 export TRIPLEA_BB_SAVE_TREE="${TRIPLEA_BB_SAVE_TREE:-0}"
-export TRIPLEA_BB_TREE_PNG="${TRIPLEA_BB_TREE_PNG:-1}"
+export TRIPLEA_BB_TREE_PNG="${TRIPLEA_BB_TREE_PNG:-0}"
 export TRIPLEA_BB_TREE_MAX_NODES="${TRIPLEA_BB_TREE_MAX_NODES:-300}"
 export TRIPLEA_BB_TREE_RANKDIR="${TRIPLEA_BB_TREE_RANKDIR:-TB}"
 # The pure-Python TripleMind action generators (this folder has no Cython build).

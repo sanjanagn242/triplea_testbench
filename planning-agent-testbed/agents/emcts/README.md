@@ -91,10 +91,12 @@ Metrics are written to `metrics/<game>/vs-<opponent>/`, or under `$TRIPLEA_TESTB
 in a tournament, as for TripleMind agents:
 
 - `game_results.csv`
-- `rollout_stats.csv`: one row per distinct genome evaluated (rounds advanced, value, whether the
-  game ended)
+- `rollout_stats.csv`: one row per search, totalling the distinct genomes it evaluated: their count,
+  the mean and spread of their values, how many ended the game, and how many advanced each number
+  of rounds
 - `efficiency.csv`: TripleMind's columns, then `evaluations`, `cache_hits`, `greedy_value`,
-  `best_value`, `phases` and `tree_nodes`
+  `best_value`, `phases`, `tree_nodes` and `unique_plans` (distinct legal plans evaluated in the
+  search: every genome is legal, so one per phenotype)
 
 In `efficiency.csv`, `num_children_at_root` is the first root's mutations,
 `num_action_sequences` is the tree's leaves, and `max_tree_depth` is the most mutations of any node

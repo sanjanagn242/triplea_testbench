@@ -8,8 +8,9 @@ are discarded.
 
 Each observation is reduced to its abstract state (abstract_state.py: owners, unit counts per
 owner and type, the players' resources; no unit IDs or static map data), and two observations are
-the same state when their abstract states are equal. Entries store the abstract state; --raw also
-keeps the first raw observation seen of each (the records folders keep all of them).
+the same state when their abstract states are equal. The tap normally records abstract states
+already; for records made with EVAL_REWARD_RAW=1, --raw also keeps the first raw observation seen of
+each state.
 
 The database is updated in place: games already counted (by game_id) are skipped, so a records
 folder can be merged again after more games were played.
@@ -53,13 +54,14 @@ def merge(db, path: Path, raw=False):
     if game_id in db["counted_games"]:
         return "counted"
     for record in game["records"]:
-        state = abstract(record["state"])
+        state = record["state"] if meta.get("abstract") else abstract(record["state"])
         key = state_key(meta["player"], state, meta.get("game_name"))
         entry = db["entries"].get(key)
         if entry is None:
             entry = db["entries"][key] = {
                 "player": meta["player"],
                 "game_name": meta.get("game_name"),
+                "game_folder": meta.get("game_folder"),
                 "round": record["round"],
                 "step": record["step"],
                 "phase": record["phase"],
@@ -69,7 +71,7 @@ def merge(db, path: Path, raw=False):
                 "games": [],
                 "state": state,
             }
-            if raw:
+            if raw and not meta.get("abstract"):
                 entry["raw_state"] = record["state"]  # the first observation seen of this state
         add(entry, record["reward"], record.get("rounds_to_end"))
         entry["games"].append(game_id)
@@ -83,7 +85,8 @@ def main():
     ap.add_argument("--out", type=Path, default=DATABASE,
                     help=f"database file, updated in place (default {DATABASE.relative_to(HERE.parent)})")
     ap.add_argument("--raw", action="store_true",
-                    help="also keep the first raw observation of each new state (about 15 KB each)")
+                    help="with raw records (EVAL_REWARD_RAW=1): also keep the first raw observation of each new "
+                         "state (about 15 KB each)")
     args = ap.parse_args()
 
     db = (json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else

@@ -27,10 +27,13 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
                               RETREAT_D)
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger,
                     DebugLogger,
                     save_mcts_tree_png)
+
+fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, no dice
 
 
 class MCTSGameState:

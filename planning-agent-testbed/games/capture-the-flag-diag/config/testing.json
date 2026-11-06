@@ -12,8 +12,8 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "tripleMind-unitMove",
-    "Germans": "all-phases-mcts"
+    "Russians": "heterogeneous-mcts",
+    "Germans": "emcts-fh"
   },
   "showObservations": false,
   "observationPlayers": {

@@ -6,7 +6,7 @@ agent_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Logging to stderr and planning-agent-testbed/logs/agent-<faction>-game-<n>.txt: 1 on, 0 off.
 export TRIPLEA_AGENT_LOG="${TRIPLEA_AGENT_LOG:-1}"
 # Game records in records/<faction>-game-<n>.jsonl: 1 on, 0 off.
-export TRIPLEA_HARD_AI_RECORD="${TRIPLEA_HARD_AI_RECORD:-1}"
+export TRIPLEA_HARD_AI_RECORD="${TRIPLEA_HARD_AI_RECORD:-0}"
 # Hard AI: seed of its randomness and simulation dice, battle simulations per estimate (scale;
 # 1.0 as ProAi), and battle-phase samples in the simulated purchase turn.
 export TRIPLEA_HARD_AI_SEED="${TRIPLEA_HARD_AI_SEED:-0}"

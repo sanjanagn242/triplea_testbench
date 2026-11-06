@@ -16,9 +16,11 @@ state is at, so the same tree holds edges of every searched kind:
 When a node's phase has nothing left to decide, expand() ends it and plays the decisions in
 between (battles, place, end of turn) with the rollout policies up to the next searched decision,
 whoever's it is: the tree goes on through this player's later phases and the opponents' (opponent
-nodes). Every node is valued by the same reward, evaluate_state, from whoAmI's point of view;
-each node keeps it from the view of the player who chose its edge, so UCT maximises for whoever
-chooses at the parent.
+nodes). Every node is valued by the same reward, evaluate_state, from whoAmI's point of view.
+
+The search statistics live on the edges, the same way for every phase: an Edge holds its action,
+the node it leads to, its visits and its value, kept from the view of the player who chose it, so
+UCT maximises for whoever chooses at the parent. A node holds only its state and its edges.
 
 Rollouts finish the leaf's phase with its own policy, then play every decision with the rollout
 policies until depth_budget rounds have ended: depth_budget 1 stops when the round the leaf is in
@@ -38,10 +40,13 @@ from triplea_fm.state import (BATTLE_SELECTION_D, CASUALTIES_D, MOVE_D, PLACE_D,
                               RETREAT_D)
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 import noncombat_generators as ncg
-from helper import (EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger,
+from helper import (EFFICIENCY_HEADER, ACTION_SEQ_HEADER, MetricLogger, RolloutStats,
                     save_mcts_tree_png)
+
+fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, no dice
 
 # The searched decisions, by the testbench's phase names.
 PURCHASE_PHASE, COMBAT_PHASE, NONCOMBAT_PHASE = "purchase", "combatMove", "nonCombatMove"
@@ -161,28 +166,38 @@ class HMCTSGameState:
         return None
 
 
-class MCTSNode:
-    def __init__(self, state, parent=None, action=None, sign=1):
-        self.state = state
-        self.parent = parent
+class Edge:
+    """A tree edge: `action`, chosen at its parent, and the node it leads to. visits counts the
+    iterations that took it and value sums their rewards from the chooser's point of view."""
+    __slots__ = ("action", "child", "sign", "visits", "value", "passes_phase")
+
+    def __init__(self, action, child, sign, passes_phase=False):
         self.action = action
-        # +1 / -1 for whether state.played_by (who picked `action`) is on whoAmI's side. value is
-        # kept from that player's point of view, so best_child_uct maximises for whoever chooses
-        # at the parent (the parent's state.next_moves_by).
+        self.child = child
+        # +1 / -1 for whether the chooser (the parent's state.next_moves_by, the child's
+        # state.played_by) is on whoAmI's side.
         self.sign = sign
-        self.children = []
-        self.untried_actions = None
         self.visits = 0
         self.value = 0.0
-        self.is_state_terminal = None
-        self.tree_level = parent.tree_level + 1 if parent else 0  # edges from the root
         # True when `action` was the chooser's last decision of its phase: expand() then advanced
-        # the state to the next searched decision, so this node is that decision.
-        self.passes_phase = False
+        # the state to the next searched decision, so the child is that decision.
+        self.passes_phase = passes_phase
 
-    def action_to(self, child):
-        """The action of the edge from this node to child."""
-        return child.action
+    def mean(self):
+        return self.value / self.visits if self.visits else 0.0
+
+
+class MCTSNode:
+    def __init__(self, state, tree_level=0):
+        self.state = state
+        self.edges = []
+        self.untried_actions = None
+        self.is_state_terminal = None
+        self.tree_level = tree_level  # edges from the root
+
+    def visits(self):
+        """Iterations that went on from this node: the sum of its edges' visits."""
+        return sum(e.visits for e in self.edges)
 
     def is_fully_expanded(self):
         return self.untried_actions is not None and len(self.untried_actions) == 0
@@ -192,26 +207,26 @@ class MCTSNode:
             self.is_state_terminal = self.state.is_terminal()
         return self.is_state_terminal
 
-    def best_child_uct(self, c_param=1.414):
-        # in case there is still an unvisited child, prioritize it to ensure exploration
-        unvisited = [child for child in self.children if child.visits == 0]
+    def best_edge_uct(self, c_param=1.414):
+        # in case there is still an unvisited edge, prioritize it to ensure exploration
+        unvisited = [e for e in self.edges if e.visits == 0]
         if unvisited:
             return random.choice(unvisited)
-        if not self.children:
+        if not self.edges:
             return None
-        log_visits = math.log(self.visits)
-        weights = [child.value / child.visits + c_param * math.sqrt(log_visits / child.visits)
-                   for child in self.children]
+        log_visits = math.log(self.visits())
+        weights = [e.value / e.visits + c_param * math.sqrt(log_visits / e.visits)
+                   for e in self.edges]
         max_wt = max(weights)
-        best_nodes = [child for child, w in zip(self.children, weights) if w == max_wt]
+        best_edges = [e for e, w in zip(self.edges, weights) if w == max_wt]
         # ties: the action with the highest strength
-        return max(best_nodes, key=lambda node: node.action.strength)
+        return max(best_edges, key=lambda e: e.action.strength)
 
 
 class HeterogeneousMCTS:
     def __init__(self, definition, map_graph_, whoAmI, time_budget, depth_budget,
                  exploration_constant, metrics_dir="metrics", trees_dir=None,
-                 rollout_epsilon=0.1):
+                 rollout_epsilon=0.1, combat_rollout="epsilon_greedy"):
         self.d = definition
         self.map = map_graph_
         self.whoAmI = whoAmI
@@ -222,6 +237,14 @@ class HeterogeneousMCTS:
         self.exploration_constant = exploration_constant  # UCB1 exploration parameter
         # random-move probability of the combat-move and purchase rollouts
         self.rollout_epsilon = rollout_epsilon
+        # combat-move rollout policy, by name: pick(current_state, actions) -> action
+        combat_rollouts = {"epsilon_greedy": self.pick_rollout_move_epsilon_greedy,
+                           "evaluate": self.pick_rollout_move_evaluate}
+        if combat_rollout not in combat_rollouts:
+            raise ValueError(f"unknown combat rollout {combat_rollout!r}, expected one of "
+                             f"{tuple(combat_rollouts)}")
+        self.combat_rollout = combat_rollout
+        self.pick_combat_rollout_move = combat_rollouts[combat_rollout]
 
         # Each search's tree is saved as <trees_dir>/<TREE_NAME[phase]>_<faction>_g<game>_r<round>
         # .dot / .html / .png (helper.save_mcts_tree_png); None saves nothing.
@@ -235,13 +258,13 @@ class HeterogeneousMCTS:
         self._rng = fm.SeededRng(random.getrandbits(62))
         self._unit_rules = {}  # player -> [PurchaseUnit] of every candidate rule
 
-        # Metric files per root phase. The rollout rows are buffered during a search and written
-        # once at its end, to keep file I/O out of the loop.
+        # Metric files per root phase. A search's rollout totals are written as one row once the
+        # search is over, to keep file I/O and per-rollout rows out of the loop.
         self.metrics = {
             phase: (MetricLogger(os.path.join(metrics_dir, f"efficiency{suffix}.csv"),
                                  header=EFFICIENCY_HEADER),
-                    MetricLogger(os.path.join(metrics_dir, f"rollout_stats{suffix}.csv"),
-                                 header=ROLLOUT_STATS_HEADER),
+                    RolloutStats(os.path.join(metrics_dir, f"rollout_stats{suffix}.csv"),
+                                 suffix.lstrip("_") or "combat"),
                     MetricLogger(os.path.join(metrics_dir, f"action_seq_stats{suffix}.csv"),
                                  header=ACTION_SEQ_HEADER))
             for phase, suffix in METRICS_SUFFIX.items()}
@@ -386,13 +409,34 @@ class HeterogeneousMCTS:
 
     # ---- rollout policies ----------------------------------------------------------------
 
-    def pick_rollout_move_epsilon_greedy(self, actions):
+    def pick_rollout_move_epsilon_greedy(self, current_state, actions):
         """With probability self.rollout_epsilon a random action, else the strongest one (ties
         broken at random)."""
         if random.random() < self.rollout_epsilon:
             return random.choice(actions)
         best = max(a.strength for a in actions)
         return random.choice([a for a in actions if a.strength == best])
+
+    def pick_rollout_move_evaluate(self, current_state, actions):
+        """The action whose resulting state evaluate_state scores highest for the player to move
+        (ties broken at random). Each action is tried on a clone of current_state's sim."""
+        player = current_state.current_player
+        best, best_actions = None, []
+        for a in actions:
+            trial = current_state.clone()
+            if not a.end_phase:
+                if isinstance(a, PurchaseUnit):
+                    ok = self.apply(trial.sim, a.action())
+                else:
+                    ok = all([self.apply(trial.sim, mv) for mv in a.moves])
+                if not ok:
+                    continue
+            score, _ = evaluate_state(trial, player, 0, self.depth_budget)
+            if best is None or score > best:
+                best, best_actions = score, [a]
+            elif score == best:
+                best_actions.append(a)
+        return random.choice(best_actions) if best_actions else random.choice(actions)
 
     def _rollout_purchase(self, current_state):
         """Epsilon-greedy units until nothing is affordable: a random one with probability
@@ -402,7 +446,7 @@ class HeterogeneousMCTS:
         while True:
             actions = self.affordable_units(sim, player)
             if not actions or not self.apply(
-                    sim, self.pick_rollout_move_epsilon_greedy(actions).action()):
+                    sim, self.pick_rollout_move_epsilon_greedy(current_state, actions).action()):
                 break
         return self.end_phase(sim)
 
@@ -414,7 +458,7 @@ class HeterogeneousMCTS:
                 current_state.current_player)
             if not actions:
                 break
-            mv = self.pick_rollout_move_epsilon_greedy(actions)
+            mv = self.pick_combat_rollout_move(current_state, actions)
             if mv.end_phase:
                 break
             for move in mv.moves:
@@ -493,12 +537,14 @@ class HeterogeneousMCTS:
     # ---- tree ----------------------------------------------------------------------------
 
     def expand(self, node):
+        """Adds an edge for node's next untried action and returns it; None when node has none
+        left (it is now fully expanded)."""
         action = node.state.getNextAction()
         # END is never a tree edge: it is only generated when nothing is left to decide (a forced
         # move), and the child of the phase's last decision already stands for the next one.
         if action is None or action.end_phase:
             node.untried_actions = []
-            return node
+            return None
         new_state = node.state.clone()
         new_state.played_by = node.state.next_moves_by
         new_state.apply_move(action)
@@ -506,11 +552,10 @@ class HeterogeneousMCTS:
         passes_phase = no_target(new_state)
         if passes_phase:
             self.pass_phase(new_state)
-        child = MCTSNode(new_state, parent=node, action=action,
-                         sign=self.sign_of(new_state.played_by))
-        child.passes_phase = passes_phase
-        node.children.append(child)
-        return child
+        edge = Edge(action, MCTSNode(new_state, node.tree_level + 1),
+                    self.sign_of(new_state.played_by), passes_phase)
+        node.edges.append(edge)
+        return edge
 
     def simulate(self, state):
         current_state = state.clone()
@@ -534,16 +579,16 @@ class HeterogeneousMCTS:
         else:
             reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
                                                  self.depth_budget)
-        self.rollout_stats_metric.buffer(self.whoAmI, state.sim.game_number, state.sim.round,
-                                         self.iteration, depth, reward, 1 if is_terminal else 0)
+        self.rollout_stats_metric.add(reward, depth, is_terminal)
         return reward, depth
 
-    def backpropagate(self, node, reward):
-        """reward is whoAmI's; each node adds it from the view of the player who chose it."""
-        while node is not None:
-            node.visits += 1
-            node.value += node.sign * reward
-            node = node.parent
+    @staticmethod
+    def backpropagate(path, reward):
+        """reward is whoAmI's; each edge of the iteration's path adds it from the view of the
+        player who chose it."""
+        for edge in path:
+            edge.visits += 1
+            edge.value += edge.sign * reward
 
     # ---- search --------------------------------------------------------------------------
 
@@ -567,31 +612,35 @@ class HeterogeneousMCTS:
         while not no_target(initial_state) and time.time() - start_time < self.time_budget:
             self.iteration += 1
             # --- Selection and expansion: walk down by UCT to a node with an untried action and
-            # expand it. expand() returns the node itself when it finds the node has no untried
-            # action left (it is now fully expanded); then keep walking down from it, so every
-            # iteration still adds a node unless it reaches a terminal or childless node. ---
+            # expand it. expand() returns None when it finds the node has no untried action left
+            # (it is now fully expanded); then keep walking down from it, so every iteration
+            # still adds an edge unless it reaches a terminal or childless node. ---
             node = root
+            path = []  # the edges taken
             while True:
                 while node.is_fully_expanded() and not node.is_terminal():
-                    best = node.best_child_uct(self.exploration_constant)
-                    if best is None:
+                    edge = node.best_edge_uct(self.exploration_constant)
+                    if edge is None:
                         break
-                    node = best
+                    path.append(edge)
+                    node = edge.child
                 if node.is_terminal():
                     break
-                child = self.expand(node)
-                if child is not node:
-                    node = child  # rollout from the new child
+                edge = self.expand(node)
+                if edge is not None:
+                    path.append(edge)
+                    node = edge.child  # rollout from the new child
                     break
-                if not node.children:
+                if not node.edges:
                     break  # nothing to expand or walk into: roll out from here
 
             value, depth = self.simulate(node.state)
             self.max_depth = max(self.max_depth, depth)
-            self.backpropagate(node, value)
+            self.backpropagate(path, value)
 
         search_time = time.time() - start_time
-        self.rollout_stats_metric.flush()
+        self.rollout_stats_metric.write(self.whoAmI, initial_state.sim.game_number,
+                                        initial_state.sim.round)
         # The latest search tree and its statistics, saved in game records.
         self.last_root = root
         self.last_stats = {
@@ -600,7 +649,7 @@ class HeterogeneousMCTS:
             "seconds": search_time,
         }
 
-        if self.trees_dir is not None and root.children:
+        if self.trees_dir is not None and root.edges:
             os.makedirs(self.trees_dir, exist_ok=True)
             tree_prefix = os.path.join(
                 self.trees_dir, f"{TREE_NAME[phase]}_{self.whoAmI}_g{sim.game_number}"
@@ -614,13 +663,13 @@ class HeterogeneousMCTS:
         # (the nodes below it are later decisions, ours or the opponents').
         chosen = []
         node = root
-        while node.children:
-            best_child = max(node.children, key=lambda c: c.visits)
-            self.log_choice_stats(initial_state, node, best_child)
-            chosen.append(best_child.action)
-            if best_child.passes_phase:
+        while node.edges:
+            best = max(node.edges, key=lambda e: e.visits)
+            self.log_choice_stats(initial_state, node, best)
+            chosen.append(best.action)
+            if best.passes_phase:
                 break
-            node = best_child
+            node = best.child
         self.last_choice = chosen
         actions = forced + self.play_phase(initial_state, chosen)
 
@@ -630,8 +679,9 @@ class HeterogeneousMCTS:
             sim.round,
             search_time,
             self.iteration,
-            root.value / root.visits if root.visits > 0 else 0,
-            len(root.children),
+            # root's edges are all whoAmI's, so their values are from its point of view
+            sum(e.value for e in root.edges) / root.visits() if root.visits() > 0 else 0,
+            len(root.edges),
             self.max_depth,
             count_leaves(root),
             # attacked territories, reinforced territories or units bought
@@ -669,10 +719,10 @@ class HeterogeneousMCTS:
         return played
 
     def log_choice_stats(self, initial_state, node, chosen):
-        """Buffers one action_seq_stats row: how `chosen` stood out among node's children."""
-        kids = node.children
-        visits = [c.visits for c in kids]
-        avgs = [c.value / c.visits if c.visits else 0.0 for c in kids]
+        """Buffers one action_seq_stats row: how the `chosen` edge stood out among node's edges."""
+        kids = node.edges
+        visits = [e.visits for e in kids]
+        avgs = [e.mean() for e in kids]
         i = kids.index(chosen)
         second = max((k for k in range(len(kids)) if k != i), key=lambda k: visits[k], default=None)
         mean_v, var_v = _mean_var(visits)
@@ -680,7 +730,8 @@ class HeterogeneousMCTS:
         z = lambda x, m, var: (x - m) / math.sqrt(var) if var > 1e-12 else ""  # blank if all equal
         self.action_seq_stats_metric.buffer(
             self.whoAmI, initial_state.sim.game_number, initial_state.sim.round,
-            chosen.tree_level, chosen.state.played_by, action_label(chosen.action), len(kids),
+            chosen.child.tree_level, chosen.child.state.played_by, action_label(chosen.action),
+            len(kids),
             visits[i], visits[i] / sum(visits) if sum(visits) else 0.0,
             visits[second] if second is not None else "", mean_v, var_v, math.sqrt(var_v),
             z(visits[i], mean_v, var_v),
@@ -713,8 +764,8 @@ def count_leaves(root):
     leaves, stack = 0, [root]
     while stack:
         node = stack.pop()
-        if node.children:
-            stack.extend(node.children)
+        if node.edges:
+            stack.extend(e.child for e in node.edges)
         else:
             leaves += 1
     return leaves
@@ -726,7 +777,7 @@ def tree_depth(root):
     while stack:
         node = stack.pop()
         deepest = max(deepest, node.tree_level)
-        stack.extend(node.children)
+        stack.extend(e.child for e in node.edges)
     return deepest
 
 
