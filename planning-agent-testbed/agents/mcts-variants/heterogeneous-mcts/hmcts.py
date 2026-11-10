@@ -168,8 +168,9 @@ class HMCTSGameState:
 
 class Edge:
     """A tree edge: `action`, chosen at its parent, and the node it leads to. visits counts the
-    iterations that took it and value sums their rewards from the chooser's point of view."""
-    __slots__ = ("action", "child", "sign", "visits", "value", "passes_phase")
+    iterations that took it, value sums their rewards from the chooser's point of view and m2 sums
+    those rewards' squared deviations from their mean (Welford's algorithm, see backpropagate)."""
+    __slots__ = ("action", "child", "sign", "visits", "value", "m2", "passes_phase")
 
     def __init__(self, action, child, sign, passes_phase=False):
         self.action = action
@@ -179,12 +180,17 @@ class Edge:
         self.sign = sign
         self.visits = 0
         self.value = 0.0
+        self.m2 = 0.0
         # True when `action` was the chooser's last decision of its phase: expand() then advanced
         # the state to the next searched decision, so the child is that decision.
         self.passes_phase = passes_phase
 
     def mean(self):
         return self.value / self.visits if self.visits else 0.0
+
+    def std(self):
+        """Standard deviation of the rewards through the edge; None under two visits."""
+        return math.sqrt(self.m2 / (self.visits - 1)) if self.visits > 1 else None
 
 
 class MCTSNode:
@@ -558,6 +564,20 @@ class HeterogeneousMCTS:
         return edge
 
     def simulate(self, state):
+        """Rolls out from state: (reward, rounds advanced). Every NOISE_EVERY-th rollout is played
+        again from state for the rollout noise (helper.RolloutStats.add_pair); only the first counts
+        in the search."""
+        reward, depth, is_terminal = self.play_out(state)
+        self.rollout_stats_metric.add(reward, depth, is_terminal)
+        if self.rollout_stats_metric.wants_pair():
+            started = time.time()
+            again, _, _ = self.play_out(state)
+            self.rollout_stats_metric.add_pair(reward, again, time.time() - started)
+        return reward, depth
+
+    def play_out(self, state):
+        """One rollout from a clone of state: (reward, rounds advanced, whether it ended in a
+        terminal state)."""
         current_state = state.clone()
         sim = current_state.sim
         depth = 0
@@ -579,16 +599,23 @@ class HeterogeneousMCTS:
         else:
             reward, is_terminal = evaluate_state(current_state, self.whoAmI, depth,
                                                  self.depth_budget)
-        self.rollout_stats_metric.add(reward, depth, is_terminal)
-        return reward, depth
+        return reward, depth, is_terminal
+
+    def clock(self):
+        """Seconds as the search's time budget counts them: the wall clock less the time this
+        search's noise rollouts took (simulate), so measuring the noise leaves the search as it is."""
+        return time.time() - self.rollout_stats_metric.noise_seconds
 
     @staticmethod
     def backpropagate(path, reward):
         """reward is whoAmI's; each edge of the iteration's path adds it from the view of the
-        player who chose it."""
+        player who chose it, updating its mean and m2 as in Welford's algorithm."""
         for edge in path:
+            x = edge.sign * reward
+            delta = x - edge.mean()
             edge.visits += 1
-            edge.value += edge.sign * reward
+            edge.value += x
+            edge.m2 += delta * (x - edge.mean())
 
     # ---- search --------------------------------------------------------------------------
 
@@ -609,7 +636,7 @@ class HeterogeneousMCTS:
         self.max_depth = 0
         start_time = time.time()
         # Nothing to decide: no search, the phase is played as it ends.
-        while not no_target(initial_state) and time.time() - start_time < self.time_budget:
+        while not no_target(initial_state) and self.clock() - start_time < self.time_budget:
             self.iteration += 1
             # --- Selection and expansion: walk down by UCT to a node with an untried action and
             # expand it. expand() returns None when it finds the node has no untried action left
@@ -736,7 +763,9 @@ class HeterogeneousMCTS:
             visits[second] if second is not None else "", mean_v, var_v, math.sqrt(var_v),
             z(visits[i], mean_v, var_v),
             avgs[i], avgs[second] if second is not None else "", mean_a, math.sqrt(var_a),
-            z(avgs[i], mean_a, var_a))
+            z(avgs[i], mean_a, var_a),
+            "" if chosen.std() is None else chosen.std(),
+            "" if second is None or kids[second].std() is None else kids[second].std())
 
 
 def action_label(act):

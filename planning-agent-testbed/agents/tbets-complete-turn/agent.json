@@ -1,0 +1,9 @@
+{
+  "id": "tbets-complete-turn",
+  "name": "TBETS (complete turn)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "MCTS over turn genomes (one flat gene sequence per player turn; heterogeneous-mcts's atomic actions as genes): root = current state, its children my remaining turn, every node's children the next player's turn. Expansion at the UCB1-selected leaf: EMCTS_GREEDY_PCT % a child (the next turn's greedy genome), otherwise a mutated sibling; greedy rollouts of EMCTS_ROLLOUT rounds. Searched at all three phases.",
+  "outputDirectories": ["metrics"]
+}

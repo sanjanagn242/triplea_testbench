@@ -1,0 +1,17 @@
+{
+  "id": "tbets-m-uct",
+  "name": "TBETS-M-UCT (heterogeneous MCTS grown with greedy children and mutated siblings)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "heterogeneous-mcts's tree of atomic actions (purchase, combat move, non-combat move of every player), grown as tbets-segmented: a node's first child is its greedy action, and each expansion adds either the leaf's greedy child (TBETS_GREEDY_PCT %) or a mutation of the leaf (another action of its parent's decision) as a sibling.",
+  "outputDirectories": [
+    "metrics",
+    "logs",
+    "trees",
+    "records"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "tbets-modified",
+  "name": "TBETS (modified)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "MCTS over phase genomes (one gene sequence per searched phase: purchase, combat move or noncombat move; heterogeneous-mcts's atomic actions as genes): root = current state, its children genomes of the current phase, every node's children genomes of the next phase (purchase -> combat -> noncombat -> next player's purchase). Expansion at the UCB1-selected leaf: TBETS_GREEDY_PCT % a child (the next phase's greedy genome), otherwise a mutated sibling; every node with children passed through gets one mutated sibling per visit; greedy rollouts of TBETS_ROLLOUT rounds.",
+  "outputDirectories": [
+    "metrics"
+  ]
+}

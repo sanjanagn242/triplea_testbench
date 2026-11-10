@@ -13,7 +13,7 @@ export TRIPLEMIND_RECORD=0
 # UCB1 exploration constant, and seed.
 export TRIPLEA_MCTS_SECONDS="${TRIPLEA_MCTS_SECONDS:-1.0}"
 export TRIPLEA_MCTS_ITERS="${TRIPLEA_MCTS_ITERS:-100000}"
-export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-2}"
+export TRIPLEA_MCTS_ROLLOUT="${TRIPLEA_MCTS_ROLLOUT:-5}"
 export TRIPLEA_MCTS_EXP_CONST="${TRIPLEA_MCTS_EXP_CONST:-1.414}"
 # Epsilon-greedy combat-move and purchase rollouts: probability of a random move / unit, else
 # the strongest attack / the most attack + defense per PU.
@@ -46,5 +46,9 @@ export PYTHONPATH="$agent_dir/../../../forward-model/python${PYTHONPATH:+:$PYTHO
   fi
 ) 9>"$agent_dir/.build.lock"
 
+# Rollout noise in rollout_stats.csv: every n-th rollout of a search is played a second time from
+# the same state, outside the search (not backpropagated, not counted against the time budget).
+# 0 plays none.
+export TRIPLEA_ROLLOUT_NOISE_EVERY="${TRIPLEA_ROLLOUT_NOISE_EVERY:-10}"
 python="${TRIPLEA_TESTBENCH_PYTHON:-python3}"
 exec "$python" -u "$agent_dir/agent.py"

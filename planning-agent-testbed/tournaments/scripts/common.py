@@ -35,21 +35,22 @@ def parse_args(description):
     return parser
 
 
-def load(tournament: Path, filename: str, columns) -> pd.DataFrame:
+def load(tournament: Path, filename: str, columns, optional=()) -> pd.DataFrame:
     """Rows of every agents/<agent>/metrics/<map>/vs-<opponent>/<filename> with the given columns,
     plus agent, map and opponent. Files missing a column (written before it existed) are skipped
-    with a note."""
+    with a note; a missing optional column is blank (NaN) instead."""
     frames = []
+    columns = [*columns, *optional]
     for path in sorted((tournament / "agents").glob(f"*/metrics/*/vs-*/{filename}")):
         df = pd.read_csv(path)
-        missing = [c for c in columns if c not in df.columns]
+        missing = [c for c in columns if c not in df.columns and c not in optional]
         if missing:
             print(f"skipping {path}: no column(s) {', '.join(missing)}")
             continue
         if df.empty:
             continue
         opponent_dir, map_dir, agent_dir = path.parent, path.parent.parent, path.parents[3]
-        df = df[list(columns)].copy()
+        df = df.reindex(columns=list(columns))
         df["agent"] = agent_dir.name
         df["map"] = map_dir.name
         df["opponent"] = opponent_dir.name[len("vs-"):]

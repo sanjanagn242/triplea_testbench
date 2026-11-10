@@ -14,6 +14,8 @@ python3 "$script_dir/plot_efficiency.py" "$tournament" "$@"
 python3 "$script_dir/plot_rollout_stats.py" "$tournament" "$@"
 # Per phase (purchase / combat / non-combat), only agents that log rollouts for that phase.
 python3 "$script_dir/plot_rollout_flatness.py" "$tournament" "$@"
+# Only agents that write the noise columns of rollout_stats*.csv; skip if none do.
+python3 "$script_dir/plot_rollout_noise.py" "$tournament" "$@" || true
 # Only agents that write action_seq_stats.csv (tripleMind-with-opp-nodes so far); skip if none do.
 python3 "$script_dir/plot_action_selection.py" "$tournament" "$@" || true
 # Only agents that write sibling_values.csv (oep-greedy-action-combat so far); skip if none do.

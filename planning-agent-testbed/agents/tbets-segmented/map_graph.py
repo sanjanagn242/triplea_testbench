@@ -1,0 +1,346 @@
+"""Map-agnostic graph view of a TripleA game, for adjacency, reachability and distance queries.
+
+Two layers:
+  MapGraph   static, built once from the `gameXml` sent in `game_start`: territories are networkx
+             nodes, <connection> elements are edges, territory/unit-type attachments are attributes.
+  GameState  dynamic, rebuilt from each request's `state` observation: owners, units, PUs.
+
+Movement domains: "land" excludes water and impassable territories, "sea" is water only, "air" is
+everything passable. Pass `domain=None` for the raw map graph.
+
+Never print to stdout here: stdout carries the agent protocol.
+"""
+
+import xml.etree.ElementTree as ET
+from collections import Counter
+
+import networkx as nx
+
+
+# ---- static map ------------------------------------------------------------------------------
+
+class UnitType:
+    def __init__(self, name, options):
+        self.name = name
+        self.movement = int(options.get("movement", 0))
+        self.attack = int(options.get("attack", 0))
+        self.defense = int(options.get("defense", 0))
+        self.is_air = _flag(options, "isAir")
+        self.is_sea = _flag(options, "isSea")
+        self.is_infrastructure = _flag(options, "isFactory") or _flag(options, "isInfrastructure")
+        self.can_produce = _flag(options, "isFactory") or _flag(options, "canProduceUnits")
+        self.is_aa = _flag(options, "isAA") or _flag(options, "isAAforCombatOnly")
+        self.is_infantry = _flag(options, "isInfantry")
+        self.can_blitz = _flag(options, "canBlitz")
+        self.is_artillery = _flag(options, "artillery")
+        self.artillery_supportable = _flag(options, "artillerySupportable")
+        self.options = options
+
+    @property
+    def domain(self):
+        return "air" if self.is_air else "sea" if self.is_sea else "land"
+
+    def __repr__(self):
+        return f"UnitType({self.name}, move={self.movement}, {self.domain})"
+
+
+class ProductionRule:
+    def __init__(self, name, costs, results):
+        self.name = name
+        self.costs = costs  # {resource: quantity}
+        self.results = results  # {unit type or resource: quantity}
+
+    @property
+    def cost(self):
+        return self.costs.get("PUs", 0)
+
+    def __repr__(self):
+        return f"ProductionRule({self.name}, {self.costs} -> {self.results})"
+
+
+class MapGraph:
+    """Static map: territories, adjacency and unit types. Built once per game."""
+
+    def __init__(self, name=""):
+        self.name = name
+        self.G = nx.Graph()
+        self.players = []
+        self.unit_types = {}
+        self.production_rules = {}
+        self.frontiers = {}  # {player: [rule names]}
+        self._views = {}
+        self._dist = {}
+
+    @classmethod
+    def from_xml(cls, xml_text):
+        root = ET.fromstring(xml_text.encode("utf-8") if isinstance(xml_text, str) else xml_text)
+        props = {p.get("name"): p.get("value") for p in root.iter("property")}
+        info = root.find("info")
+        m = cls(props.get("mapName") or (info.get("name") if info is not None else ""))
+
+        for t in root.iter("territory"):
+            m.G.add_node(t.get("name"), water=t.get("water") == "true", impassable=False,
+                         production=0, capital=None, victory_city=0)
+        for c in root.iter("connection"):
+            m.G.add_edge(c.get("t1"), c.get("t2"))
+        m.players = [p.get("name") for p in root.iter("player")]
+
+        for a in root.iter("attachment"):
+            options = {o.get("name"): o.get("value") for o in a.iter("option")}
+            target = a.get("attachTo")
+            if a.get("type") == "territory" and target in m.G:
+                node = m.G.nodes[target]
+                node["production"] = int(options.get("production", 0))
+                node["capital"] = options.get("capital")
+                node["victory_city"] = int(options.get("victoryCity", 0))
+                node["impassable"] = _flag(options, "isImpassable")
+            elif a.get("type") == "unitType":
+                m.unit_types[target] = UnitType(target, options)
+
+        for r in root.iter("productionRule"):
+            m.production_rules[r.get("name")] = ProductionRule(
+                r.get("name"),
+                {c.get("resource"): int(c.get("quantity")) for c in r.iter("cost")},
+                {x.get("resourceOrUnit"): int(x.get("quantity")) for x in r.iter("result")})
+        frontier_rules = {f.get("name"): [fr.get("name") for fr in f.iter("frontierRules")]
+                          for f in root.iter("productionFrontier")}
+        for pp in root.iter("playerProduction"):
+            m.frontiers[pp.get("player")] = frontier_rules.get(pp.get("frontier"), [])
+        return m
+
+    # -- territory facts --
+
+    def territories(self):
+        return list(self.G.nodes)
+
+    def is_water(self, t):
+        return self.G.nodes[t]["water"]
+
+    def capitals(self):
+        """{player: territory}"""
+        return {d["capital"]: t for t, d in self.G.nodes(data=True) if d["capital"]}
+
+    def victory_cities(self):
+        return [t for t, d in self.G.nodes(data=True) if d["victory_city"]]
+
+    def unit_cost(self, unit_type):
+        """PUs per unit from the cheapest production rule that builds it (None if not buildable)."""
+        costs = [r.cost / r.results[unit_type] for r in self.production_rules.values()
+                 if unit_type in r.results and r.results[unit_type] > 0]
+        return min(costs) if costs else None
+
+    def purchasable(self, player):
+        """[ProductionRule] in the player's frontier."""
+        return [self.production_rules[r] for r in self.frontiers.get(player, [])
+                if r in self.production_rules]
+
+    # -- graph queries --
+
+    def view(self, domain=None):
+        """Subgraph a unit of `domain` may move through (read-only, cached)."""
+        if domain is None:
+            return self.G
+        if domain not in self._views:
+            nodes = self.G.nodes
+            keep = {
+                "land": lambda t: not nodes[t]["water"] and not nodes[t]["impassable"],
+                "sea": lambda t: nodes[t]["water"],
+                "air": lambda t: not nodes[t]["impassable"],
+            }[domain]
+            self._views[domain] = nx.subgraph_view(self.G, filter_node=keep)
+        return self._views[domain]
+
+    def _graph(self, domain, avoid):
+        g = self.view(domain)
+        if avoid:
+            avoid = set(avoid)
+            g = nx.subgraph_view(g, filter_node=lambda t: t not in avoid)
+        return g
+
+    def neighbors(self, t, domain=None):
+        g = self.view(domain)
+        return list(g.neighbors(t)) if t in g else []
+
+    def distance(self, src, dst, domain=None, avoid=()):
+        """Fewest moves from src to dst, or None if unreachable. `avoid` nodes are impassable
+        (src and dst are always allowed)."""
+        if not avoid:
+            return self._all_pairs(domain).get(src, {}).get(dst)
+        g = self._graph(domain, set(avoid) - {src, dst})
+        try:
+            return nx.shortest_path_length(g, src, dst)
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            return None
+
+    def distance_from_set(self, sources, domain=None):
+        """{territory: distance to the nearest of `sources`} (multi-source BFS)."""
+        g = self.view(domain)
+        sources = [s for s in sources if s in g]
+        if not sources:
+            return {}
+        return nx.multi_source_dijkstra_path_length(g, sources)
+
+    def objectives(self):
+        """Highest-production territories: the map's natural targets (e.g. the CTF flag)."""
+        best = max((d["production"] for _, d in self.G.nodes(data=True)), default=0)
+        return [t for t, d in self.G.nodes(data=True) if best and d["production"] == best]
+
+    def _all_pairs(self, domain):
+        # Precomputed once per domain; maps have at most a few hundred territories.
+        if domain not in self._dist:
+            self._dist[domain] = dict(nx.all_pairs_shortest_path_length(self.view(domain)))
+        return self._dist[domain]
+
+    def __repr__(self):
+        return (f"MapGraph({self.name}, {self.G.number_of_nodes()} territories, "
+                f"{self.G.number_of_edges()} connections)")
+
+
+# ---- dynamic state ---------------------------------------------------------------------------
+
+class Unit:
+    def __init__(self, unit_id, unit_type, owner, movement=1, movement_left=1, attack=0,
+                 defense=0, hits=0, properties=None, uid=None):
+        self.id = unit_id
+        self.uid = uid  # forward-model unit id (set when built from a SimulationState)
+        self.unit_type = unit_type
+        self.owner = owner
+        self.range = movement
+        self.movement_left = movement_left
+        self.attack = attack
+        self.defense = defense
+        self.hits = hits
+        self.moved = movement_left < movement  # Track if unit has moved this turn
+        self.properties = properties if properties is not None else {}
+
+    @classmethod
+    def from_json(cls, u):
+        return cls(u["id"], u["type"], u.get("owner") or "Neutral",
+                   movement=int(u.get("movement", 1)),
+                   movement_left=int(float(u.get("movementLeft", u.get("movement", 1)))),
+                   attack=u.get("attack", 0), defense=u.get("defense", 0), hits=u.get("hits", 0),
+                   properties=u)
+
+    @property
+    def domain(self):
+        p = self.properties
+        return "air" if p.get("air") else "sea" if p.get("sea") else "land"
+
+    def __repr__(self):
+        return f"Unit({self.unit_type}, {self.owner}, id={self.id[:8]})"
+
+
+class Territory:
+    def __init__(self, name, owner="Neutral"):
+        self.name = name
+        self.owner = owner
+        self.units = []
+
+    def __repr__(self):
+        return f"Territory({self.name}, owner={self.owner}, units={len(self.units)})"
+
+
+class Player:
+    def __init__(self, name, pu, capital=None):
+        self.name = name
+        self.PU = pu
+        self.capital = capital
+        self.unplaced = {}  # {unit_type: quantity}
+
+    def __repr__(self):
+        return f"Player({self.name}, PU={self.PU})"
+
+
+class GameState:
+    """One observation laid over a MapGraph."""
+
+    def __init__(self, map_graph, state, whoAmI):
+        self.map = map_graph
+        self.whoAmI = whoAmI
+        self.round = state.get("round", 0)
+        self.step = state.get("step", "")
+        self.active_player = state.get("activePlayer")
+        # Turn history the observation does not carry (empty at the start of a turn).
+        self.conquered = set()  # territories conquered this turn
+        self.blitzed = set()  # ...of which conquered by blitzing through
+
+        self.territories = {}
+        for t in state["territories"]:
+            territory = Territory(t["name"], t.get("owner") or "Neutral")
+            territory.units = [Unit.from_json(u) for u in t.get("units", [])]
+            self.territories[territory.name] = territory
+
+        capitals = map_graph.capitals()
+        self.players = {}
+        for p in state["players"]:
+            player = Player(p["name"], p.get("resources", {}).get("PUs", 0),
+                            capitals.get(p["name"]))
+            player.unplaced = dict(Counter(_unit_type(u) for u in p.get("unitsInReserve", [])))
+            self.players[player.name] = player
+        self.current_player = self.players.get(whoAmI)
+
+    @classmethod
+    def from_sim(cls, map_graph, definition, sim, whoAmI):
+        """GameState view of a triplea_fm SimulationState (live bridge state or a rollout state).
+        Units carry `uid`, the forward-model id that MoveAction/PlaceAction expect."""
+        from triplea_fm import rules
+        from triplea_fm.definition import NULL_PLAYER
+
+        d = definition
+        g = cls.__new__(cls)
+        g.map = map_graph
+        g.whoAmI = whoAmI
+        g.round = sim.round
+        g.step = d.steps[sim.step].name
+        g.active_player = (d.player_names[sim.decision.actor]
+                           if sim.decision is not None else None)
+
+        def pname(o):
+            return "Neutral" if o == NULL_PLAYER else d.player_names[o]
+
+        g.territories = {name: Territory(name, pname(sim.owner[i]))
+                         for i, name in enumerate(d.territory_names)}
+        capitals = map_graph.capitals()
+        g.players = {name: Player(name, sim.balances[i][d.treasury_resource], capitals.get(name))
+                     for i, name in enumerate(d.player_names)}
+        for u in sim.units.values():
+            ut = d.unit_types[u.type]
+            if u.loc < 0:
+                if u.owner != NULL_PLAYER:
+                    unplaced = g.players[d.player_names[u.owner]].unplaced
+                    unplaced[ut.name] = unplaced.get(ut.name, 0) + 1
+                continue
+            g.territories[d.territory_names[u.loc]].units.append(
+                Unit(str(u.id), ut.name, pname(u.owner), movement=ut.movement,
+                     movement_left=rules.movement_left(d, u), attack=ut.attack,
+                     defense=ut.defense, hits=u.hits, uid=u.id,
+                     properties={"air": ut.is_air, "sea": ut.domain == 2,
+                                 "infrastructure": ut.is_infrastructure}))
+        g.conquered = {d.territory_names[t] for t in sim.conquered}
+        g.blitzed = {d.territory_names[t] for t in sim.blitzed}
+        g.current_player = g.players.get(whoAmI)
+        return g
+
+    def owner(self, t):
+        return self.territories[t].owner
+
+    def owned_by(self, owner=None):
+        owner = owner or self.whoAmI
+        return [t for t in self.territories.values() if t.owner == owner]
+
+    def frontier(self, owner=None):
+        """Territories owned by `owner` (default: me) that border someone else's land."""
+        owner = owner or self.whoAmI
+        return [t for t in self.owned_by(owner)
+                if any(self.territories[n].owner != owner
+                       for n in self.map.neighbors(t.name, "land"))]
+
+
+# ---- visualization ---------------------------------------------------------------------------
+
+def _flag(options, key):
+    return str(options.get(key, "false")).lower() == "true"
+
+
+def _unit_type(u):
+    return (u.get("type") or u.get("unitType")) if isinstance(u, dict) else str(u)

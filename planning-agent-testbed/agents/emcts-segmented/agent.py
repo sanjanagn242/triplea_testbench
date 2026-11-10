@@ -260,7 +260,7 @@ class Agent:
                             st.unique_plans)
         for rounds, reward, terminal in st.rollouts:
             self.rollout_stats.add(reward, rounds, terminal)
-        self.rollout_stats.write(self.player, self.game_number, state.round)
+        self.rollout_stats.write(self.player, self.game_number, state.round, SEGMENT_PHASE[phase])
 
 
 def main():

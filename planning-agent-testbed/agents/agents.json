@@ -29,10 +29,15 @@
     "emcts",
     "emcts-fh",
     "emcts-segmented",
+    "tbets-complete-turn",
+    "tbets-segmented",
+    "tbets-modified",
     "emcts-puw",
     "ne-mcts-all-attacks",
     "bb-mcts-all-attacks",
     "all-phases-mcts",
-    "heterogeneous-mcts"
+    "heterogeneous-mcts",
+    "tbets-m-uct",
+    "tbets-seg-hybrid"
   ]
 }

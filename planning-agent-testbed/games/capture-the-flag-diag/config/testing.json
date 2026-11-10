@@ -12,8 +12,8 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "heterogeneous-mcts",
-    "Germans": "emcts-fh"
+    "Russians": "emcts-segmented",
+    "Germans": "tbets-seg-hybrid"
   },
   "showObservations": false,
   "observationPlayers": {

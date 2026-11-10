@@ -1,14 +1,20 @@
-"""Compares how many distinct legal plans the EMCTS agents evaluated per search, in one tournament
-(the unique_plans column of every agents/emcts*/metrics/<map>/vs-*/efficiency.csv, one row per
-search; only the EMCTS variants write it).
+"""Compares how many distinct legal plans the EMCTS, TBETS and HMCTS agents evaluated per search, in
+one tournament (one row per search): the unique_plans column of every
+agents/{emcts,tbets}*/metrics/<map>/vs-*/efficiency.csv, and for heterogeneous-mcts,
+tbets-m-uct and tbets-seg-hybrid (its tree) the num_action_sequences column of their efficiency.csv (combat move),
+efficiency_purchase.csv and efficiency_noncombat.csv.
 
 A plan is the genome as played: in emcts and emcts-puw every genome is legal, so one plan per
 phenotype; in emcts-fh and emcts-segmented the decoded (repaired) genome, so stored genomes that
-decode to the same plan count once.
+decode to the same plan count once; in tbets-complete-turn and tbets-segmented the decoded genomes
+evaluated. heterogeneous-mcts and tbets-m-uct have no genomes: their count is the action sequences
+(root-to-leaf paths) of their search tree. tbets-seg-hybrid stores its genomes in that tree, so
+the same count is its distinct genomes.
 
 For each map, writes to <out>/<map>/, and for all maps combined to <out>/all-maps/:
-  unique_plans.png          one row per searched phase (combatMove for every agent; emcts-segmented
-                            also searches purchase and nonCombatMove): unique plans per search,
+  unique_plans.png          one row per searched phase (combatMove for every agent; emcts-segmented,
+                            the tbets agents, heterogeneous-mcts, tbets-m-uct and tbets-seg-hybrid also search purchase and
+                            nonCombatMove): unique plans per search,
                             distribution per agent (box; dots = each game's mean), and by round
                             (line = mean, band = min to max across that round's searches)
   unique_plans_summary.txt  per agent and phase: games, searches, unique plans; and the mean, min
@@ -29,23 +35,39 @@ from common import agent_colors, agent_legend, boxes_by_agent, by_map, load, par
 COLUMNS = ["player", "game", "round", "unique_plans"]
 COMBAT = "combatMove"
 PHASES = [COMBAT, "purchase", "nonCombatMove"]  # row order of the plots
+PLANNERS = ("emcts", "tbets")  # agents whose efficiency.csv has unique_plans
+# Agents on heterogeneous-mcts's tree: one efficiency file per searched phase, num_action_sequences
+# for the plans.
+HMCTS = ("heterogeneous-mcts", "tbets-m-uct", "tbets-seg-hybrid")
+HMCTS_FILES = {"efficiency.csv": COMBAT, "efficiency_purchase.csv": "purchase",
+               "efficiency_noncombat.csv": "nonCombatMove"}
+HMCTS_COLUMNS = ["player", "game", "round", "num_action_sequences"]
 
 args = parse_args(__doc__.splitlines()[0]).parse_args()
 out_root = args.out or args.tournament / "plots"
-# emcts-segmented logs one row per searched phase (its phase column); the others search only the
-# combat move (their files are left out of this load quietly; the next one reads them).
+# emcts-segmented and the tbets agents log one row per searched phase (their phase column); the
+# others search only the combat move. Files without these columns (the other agents' and
+# heterogeneous-mcts') are left out of these loads quietly.
 with contextlib.redirect_stdout(io.StringIO()):
     phased = load(args.tournament, "efficiency.csv", COLUMNS + ["phase"])
-single = load(args.tournament, "efficiency.csv", COLUMNS)
+    single = load(args.tournament, "efficiency.csv", COLUMNS)
+    hmcts = [load(args.tournament, f, HMCTS_COLUMNS).assign(phase=phase)
+             for f, phase in HMCTS_FILES.items()]
 single = single[~single["agent"].isin(phased["agent"].unique())].assign(phase=COMBAT)
+hmcts = pd.concat(hmcts, ignore_index=True).rename(columns={"num_action_sequences": "unique_plans"})
+hmcts = hmcts[hmcts["agent"].str.startswith(HMCTS)]
 df = pd.concat([phased, single], ignore_index=True)
-df = df[df["agent"].str.startswith("emcts")]
+df = df[df["agent"].str.startswith(PLANNERS) & ~df["agent"].str.startswith(HMCTS)]
+df = pd.concat([df, hmcts], ignore_index=True)
 if df.empty:
-    raise SystemExit(f"no EMCTS efficiency.csv with unique_plans under {args.tournament / 'agents'}")
+    raise SystemExit(f"no EMCTS/TBETS unique_plans or {'/'.join(HMCTS)} num_action_sequences under "
+                     f"{args.tournament / 'agents'}")
 for c in ["game", "round", "unique_plans"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 df = df.dropna(subset=["unique_plans"])
 colors = agent_colors(args.tournament)
+Y_LABEL = ("Unique legal plans\n(heterogeneous-mcts, tbets-m-uct, tbets-seg-hybrid: action sequences)"
+           if df["agent"].str.startswith(HMCTS).any() else "Unique legal plans")
 
 
 def range_by_round(ax, d, value):
@@ -71,11 +93,11 @@ for map_name, m in by_map(df, args.maps):
         shown = sorted(p["agent"].unique())
         boxes_by_agent(ax1, {a: p.loc[p["agent"] == a, "unique_plans"] for a in shown}, colors,
                        {a: p[p["agent"] == a].groupby(["map", "game"])["unique_plans"].mean() for a in shown})
-        ax1.set_ylabel("Unique legal plans", fontsize=12)
+        ax1.set_ylabel(Y_LABEL, fontsize=12)
         ax1.set_title(f"{phase}: unique plans per search (dots: each game's mean)", fontsize=12)
         range_by_round(ax2, p, "unique_plans")
         ax2.set_xlabel("Round", fontsize=12)
-        ax2.set_ylabel("Unique legal plans", fontsize=12)
+        ax2.set_ylabel(Y_LABEL, fontsize=12)
         ax2.set_title(f"{phase}: mean by round (band: min to max across searches)", fontsize=12)
         for ax in (ax1, ax2):
             style(ax)

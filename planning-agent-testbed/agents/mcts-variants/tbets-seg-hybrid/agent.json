@@ -1,0 +1,17 @@
+{
+  "id": "tbets-seg-hybrid",
+  "name": "TBETS-seg-hybrid (tbets-segmented's phase genomes on heterogeneous MCTS's per-gene tree)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "tbets-segmented's greedy genomes and one-gene mutations (with repair) of phase genomes, stored in heterogeneous-mcts's tree of atomic actions: genomes that share their first genes share those edges, so UCB1 and the statistics are per gene, not per genome.",
+  "outputDirectories": [
+    "metrics",
+    "logs",
+    "trees",
+    "records"
+  ]
+}

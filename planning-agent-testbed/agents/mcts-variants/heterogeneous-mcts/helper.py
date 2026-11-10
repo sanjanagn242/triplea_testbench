@@ -99,11 +99,21 @@ EFFICIENCY_HEADER = ["player", "game", "round", "time_per_turn", "num_iterations
 # RolloutStats: phase (purchase, combat or noncombat), the number of rollouts, the mean of their
 # rewards and reward_m2, the sum of the rewards' squared deviations from that mean (the reward
 # variance within the search is reward_m2 / (rollouts - 1), and searches combine exactly), the
-# reward range, the rollouts that stopped in a terminal win (reward > 0) or loss, and depth_counts,
-# "depth:count" pairs joined by ";" of the rounds the rollouts advanced.
+# reward range, the rollouts that stopped in a terminal win (reward > 0) or loss, depth_counts,
+# "depth:count" pairs joined by ";" of the rounds the rollouts advanced, and the rollout noise:
+# noise_pairs rollouts played a second time from the same state (see NOISE_EVERY), noise_var_sum
+# the sum of half the squared difference of each pair's rewards (the pooled reward variance of a
+# rollout from one state is noise_var_sum / noise_pairs, and searches combine by summing) and
+# noise_seconds the time the second rollouts took.
 ROLLOUT_STATS_HEADER = ["player", "game", "round", "phase", "rollouts", "reward_mean", "reward_m2",
                         "reward_min", "reward_max", "terminal_wins", "terminal_losses",
-                        "depth_counts"]
+                        "depth_counts", "noise_pairs", "noise_var_sum", "noise_seconds"]
+
+# Every NOISE_EVERY-th rollout of a search is played a second time from the same state, outside the
+# search (not backpropagated, its time not counted against the search's budget), to measure the
+# rollout's noise: the spread of the rewards of rollouts from one state, 0 when rollouts are
+# deterministic. 0 plays none.
+NOISE_EVERY = int(os.environ.get("TRIPLEA_ROLLOUT_NOISE_EVERY", "10"))
 
 
 class RolloutStats:
@@ -122,6 +132,8 @@ class RolloutStats:
         self.lo, self.hi = math.inf, -math.inf
         self.wins = self.losses = 0
         self.depths = defaultdict(int)
+        self.pairs = 0
+        self.noise_var_sum = self.noise_seconds = 0.0
 
     def add(self, reward, depth, terminal):
         """One rollout: its reward, the rounds it advanced and whether it reached a terminal state.
@@ -141,22 +153,37 @@ class RolloutStats:
                 self.losses += 1
         self.depths[depth] += 1
 
+    def wants_pair(self):
+        """Whether the rollout just added is to be played a second time from the same state."""
+        return NOISE_EVERY > 0 and self.n % NOISE_EVERY == 0
+
+    def add_pair(self, reward, again, seconds):
+        """A rollout's reward and the reward of the same rollout played again from the same state,
+        and the seconds the second one took."""
+        self.pairs += 1
+        self.noise_var_sum += (reward - again) ** 2 / 2
+        self.noise_seconds += seconds
+
     def write(self, player, game, round_, phase=None):
         """Log the search's row (none when it ran no rollout) and start over for the next one."""
         if self.n:
             self.logger.log(player, game, round_, phase or self.phase, self.n, f"{self.mean:.6g}",
                             f"{self.m2:.6g}", f"{self.lo:.6g}", f"{self.hi:.6g}", self.wins,
-                            self.losses, ";".join(f"{d}:{c}" for d, c in sorted(self.depths.items())))
+                            self.losses, ";".join(f"{d}:{c}" for d, c in sorted(self.depths.items())),
+                            self.pairs, f"{self.noise_var_sum:.6g}", f"{self.noise_seconds:.4g}")
         self.reset()
 
 # One row per tree level of the chosen action sequence in action_seq_stats.csv: how the chosen
 # (most-visited) child compared to its siblings. visit_count / var / std_dev are over the visit
 # counts of all children at that level, avg_* over their average values (both from the chooser's
 # point of view); *_z is the chosen child's z-score among them (blank when they are all equal).
+# reward_std / second_reward_std are the standard deviation of the rewards backpropagated through the
+# chosen / runner-up child (every rollout of its subtree, blank under two), so reward_std /
+# sqrt(visit_count) is the standard error of avg_value.
 ACTION_SEQ_HEADER = ["player", "game", "round", "tl", "chooser", "action", "num_children",
                      "visit_count", "visit_share", "second_visit_count", "mean_visits", "var",
                      "std_dev", "visit_z", "avg_value", "second_avg_value", "mean_avg_value",
-                     "avg_value_std_dev", "avg_value_z"]
+                     "avg_value_std_dev", "avg_value_z", "reward_std", "second_reward_std"]
 
 
 def turn_position(definition, player_name):
