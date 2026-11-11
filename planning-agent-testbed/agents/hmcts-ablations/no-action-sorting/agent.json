@@ -1,0 +1,18 @@
+{
+  "id": "hmcts-no-action-sorting",
+  "name": "Heterogeneous MCTS, no action sorting (ablation)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": [
+    "bash",
+    "${agentDir}/run-agent.sh"
+  ],
+  "description": "heterogeneous-mcts with unordered tree actions: every combat target's attacks and every short territory's reinforcements offered at once, in map order, no strength ordering or strength tie-break; rollouts unchanged.",
+  "outputDirectories": [
+    "metrics",
+    "logs",
+    "trees",
+    "records",
+    "map_images"
+  ]
+}

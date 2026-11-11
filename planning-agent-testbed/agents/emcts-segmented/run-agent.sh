@@ -14,7 +14,7 @@ export EMCTS_SECONDS="${EMCTS_SECONDS:-1.0}"
 export EMCTS_PHASES="${EMCTS_PHASES:-40}"
 export EMCTS_EXP_CONST="${EMCTS_EXP_CONST:-0}"
 export EMCTS_SEED="${EMCTS_SEED:-0}"
-export EMCTS_HORIZON="${EMCTS_HORIZON:-1}"
+export EMCTS_HORIZON="${EMCTS_HORIZON:-2}"
 # Search tree of each searched phase in planning-agent-testbed/logs/trees/: SAVE_TREE 1 saves a .dot,
 # TREE_PNG 1 also renders a .png (needs Graphviz `dot`), TREE_MAX_NODES caps the nodes drawn (the
 # most visited, plus the bridge-burning path), TREE_MAX_DEPTH the levels drawn below that path,

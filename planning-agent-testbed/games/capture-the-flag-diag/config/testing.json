@@ -13,7 +13,7 @@
   "aiCombatStepPauseMs": 0,
   "agents": {
     "Russians": "emcts-segmented",
-    "Germans": "tbets-seg-hybrid"
+    "Germans": "hmcts-no-action-sorting"
   },
   "showObservations": false,
   "observationPlayers": {

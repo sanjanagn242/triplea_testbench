@@ -37,6 +37,8 @@
     "bb-mcts-all-attacks",
     "all-phases-mcts",
     "heterogeneous-mcts",
+    "hmcts-no-action-sorting",
+    "hmcts-no-eval-function",
     "tbets-m-uct",
     "tbets-seg-hybrid"
   ]
