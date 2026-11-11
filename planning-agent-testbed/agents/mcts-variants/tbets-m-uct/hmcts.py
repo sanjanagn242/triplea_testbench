@@ -465,11 +465,11 @@ class HeterogeneousMCTS:
         return self.end_phase(current_state.sim)
 
     def _rollout_rest_of_noncombat(self, current_state):
-        """Rest of a non-combat move the tree started: a random option per territory, then the
-        positioning moves."""
+        """Rest of a non-combat move the tree started: the strongest option per territory (the
+        first noncombat_actions offers), then the positioning moves. No randomness."""
         while True:
             current_state.legal_moves()
-            mv = random.choice(current_state.actions)
+            mv = current_state.actions[0]
             if mv.end_phase:
                 break
             current_state.apply_move(mv)
