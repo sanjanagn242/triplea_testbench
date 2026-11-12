@@ -33,8 +33,8 @@ mutations of one gene: a child is its parent's genome with one atomic action cha
         offered, else the strongest reinforcement;
       - another player's turn: TripleMind's greedy policies, in the state reached (the first
         purchase_actions option, the strongest attack set per target, noncombat_move's plan);
-    between segments battles are deterministic (fast_battle, default casualties, no retreat) and
-    placement puts everything bought at the home factory;
+    between segments battles are deterministic (fast_battle, default casualties, no retreat; dice
+    with TRIPLEA_ROLLOUT_BATTLE=dice) and placement puts everything bought at the home factory;
   * root (initialisation strategy phi): this turn's combat segment, if the genome has one, is the
     Greedy Action AI's (the territories in priority order, each gene the option whose genome
     evaluates best), as emcts-fh's; every other segment is decoded from nothing;
@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import action_generators as ag  # TripleMind's combat, noncombat and purchase action generation
+import fast_battle
 import map_graph
 import noncombat_generators as ncg  # heterogeneous-mcts's atomic noncombat options
 import triplea_fm as fm
@@ -353,7 +354,7 @@ class EMCTSSegmented:
 
     def _between_segments(self, s) -> bool:
         """A decision that is not a segment's: placement, or battles as the live adapter answers
-        them (fight every battle in order, the most likely outcome with fast_battle, default
+        them (fight every battle in order, the most likely outcome with fast_battle or dice, default
         casualties, never retreat)."""
         kind = s.decision.kind
         if kind == PLACE_D:
@@ -392,7 +393,8 @@ class EMCTSSegmented:
         evaluate_state for the searching player. Returns (value, decoded genome, its turns);
         cached per genome and per decoded genome."""
         k = key(genes)
-        cached = self.values.get(k)
+        # A cached value is read back only with fast battles: with dice every evaluation rolls again.
+        cached = self.values.get(k) if fast_battle.DETERMINISTIC else None
         if cached is not None:
             self.stats.cache_hits += 1
             return cached

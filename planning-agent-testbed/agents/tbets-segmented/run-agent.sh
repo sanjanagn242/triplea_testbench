@@ -35,5 +35,8 @@ export PYTHONPATH="$agent_dir/../../forward-model/python${PYTHONPATH:+:$PYTHONPA
 # the same state, outside the search (not backpropagated, not counted against the time budget).
 # 0 plays none.
 export TRIPLEA_ROLLOUT_NOISE_EVERY="${TRIPLEA_ROLLOUT_NOISE_EVERY:-10}"
+# Battles in the search's simulations: fast (the Fast AI's most likely outcome, no dice) or
+# dice (the forward model's dice-rolling battles, default casualties, never retreat).
+export TRIPLEA_ROLLOUT_BATTLE="${TRIPLEA_ROLLOUT_BATTLE:-fast}"
 python="${TRIPLEA_TESTBENCH_PYTHON:-python3}"
 exec "$python" -u "$agent_dir/agent.py"

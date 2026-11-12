@@ -1,13 +1,13 @@
 {
   "id": "hmcts-no-eval-function",
-  "name": "Heterogeneous MCTS (one tree over purchase, combat and non-combat moves)",
+  "name": "Heterogeneous MCTS, no evaluation function (ablation)",
   "language": "Python 3.10+",
   "entrypoint": "agent.py",
   "command": [
     "bash",
     "${agentDir}/run-agent.sh"
   ],
-  "description": "One MCTS tree whose nodes are the purchase, combat-move and non-combat-move decisions of every player, all valued by the same reward; place is not searched.",
+  "description": "heterogeneous-mcts with no evaluation function: rollouts play to the end of the game (capped at 100 rounds and the time budget) and score +1 win, -1 loss, 0 error or no winner; rollouts cut off by the time budget are not backpropagated; combat-move rollouts are epsilon-greedy only.",
   "outputDirectories": [
     "metrics",
     "logs",

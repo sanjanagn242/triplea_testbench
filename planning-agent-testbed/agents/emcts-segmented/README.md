@@ -89,6 +89,7 @@ purchase and noncombat fall back to TripleMind's greedy policy, and the combat m
 | `EMCTS_EXP_CONST` | 0 | UCB1 exploration constant |
 | `EMCTS_SEED` | 0 | seed for the order in which mutations are tried and for UCB tie-breaks |
 | `EMCTS_HORIZON` | 1 | turns after this one in the genome, any player's (0: the rest of this turn only; with two players, 2 reaches my next turn) |
+| `TRIPLEA_ROLLOUT_BATTLE` | fast | battles in the search's simulations: `fast` (the Fast AI's most likely outcome, no dice; evaluations cached) or `dice` (dice rolled, default casualties, no retreat; every evaluation rolls again) |
 | `TRIPLEA_AGENT_LOG` | 0 | 1 logs to stderr and `planning-agent-testbed/logs/agent-<faction>-game-<n>.txt` |
 
 ## Visualising a search

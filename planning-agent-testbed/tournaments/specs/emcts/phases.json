@@ -1,0 +1,24 @@
+{
+  "games": 2,
+  "sweep": {
+    "agent": "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=0",
+    "opponent": "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_HORIZON=0 EMCTS_PHASES=1",
+    "values": {"EMCTS_PHASES": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+  },
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

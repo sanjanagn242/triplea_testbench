@@ -82,6 +82,15 @@ tripleMind-mcts-MCTS_ROLLOUT-10 (a leading TRIPLEA_ is dropped). Each variant ge
 agent.json in agents/generated-variants/<id>/ whose command sets the variables and runs the agent's
 own command; the agent's run script must take the value from the environment (VAR="${VAR:-default}").
 
+Sweep: instead of "agents", a "sweep" plays one agent against a variant of another for every value
+of its swept settings, and nothing else (the variants do not play each other):
+  "sweep": {"agent": "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_PHASES=40",  # fixed settings, if any
+            "opponent": "Hard (AI)",                 # any "agents" entry, a variant too
+            "values": {"EMCTS_HORIZON": [0, 5, 10, ""]}}
+Every combination of the "values" lists is one variant (two variables with 3 and 4 values give 12),
+named like any variant (emcts-segmented-EMCTS_SECONDS-1.0-EMCTS_PHASES-40-EMCTS_HORIZON-5). Each
+variant plays the opponent in both seats (or both diagonal sides). Not with cyclic seating.
+
 Usage (from the repository root or planning-agent-testbed/):
   python3 planning-agent-testbed/tools/tournament.py \\
       --spec planning-agent-testbed/games/capture-the-flag-diag/tournament.json
@@ -126,7 +135,7 @@ BATCH_STAGGER_SECONDS = 15  # between the starts of parallel batches (run_batche
 
 # Spec keys that describe the tournament rather than a configuration setting.
 SPEC_KEYS = {"map", "maps", "gameFolder", "games", "agents", "factions", "otherAgents", "selfPlay",
-             "seating"}
+             "seating", "sweep"}
 SEATINGS = ("pairwise", "cyclic", "diagonal")
 
 
@@ -149,7 +158,13 @@ def generate_configs(spec_path: Path, agents_override, games_override):
 
 def generate_map_configs(spec_path: Path, spec, agents_override, games_override, single_map):
     known = agent_manifests()
-    agents = resolve_agents(agents_override or spec.get("agents") or [], known)
+    sweep = spec.get("sweep")
+    if sweep and (agents_override or spec.get("agents")):
+        raise SystemExit("a spec with \"sweep\" takes no \"agents\" (or --agents)")
+    if sweep:
+        agents = resolve_agents(sweep_entries(sweep), known)
+    else:
+        agents = resolve_agents(agents_override or spec.get("agents") or [], known)
     if len(agents) < 2 and not (agents and spec.get("selfPlay")):
         raise SystemExit("the spec needs at least two agents")
     for agent in agents:
@@ -186,6 +201,8 @@ def generate_map_configs(spec_path: Path, spec, agents_override, games_override,
                          f"{', '.join(seats)}), got {len(agents)}")
     if seating == "cyclic" and spec.get("selfPlay"):
         raise SystemExit("selfPlay does not apply to cyclic seating")
+    if seating == "cyclic" and sweep:
+        raise SystemExit("sweep does not apply to cyclic seating")
     games = games_override or int(spec.get("games", 1))
     settings = {k: v for k, v in spec.items() if k not in SPEC_KEYS}
 
@@ -193,7 +210,10 @@ def generate_map_configs(spec_path: Path, spec, agents_override, games_override,
         lineups = [[agents[(i + k) % len(agents)] for k in range(len(seats))]
                    for i in range(len(agents))]
     else:
-        pairs = [(a, b) for a, b in itertools.combinations(agents, 2) for a, b in ((a, b), (b, a))]
+        if sweep:  # agents[0] is the opponent, the rest the swept variants
+            pairs = [p for v in agents[1:] for p in ((agents[0], v), (v, agents[0]))]
+        else:
+            pairs = [(a, b) for a, b in itertools.combinations(agents, 2) for a, b in ((a, b), (b, a))]
         if spec.get("selfPlay"):
             pairs += [(a, a) for a in agents]
         lineups = [[a, b] if seating == "pairwise" else [a, b, a, b] for a, b in pairs]
@@ -519,6 +539,26 @@ def parse_agent(entry):
         raise SystemExit(f"no agent in {entry!r}")
     env = dict(s.split("=", 1) for s in settings)
     return " ".join(words), env or None, None
+
+
+def sweep_entries(sweep):
+    """A spec's "sweep" -> agent entries: its opponent first, then one variant of its agent per
+    combination of the swept values (see the module docstring)."""
+    if not isinstance(sweep, dict) or not sweep.get("agent") or not sweep.get("opponent"):
+        raise SystemExit(f"\"sweep\" needs \"agent\", \"opponent\" and \"values\": {sweep}")
+    values = sweep.get("values")
+    if not isinstance(values, dict) or not values or not all(
+            isinstance(v, list) and v for v in values.values()):
+        raise SystemExit(f"sweep \"values\" must map each variable to a non-empty list: {values}")
+    agent, env, chosen = parse_agent(sweep["agent"])
+    variants = []
+    for combo in itertools.product(*values.values()):
+        swept = {k: "" if v is None else str(v) for k, v in zip(values, combo)}
+        entry = {"agent": agent, "env": {**(env or {}), **swept}}
+        if chosen:  # a chosen ID gets the swept settings appended, as variant_id would
+            entry["id"] = variant_id(chosen, swept)
+        variants.append(entry)
+    return [sweep["opponent"], *variants]
 
 
 def variant_id(agent, env):

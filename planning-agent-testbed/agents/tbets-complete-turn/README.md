@@ -86,6 +86,7 @@ no moves (as in `emcts-fh`).
 | `TBETS_SEED` | 0 | seed for the mutation order, the child-or-sibling draw and UCB tie-breaks |
 | `TBETS_ROLLOUT` | 2 | rollout length in rounds: greedy play until that many rounds have started after the round of the last genome's turn (0: stop at the end of that turn; 1: at the end of that round) |
 | `TBETS_GREEDY_PCT` | 5 | % of expansions that add a child (the next turn's greedy genome) instead of a sibling (a mutation of the selected leaf) |
+| `TRIPLEA_ROLLOUT_BATTLE` | fast | battles in the search's simulations: `fast` (the Fast AI's most likely outcome, no dice; evaluations cached) or `dice` (dice rolled, default casualties, no retreat; every evaluation rolls again) |
 | `TRIPLEA_AGENT_LOG` | 0 | 1 logs to stderr and `planning-agent-testbed/logs/agent-<faction>-game-<n>.txt` |
 
 ## Visualising a search

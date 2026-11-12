@@ -46,7 +46,7 @@ import noncombat_generators as ncg
 from helper import (EFFICIENCY_HEADER, ACTION_SEQ_HEADER, MetricLogger, RolloutStats,
                     save_mcts_tree_png)
 
-fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, no dice
+fast_battle.install()  # the search's battles: the Fast AI's most likely outcome, or dice
 
 # The searched decisions, by the testbench's phase names.
 PURCHASE_PHASE, COMBAT_PHASE, NONCOMBAT_PHASE = "purchase", "combatMove", "nonCombatMove"

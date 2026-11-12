@@ -12,8 +12,8 @@
   "aiMovePauseMs": 0,
   "aiCombatStepPauseMs": 0,
   "agents": {
-    "Russians": "emcts-segmented",
-    "Germans": "hmcts-no-action-sorting"
+    "Russians": "Hard (AI)",
+    "Germans": "emcts-segmented"
   },
   "showObservations": false,
   "observationPlayers": {

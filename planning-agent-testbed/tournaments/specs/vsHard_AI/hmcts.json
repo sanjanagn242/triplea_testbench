@@ -1,0 +1,23 @@
+{
+  "games": 10,
+  "agents": [
+    "Hard (AI)",
+    "heterogeneous-mcts TRIPLEA_MCTS_SECONDS=1.0 TRIPLEA_MCTS_EXP_CONST=0.5 TRIPLEA_MCTS_EPSILON=0.5"
+  ],
+  "roundLimit": 100,
+  "aiMovePauseMs": 0,
+  "aiCombatStepPauseMs": 0,
+  "maps": [
+    {
+      "gameFolder": "capture-the-flag-diag",
+      "map": {
+        "name": "Capture The Flag",
+        "gameName": "Capture The Flag",
+        "aliases": [
+          "capture_the_flag",
+          "CTF"
+        ]
+      }
+    }
+  ]
+}

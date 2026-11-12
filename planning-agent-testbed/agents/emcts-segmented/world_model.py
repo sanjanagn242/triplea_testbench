@@ -109,7 +109,7 @@ class Game:
         self.player = player  # the searching player: rewards are always from its point of view
         self.playout_phases = playout_phases
         self.graph = LandGraph(d)
-        self.rng = fm.SeededRng(0)  # no dice are drawn: battles are deterministic
+        self.rng = fm.SeededRng(0)  # draws dice only with TRIPLEA_ROLLOUT_BATTLE=dice
         self.rnd = random.Random(seed)  # the Weak AI's shuffle
 
     # ---- the acting player and its territories ----

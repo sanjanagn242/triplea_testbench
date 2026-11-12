@@ -33,7 +33,7 @@ class Game:
 
     def __init__(self, d):
         self.d = d
-        self.rng = fm.SeededRng(0)  # no dice are drawn: battles are deterministic
+        self.rng = fm.SeededRng(0)  # draws dice only with TRIPLEA_ROLLOUT_BATTLE=dice
 
     @staticmethod
     def actor(s) -> int:

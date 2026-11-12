@@ -5,16 +5,25 @@ estimate (ActionUtils.simulateBattles with FastOddsEstimator), so one playout va
 real game still rolls dice. This module ports the estimator (and the ProBattleUtils strength
 estimate it calls) and simulateBattles, and swaps them in for the kernel's dice-rolling battle loop,
 rules._run_battle, inside this agent's process only.
+TRIPLEA_ROLLOUT_BATTLE=dice keeps the kernel's dice-rolling battles instead (MODE).
 """
 
 from __future__ import annotations
 
 import math
+import os
 
 from triplea_fm import rules
 from triplea_fm.state import NORMAL_BATTLE
 
 _dice_battle = rules._run_battle
+
+# How the search's battles are resolved: fast (the most likely outcome below, the default) or
+# dice (the kernel's own battle loop: dice, default casualties, never retreat).
+MODE = os.environ.get("TRIPLEA_ROLLOUT_BATTLE", "fast")
+if MODE not in ("fast", "dice"):
+    raise ValueError(f"TRIPLEA_ROLLOUT_BATTLE must be fast or dice, not {MODE!r}")
+DETERMINISTIC = MODE == "fast"
 
 
 def estimate_power(d, s, units, attacking: bool) -> float:
@@ -95,5 +104,6 @@ def _most_likely_battle(d, s, b, rng, events) -> bool:
 
 
 def install():
-    """Make every battle the kernel fights in this process deterministic."""
-    rules._run_battle = _most_likely_battle
+    """Make every battle the kernel fights in this process deterministic, unless
+    TRIPLEA_ROLLOUT_BATTLE=dice keeps the kernel's dice."""
+    rules._run_battle = _most_likely_battle if DETERMINISTIC else _dice_battle

@@ -31,5 +31,8 @@ export TRIPLEMIND_PURE_PYTHON=1
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
 # also works; this keeps the repository copy importable without installation).
 export PYTHONPATH="$agent_dir/../../forward-model/python${PYTHONPATH:+:$PYTHONPATH}"
+# Battles in the search's simulations: fast (the Fast AI's most likely outcome, no dice) or
+# dice (the forward model's dice-rolling battles, default casualties, never retreat).
+export TRIPLEA_ROLLOUT_BATTLE="${TRIPLEA_ROLLOUT_BATTLE:-fast}"
 python="${TRIPLEA_TESTBENCH_PYTHON:-python3}"
 exec "$python" -u "$agent_dir/agent.py"

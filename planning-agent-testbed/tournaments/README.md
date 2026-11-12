@@ -199,6 +199,25 @@ A setting only takes effect if the agent's run script reads it from the environm
 tournament warns about a variable the script sets itself, such as `TRIPLEA_AGENT_LOG`. Game records
 are still written to the base agent's own folder, shared by its variants.
 
+## Sweeping a setting against one opponent
+
+To play one agent against variants of another, one variant per value of a setting, put a `sweep` in
+the spec instead of `agents`:
+
+```json
+"sweep": {
+  "agent": "emcts-segmented EMCTS_SECONDS=1.0 EMCTS_PHASES=40",
+  "opponent": "Hard (AI)",
+  "values": {"EMCTS_HORIZON": [0, 5, 10, ""]}
+}
+```
+
+`agent` holds the settings that stay fixed. Every combination of the `values` lists is one variant,
+so two variables with 3 and 4 values give 12 variants. Variants are named like any other variant
+(`emcts-segmented-EMCTS_SECONDS-1.0-EMCTS_PHASES-40-EMCTS_HORIZON-5`). Each variant plays
+`opponent` in both seats. The variants do not play each other. `opponent` can be any `agents` entry,
+including a variant. A sweep cannot be combined with `agents` / `--agents` or with `cyclic` seating.
+
 ## Maps with four players (seating)
 
 A spec plays every pair of its agents on two seats. On a map with more players, set `"seating"` in

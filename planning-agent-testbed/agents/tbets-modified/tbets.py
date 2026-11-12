@@ -23,8 +23,8 @@ Cowling, "Evolutionary MCTS for Multi-Action Adversarial Games", IEEE CIG 2018) 
         units still reach it unused; every other target takes its strongest attack set, or skip);
       - noncombat: each territory the generator offers takes its stored option if that is still
         offered, else the strongest reinforcement;
-    battles are deterministic (fast_battle, default casualties, no retreat) and placement puts
-    everything bought at the home factory;
+    battles are deterministic (fast_battle, default casualties, no retreat; dice with
+    TRIPLEA_ROLLOUT_BATTLE=dice) and placement puts everything bought at the home factory;
   * tree: the root is the current state. Its children are genomes of the current phase; a node's
     children are genomes of the next searched phase in the game (purchase -> combat move ->
     noncombat move -> the next player's purchase -> ...), played from the state its path
@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import action_generators as ag  # TripleMind's combat, noncombat and purchase action generation
+import fast_battle
 import map_graph
 import noncombat_generators as ncg  # heterogeneous-mcts's atomic noncombat options
 import triplea_fm as fm
@@ -386,7 +387,7 @@ class TBETS:
 
     def _between_phases(self, s) -> bool:
         """A decision that plays no gene: placement, or battles as the live adapter answers
-        them (fight every battle in order, the most likely outcome with fast_battle, default
+        them (fight every battle in order, the most likely outcome with fast_battle or dice, default
         casualties, never retreat)."""
         kind = s.decision.kind
         if kind == PLACE_D:
@@ -431,7 +432,8 @@ class TBETS:
         Returns (value, decoded genomes, their Turns, the searched phase after the last genome's);
         cached per path and per decoded path."""
         k = tuple((p, ph, key(g)) for p, ph, g in path)
-        cached = self.values.get(k)
+        # A cached value is read back only with fast battles: with dice every evaluation rolls again.
+        cached = self.values.get(k) if fast_battle.DETERMINISTIC else None
         if cached is not None:
             self.stats.cache_hits += 1
             return cached
