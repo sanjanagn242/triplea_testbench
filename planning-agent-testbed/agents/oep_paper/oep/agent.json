@@ -1,0 +1,9 @@
+{
+  "id": "oep",
+  "name": "OEP Online Evolutionary Planning (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Online Evolutionary Planning of Justesen et al. (2018) for the purchase, combat move and non-combat move: genomes of 3 actions, population 100, survival rate 0.5, uniform crossover keeping genes legal, mutation probability 0.1 (later illegal genes regenerated), static heuristic evaluation (fixed dice per search, cached, survivors not re-evaluated); plays the best genome found in the time budget.",
+  "outputDirectories": ["metrics", "logs"]
+}

@@ -21,6 +21,7 @@
     "hard-ai-game-recorder",
     "roxo-ne-mcts",
     "greedy-action-combat",
+    "greedy-action",
     "greedy-turn-combat",
     "ne-mcts-combat",
     "bb-mcts-combat",

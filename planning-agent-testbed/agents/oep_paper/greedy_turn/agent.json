@@ -1,0 +1,9 @@
+{
+  "id": "greedy-turn",
+  "name": "OEP Greedy Turn",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Greedy Turn baseline of Justesen et al. (2018) for purchase, combat move and non-combat move: depth-first search of variable depth over the phase's action sequences with a transposition table and action sorting, every leaf scored with the heuristic, the sequence reaching the best leaf played. Uses the full time budget. Placement by the engine, battles fightAll.",
+  "outputDirectories": ["metrics", "logs"]
+}

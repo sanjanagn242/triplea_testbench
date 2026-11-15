@@ -1,0 +1,9 @@
+{
+  "id": "greedy-action",
+  "name": "OEP Greedy Action",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Greedy Action baseline of Justesen et al. (2018) for purchase, combat move and non-combat move: one-ply forward-model search over the phase's actions, picking the one whose resulting state scores highest under the heuristic, repeated until ending the phase scores best. Placement by the engine, battles fightAll.",
+  "outputDirectories": ["metrics", "logs"]
+}

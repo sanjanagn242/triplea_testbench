@@ -1,0 +1,9 @@
+{
+  "id": "bb-mcts",
+  "name": "OEP Bridge Burning MCTS (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "BB-MCTS of Justesen et al. (2018), i.e. the vanilla-mcts agent (UCT with C = 1/sqrt 2, epsilon-greedy rollouts with epsilon = 0.5 to the end of the turn, transposition table, descent-path BackupNegamax) plus bridge burning, searching the purchase, combat move and non-combat move: the time budget is split into burn phases, each ending by keeping only the most promising root child, which becomes the new root.",
+  "outputDirectories": ["metrics", "logs"]
+}

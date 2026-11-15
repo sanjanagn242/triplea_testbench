@@ -1,0 +1,9 @@
+{
+  "id": "ne-mcts",
+  "name": "OEP Non-exploring MCTS (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Non-exploring MCTS of Justesen et al. (2018), i.e. the vanilla-mcts agent with C = 0 and epsilon = 1, searching the purchase, combat move and non-combat move: best-mean tree policy (every child visited once before any is expanded further), deterministic rollouts following the sorting heuristic to the end of the turn (fixed dice per search, cached per node) rated with the heuristic, transposition table with edge statistics, descent-path BackupNegamax.",
+  "outputDirectories": ["metrics", "logs"]
+}

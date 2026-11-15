@@ -1,0 +1,9 @@
+{
+  "id": "vanilla-mcts",
+  "name": "OEP Vanilla MCTS (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Vanilla action-based MCTS of Justesen et al. (2018), the base of NE-MCTS and BB-MCTS, searching the purchase, combat move and non-combat move: UCT X + 2C sqrt(2 ln n / n_j) with C = 1/sqrt 2, epsilon-greedy rollouts (epsilon = 0.5) to the end of the turn rated with the heuristic, transposition table with edge statistics, descent-path BackupNegamax.",
+  "outputDirectories": ["metrics", "logs"]
+}
