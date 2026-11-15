@@ -47,6 +47,7 @@ repeat:
   each level gets `remaining time / number of attacks at that level`; purchase and non-combat
   levels take one sweep each. If the budget runs out before a level is scored, the plan stops
   there (`reached_end_of_turn = 0`).
+- **Battle resolution**: `TRIPLEA_BATTLE_RESOLUTION` (`run-agent.sh`) picks how the search's battles are fought: `dice` (default: the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). With `fast` one sample is exact, so the combat move scores each candidate once (no resampling sweeps). The real game always rolls dice.
 - **Placement** is the engine's (`{}`), battles `fightAll`, as in TripleMind.
 
 ## Metrics

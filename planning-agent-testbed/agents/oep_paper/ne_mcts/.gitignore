@@ -1,0 +1,6 @@
+# Cython build products (scripts/build_cython.sh)
+.venv-build/
+build/
+action_generators_cy.c
+action_generators_cy*.so
+.build.lock

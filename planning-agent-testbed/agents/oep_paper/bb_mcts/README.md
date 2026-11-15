@@ -5,9 +5,12 @@ Adversarial Games: Online Evolutionary Planning Versus Tree Search* (IEEE Transa
 2018, Sections V and VI): exactly [Vanilla MCTS](../vanilla_mcts/README.md) (C = 1/√2, ε = 0.5)
 **plus the bridge burning step**. Unlike [bb_mcts_combat](../bb_mcts_combat/README.md) (combat move
 only), this agent searches every phase request it gets: **purchase, combat move and non-combat
-move**. Placement is
-the engine's and battles are `fightAll`, as TripleMind. Action generators, map graph and metric
-helpers are copies of TripleMind's (pure Python); `noncombat_generators.py` is all-phases-mcts's.
+move**. Placement is the engine's and battles are `fightAll`, as TripleMind.
+Action generators, map graph and metric helpers are copies of TripleMind's, with the Cython
+build of the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`): `run-agent.sh`
+rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build falls back to the Python
+generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1` forces Python.
+`noncombat_generators.py` is all-phases-mcts's.
 
 ## Algorithm
 
@@ -75,6 +78,7 @@ cover) is answered without searching.
 | `TRIPLEA_BB_C` | 0.7071 (1/√2) | C of the UCT term 2C √(2 ln n / n_j) |
 | `TRIPLEA_BB_EPSILON` | 0.5 | rollout: probability of the highest-rated action |
 | `TRIPLEA_BB_SEED` | 0 | search seed |
+| `TRIPLEA_BATTLE_RESOLUTION` | dice | battles in the search's simulations: `dice` (the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). The real game always rolls dice |
 
 ## Metrics
 

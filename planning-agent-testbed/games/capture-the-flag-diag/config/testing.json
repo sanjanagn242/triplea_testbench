@@ -13,7 +13,7 @@
   "aiCombatStepPauseMs": 0,
   "agents": {
     "Russians": "Hard (AI)",
-    "Germans": "emcts-segmented"
+    "Germans": "oep"
   },
   "showObservations": false,
   "observationPlayers": {

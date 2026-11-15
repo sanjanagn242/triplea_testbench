@@ -6,9 +6,12 @@ on Games, 2018, Sections V and VI): exactly [Vanilla MCTS](../vanilla_mcts/READM
 **C = 0 and ε = 1**, so rollouts are fully deterministic and follow the sorting heuristic. Every
 child of a node is visited at least once before any of them is expanded further. Unlike
 [ne_mcts_combat](../ne_mcts_combat/README.md) (combat move only), this agent searches every phase
-request it gets: **purchase, combat move and non-combat move**. Placement is
-the engine's and battles are `fightAll`, as TripleMind. Action generators, map graph and metric
-helpers are copies of TripleMind's (pure Python); `noncombat_generators.py` is all-phases-mcts's.
+request it gets: **purchase, combat move and non-combat move**. Placement is the engine's and battles are `fightAll`, as TripleMind.
+Action generators, map graph and metric helpers are copies of TripleMind's, with the Cython
+build of the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`): `run-agent.sh`
+rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build falls back to the Python
+generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1` forces Python.
+`noncombat_generators.py` is all-phases-mcts's.
 
 ## Algorithm
 
@@ -64,6 +67,7 @@ cover) is answered without searching.
 |---|---|---|
 | `TRIPLEA_NE_SECONDS` | 1.0 | search time per phase request |
 | `TRIPLEA_NE_SEED` | 0 | search seed (draws each search's fixed dice) |
+| `TRIPLEA_BATTLE_RESOLUTION` | dice | battles in the search's simulations: `dice` (the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). The real game always rolls dice |
 
 C = 0 and ε = 1 are fixed: they are what makes this NE-MCTS rather than Vanilla MCTS.
 

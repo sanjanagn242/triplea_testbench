@@ -58,9 +58,12 @@ from triplea_fm.definition import (BATTLE, COMBAT_MOVE, END_ROUND, END_TURN, NON
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 import noncombat_generators as ncg
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
+
+fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
 
 # TripleMind's columns first (the plot scripts read them by name), then the columns the other OEP
 # agents share, then this agent's own.

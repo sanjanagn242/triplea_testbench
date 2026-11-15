@@ -40,8 +40,11 @@ from triplea_fm.definition import BATTLE
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
+
+fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
 
 # TripleMind's columns first (the plot scripts read them by name), then this agent's own; `phase`
 # (purchase, combatMove, nonCombatMove) last, as one search runs per phase.
@@ -238,9 +241,11 @@ class GreedyActionSearch:
             if phase == "combatMove":
                 # Attack only when it beats ending the phase now (END first wins ties). Each pick
                 # removes at least one target, so at most len(actions) levels remain: give this one
-                # that share of the remaining time (and always at least one full sweep).
+                # that share of the remaining time (and always at least one full sweep). Fast
+                # battles roll no dice, so one sweep is exact.
                 candidates = [end] + [Candidate(a) for a in actions]
-                level_deadline = level_started + (deadline - level_started) / len(actions)
+                level_deadline = (level_started if fast_battle.DETERMINISTIC else
+                                  level_started + (deadline - level_started) / len(actions))
             else:
                 # No dice, so one sweep is exact. END last: ties go to the generator's order.
                 candidates = [Candidate(a) for a in actions] + [end]

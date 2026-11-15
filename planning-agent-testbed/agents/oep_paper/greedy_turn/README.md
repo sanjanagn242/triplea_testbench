@@ -56,6 +56,7 @@ chosen sequence: from the root, go to the best child while it beats END there
   always uses all of it (DFS, then resampling). Purchase and non-combat roll no dice, so they
   stop early only when the DFS has scored every plan (the result is then exact); otherwise
   the DFS runs until the budget is used.
+- **Battle resolution**: `TRIPLEA_BATTLE_RESOLUTION` (`run-agent.sh`) picks how the search's battles are fought: `dice` (default: the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). With `fast` one sample is exact, so the combat move skips the resampling after the DFS. The real game always rolls dice.
 - **Placement** is the engine's (`{}`), battles `fightAll`, as in TripleMind.
 
 ## Metrics

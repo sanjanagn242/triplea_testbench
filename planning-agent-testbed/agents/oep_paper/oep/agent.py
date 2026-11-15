@@ -15,6 +15,8 @@ Environment:
   TRIPLEA_OEP_SURVIVAL       share of the population kept each generation (default 0.5)
   TRIPLEA_OEP_MUTATION       probability that an offspring is mutated (default 0.1)
   TRIPLEA_OEP_GENOME_LENGTH  actions per genome (default 3)
+  TRIPLEA_OEP_ROLLOUT_LENGTH player turns played out after mine in an evaluation (default 0:
+                             static evaluation)
   TRIPLEA_OEP_SEED           search seed (default 0)
   TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
 """
@@ -49,7 +51,8 @@ GREEDY_GAME_RESULTS_HEADER = GAME_RESULTS_HEADER + ["winners"]
 
 
 class Agent:
-    def __init__(self, time_budget, population, survival, mutation, genome_length, seed=0):
+    def __init__(self, time_budget, population, survival, mutation, genome_length, rollout_length,
+                 seed=0):
         self.player = None
         self.log_path = None
         self.definition = None
@@ -65,6 +68,7 @@ class Agent:
         self.survival = survival
         self.mutation = mutation
         self.genome_length = genome_length
+        self.rollout_length = rollout_length
         self.seed = seed
         self.phase_handlers = {
             "purchase": self.searched,
@@ -113,8 +117,8 @@ class Agent:
         self.definition = definition
         self.bridge = LiveBridge(definition, self.player, self.game_number)
         self.search = OEP(definition, self.map, self.player, self.time_budget, self.population,
-                          self.survival, self.mutation, self.genome_length, self.seed,
-                          metrics_dir=METRICS_DIR / self.output_folder)
+                          self.survival, self.mutation, self.genome_length,
+                          self.rollout_length, self.seed, metrics_dir=METRICS_DIR / self.output_folder)
         self.log(f"ready as {self.player}")
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
 
@@ -175,6 +179,7 @@ def main():
                   float(os.environ.get("TRIPLEA_OEP_SURVIVAL", "0.5")),
                   float(os.environ.get("TRIPLEA_OEP_MUTATION", "0.1")),
                   int(os.environ.get("TRIPLEA_OEP_GENOME_LENGTH", "3")),
+                  int(os.environ.get("TRIPLEA_OEP_ROLLOUT_LENGTH", "0")),
                   int(os.environ.get("TRIPLEA_OEP_SEED", "0")))
     for line in sys.stdin:
         line = line.strip()

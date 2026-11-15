@@ -12,11 +12,13 @@ combat move and non-combat move, with the actions and heuristic of the other OEP
     replaced by offspring of two random survivors;
   * initialization: random legal actions through the forward model until the genome's actions are
     used up (or END is drawn);
-  * fitness, static evaluation (the paper found rollout-based fitness no better): the genome's
-    actions applied to a clone of the state, then END, then the rest of my turn with no further
-    decisions (battles: default casualties, no retreat, the search's fixed dice; placement at the
-    home factory; my other phases ended at once), rated with evaluate_state. Deterministic, so the
-    value is cached per resulting state and survivors are never re-evaluated;
+  * fitness: the genome's actions applied to a clone of the state, then END, then the rest of my
+    turn with no further decisions (battles: default casualties, no retreat, the search's fixed
+    dice; placement at the home factory; my other phases ended at once), then ROLLOUT_LENGTH
+    player turns played out with TripleMind's deterministic policy for every player (0, the
+    default: static evaluation, as the paper found rollout-based fitness no better; 2 in a
+    two-player game: the opponent's turn, then mine), rated with evaluate_state. Deterministic, so
+    the value is cached per resulting state and survivors are never re-evaluated;
   * crossover, uniform: for each gene, a random parent's gene if it is legal in the child's
     simulated state, otherwise the other parent's, then the next genes of the parents' sequences,
     then a random legal action;
@@ -49,9 +51,12 @@ from triplea_fm.definition import (BATTLE, COMBAT_MOVE, END_ROUND, END_TURN, NON
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 import noncombat_generators as ncg
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, MetricLogger
+
+fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
 
 # TripleMind's columns first (the plot scripts read them by name), then this agent's own.
 OEP_EFFICIENCY_HEADER = EFFICIENCY_HEADER + ["evaluations", "cache_hits",
@@ -62,6 +67,7 @@ GENOME_LENGTH = 3  # actions per genome (the paper: 5)
 POPULATION = 100
 SURVIVAL_RATE = 0.5
 MUTATION_RATE = 0.1
+ROLLOUT_LENGTH = 0  # player turns played out after mine in an evaluation (0: static evaluation)
 ROLLOUT_STRENGTH_MARGIN = 1.5  # TripleMind's first attack threshold (combat_actions)
 MAX_TURN_STEPS = 50  # guard for the walk through the rest of the turn
 END_GENE = "END"
@@ -359,7 +365,8 @@ def end_action(actions):
 class OEP:
     def __init__(self, definition, map_graph_, whoAmI, time_budget, population=POPULATION,
                  survival_rate=SURVIVAL_RATE, mutation_rate=MUTATION_RATE,
-                 genome_length=GENOME_LENGTH, seed=0, metrics_dir="metrics"):
+                 genome_length=GENOME_LENGTH, rollout_length=ROLLOUT_LENGTH, seed=0,
+                 metrics_dir="metrics"):
         self.d = definition
         self.map = map_graph_
         self.whoAmI = whoAmI
@@ -369,6 +376,7 @@ class OEP:
         self.survivors = max(1, min(self.population - 1, int(self.population * survival_rate)))
         self.mutation_rate = mutation_rate  # probability that an offspring is mutated
         self.genome_length = max(1, genome_length)
+        self.rollout_length = max(0, rollout_length)  # player turns played out after mine
         self.rnd = random.Random(seed)
         self.move_rng = self.new_rng()  # moves and purchases roll no dice
         self.dice_seed = self.rnd.getrandbits(62)  # every evaluation's dice, redrawn per search
@@ -396,8 +404,8 @@ class OEP:
     def apply(self, sim, action, rng):
         return fm.apply_in_place(self.d, sim, action, rng) != fm.REJECTED
 
-    def view(self, sim):
-        return map_graph.GameState.from_sim(self.map, self.d, sim, self.whoAmI)
+    def view(self, sim, player=None):
+        return map_graph.GameState.from_sim(self.map, self.d, sim, player or self.whoAmI)
 
     def new_rng(self):
         return fm.SeededRng(self.rnd.getrandbits(62))
@@ -445,10 +453,11 @@ class OEP:
                 break
         return ok
 
-    def place_at_home(self, sim, rng):
+    def place_at_home(self, sim, rng, player=None):
         """Everything bought goes to the home factory (TripleMind's placement policy)."""
+        player = player or self.whoAmI
         held = sim.held_units(sim.decision.actor)
-        home = ag._home_factory(self.view(sim), self.whoAmI)
+        home = ag._home_factory(self.view(sim, player), player)
         if held and home is not None:
             territory = self.d.territory_index[home]
             if not self.apply(sim, fm.PlaceAction(tuple(u.id for u in held), territory), rng):
@@ -457,6 +466,71 @@ class OEP:
                         break
         return self.apply(sim, fm.EndPhaseAction(), rng)
 
+    # ---- rollout -------------------------------------------------------------------------
+
+    def play_turns(self, sim, rng, turns):
+        """The next `turns` player turns after mine (2: the opponent's, then mine in a two-player
+        game), every player with TripleMind's deterministic policy (play_step). Returns the turns
+        started; fewer when the game ends first."""
+        current, played = self.me, 0
+        for _ in range(MAX_TURN_STEPS * (turns + 1)):
+            if sim.terminal is not None or sim.decision is None:
+                break
+            step = self.d.steps[sim.step]
+            if step.actor >= 0 and step.actor != current:
+                if played == turns:
+                    break
+                current, played = step.actor, played + 1
+            before = (sim.step, sim.round)
+            if not self.play_step(sim, step, rng) or (sim.step, sim.round) == before:
+                break
+        return played
+
+    def play_step(self, sim, step, rng):
+        """One step of a rollout turn, as TripleMind plays it: the first of purchase_actions;
+        attacks with strength > ROLLOUT_STRENGTH_MARGIN x defence in priority order; battles with
+        default casualties, no retreat; noncombat_move; placement at the home factory."""
+        if step.kind == BATTLE:
+            return self.fight_battles(sim, rng)
+        player = self.d.player_names[step.actor] if step.actor >= 0 else None
+        if player is None:
+            pass
+        elif step.kind == PURCHASE:
+            actions = ag.purchase_actions(self.view(sim, player), self.d, player)
+            if actions:
+                self.apply(sim, actions[0], rng)
+        elif step.kind == COMBAT_MOVE:
+            self.play_attacks(sim, player, rng)
+        elif step.kind == NONCOMBAT_MOVE:
+            for mv in ag.noncombat_move(self.view(sim, player), self.d, player):
+                self.apply(sim, mv, rng)  # a rejected move is skipped, as live
+        elif step.kind == PLACE:
+            return self.place_at_home(sim, rng, player)
+        return self.apply(sim, fm.EndPhaseAction(), rng)
+
+    def play_attacks(self, sim, player, rng):
+        """The combat move's highest-rated attacks (CombatPhase's rating, for any player): the
+        first target in priority order whose reachable units beat its defence by
+        ROLLOUT_STRENGTH_MARGIN, until none is left."""
+        attacked = set()
+        while True:
+            game = self.view(sim, player)
+            m = game.map
+            for target in ag.enemy_territories_by_priority(game, player):
+                if target in attacked:
+                    continue
+                reachable = ag.get_reachable_units(game, target, player)
+                if not reachable:
+                    continue
+                strength = ag.calculate_attack_strength(m, [u for u, _, _ in reachable])
+                defence = ag.defender_strength(m, game.territories[target], player)
+                if strength > ROLLOUT_STRENGTH_MARGIN * defence:
+                    break
+            else:
+                return
+            attacked.add(target)
+            for mv in ag._group_moves(self.d, [(u, route) for u, _, route in reachable]):
+                self.apply(sim, mv, rng)
 
     # ---- genomes -------------------------------------------------------------------------
 
@@ -519,8 +593,9 @@ class OEP:
         return self.build(phase, root, choose)
 
     def evaluate(self, phase, genome, cache, stats, game_number, round_, generation):
-        """Static evaluation: the genome's actions (already on genome.state), END, the rest of my
-        turn without decisions, evaluate_state. Cached per resulting phase state."""
+        """The genome's actions (already on genome.state), END, the rest of my turn without
+        decisions, then rollout_length player turns (play_turns; 0: static evaluation),
+        evaluate_state. Deterministic, so cached per resulting phase state."""
         key = phase.key(genome.state)
         if key in cache:
             genome.fitness = cache[key]
@@ -528,15 +603,18 @@ class OEP:
         else:
             state = genome.state
             rng = fm.SeededRng(self.dice_seed)
+            turns = 0
             try:
                 if phase.finish(state, genome.actions[-1], rng):
                     self.finish_turn(state.sim, rng)
+                    if self.rollout_length:
+                        turns = self.play_turns(state.sim, rng, self.rollout_length)
                 reward, terminal = evaluate_state(self, state.sim, self.whoAmI)
             except Exception:
                 reward, terminal = -0.5, False
             cache[key] = genome.fitness = reward
             stats["evaluations"] += 1
-            self.rollout_stats_metric.buffer(self.whoAmI, game_number, round_, generation, 0,
+            self.rollout_stats_metric.buffer(self.whoAmI, game_number, round_, generation, turns,
                                              reward, 1 if terminal else 0, len(genome.actions) - 1,
                                              phase.name)
         genome.state = None  # no longer needed: offspring are rebuilt from the root
@@ -610,7 +688,7 @@ class OEP:
             generations,  # num_iterations: generations
             best.fitness if best else "",  # root_value: the best genome's value
             len(root_actions),  # num_children_at_root: legal first actions, END included
-            0,  # max_rollout: static evaluation, no rollout
+            self.rollout_length,  # max_rollout: player turns played out after mine
             stats["evaluations"],  # num_action_sequences: distinct genomes evaluated
             len(chosen),  # num_of_terr_attacked: actions chosen (attacks, units, reinforcements)
             self.genome_length,  # max_tree_depth: genome length

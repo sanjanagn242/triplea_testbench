@@ -52,8 +52,11 @@ from triplea_fm.definition import BATTLE
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, HELD, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
+import fast_battle
 import map_graph
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
+
+fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
 
 # TripleMind's columns first (the plot scripts read them by name), then Greedy Action's extra
 # columns (same names, so the two agents' files compare), then this agent's own; `phase`
@@ -288,9 +291,11 @@ class GreedyTurnSearch:
             stack.extend(reversed(node.children))  # first in the action sorting is searched first
         complete = not stack
 
-        # --- combat move, remaining time: resample every leaf (common dice seed per sweep) ---
+        # --- combat move, remaining time: resample every leaf (common dice seed per sweep);
+        # fast battles roll no dice, so the one sample is exact ---
         sweeps = 1
-        while complete and phase == "combatMove" and time.time() < deadline:
+        while (complete and phase == "combatMove" and not fast_battle.DETERMINISTIC
+               and time.time() < deadline):
             for leaf in leaves:
                 if time.time() >= deadline:
                     break

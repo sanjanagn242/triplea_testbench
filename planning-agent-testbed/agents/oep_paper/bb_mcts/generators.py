@@ -20,5 +20,5 @@ else:
         import action_generators as ag
         IMPLEMENTATION = "python (Cython module not built)"
         if os.environ.get("TRIPLEA_AGENT_LOG") == "1":
-            print(f"tripleMind: action_generators_cy unavailable ({e}); using the pure-Python "
+            print(f"bb-mcts: action_generators_cy unavailable ({e}); using the pure-Python "
                   f"generators. Build it with scripts/build_cython.sh.", file=sys.stderr, flush=True)

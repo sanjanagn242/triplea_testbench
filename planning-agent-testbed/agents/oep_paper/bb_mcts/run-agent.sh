@@ -12,10 +12,24 @@ export TRIPLEA_BB_SECONDS="${TRIPLEA_BB_SECONDS:-1.0}"
 export TRIPLEA_BB_C="${TRIPLEA_BB_C:-0.7071067811865476}"
 export TRIPLEA_BB_EPSILON="${TRIPLEA_BB_EPSILON:-0.5}"
 export TRIPLEA_BB_SEED="${TRIPLEA_BB_SEED:-0}"
-# The pure-Python TripleMind action generators (this folder has no Cython build).
-export TRIPLEMIND_PURE_PYTHON=1
+# Battles in the search's simulations: dice (the forward model's dice-rolling battles, default
+# casualties, never retreat) or fast (the Fast AI's most likely outcome, no dice).
+export TRIPLEA_BATTLE_RESOLUTION="${TRIPLEA_BATTLE_RESOLUTION:-dice}"
+# TripleMind's action generators: 1 forces the pure-Python ones, 0 uses the Cython build.
+export TRIPLEMIND_PURE_PYTHON="${TRIPLEMIND_PURE_PYTHON:-0}"
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
 # also works; this keeps the repository copy importable without installation).
 export PYTHONPATH="$agent_dir/../../../forward-model/python${PYTHONPATH:+:$PYTHONPATH}"
+
+# (Re)build the Cython action generators when the .pyx is newer than the compiled module. The
+# lock serialises agents launched together; a failed build falls back to the Python generators.
+(
+  flock 9
+  so="$(ls "$agent_dir"/action_generators_cy*.so 2>/dev/null | head -n 1 || true)"
+  if [ -z "$so" ] || [ "$agent_dir/action_generators_cy.pyx" -nt "$so" ]; then
+    bash "$agent_dir/scripts/build_cython.sh" || echo "bb-mcts: Cython build failed" >&2
+  fi
+) 9>"$agent_dir/.build.lock"
+
 python="${TRIPLEA_TESTBENCH_PYTHON:-python3}"
 exec "$python" -u "$agent_dir/agent.py"

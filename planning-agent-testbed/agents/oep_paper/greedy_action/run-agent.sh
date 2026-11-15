@@ -8,6 +8,9 @@ export TRIPLEA_AGENT_LOG="${TRIPLEA_AGENT_LOG:-0}"
 # Search: time per phase decision (purchase, combat move, non-combat move; s) and seed.
 export TRIPLEA_GREEDY_SECONDS="${TRIPLEA_GREEDY_SECONDS:-1.0}"
 export TRIPLEA_GREEDY_SEED="${TRIPLEA_GREEDY_SEED:-0}"
+# Battles in the search's simulations: dice (the forward model's dice-rolling battles, default
+# casualties, never retreat) or fast (the Fast AI's most likely outcome, no dice).
+export TRIPLEA_BATTLE_RESOLUTION="${TRIPLEA_BATTLE_RESOLUTION:-dice}"
 # TripleMind's action generators: 1 forces the pure-Python ones, 0 uses the Cython build.
 export TRIPLEMIND_PURE_PYTHON="${TRIPLEMIND_PURE_PYTHON:-0}"
 # The testbench forward-model library (pip install -e planning-agent-testbed/forward-model/python
