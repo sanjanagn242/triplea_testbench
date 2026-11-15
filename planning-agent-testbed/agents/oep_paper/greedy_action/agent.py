@@ -3,9 +3,9 @@
 JSON over stdin/stdout).
 
 The purchase, combat move and non-combat move are each searched by GreedyActionSearch (greedy.py),
-once per phase: one action at a time (one unit bought, one attack, one move), each the best
-one-ply choice scored with the forward model and TripleMind's heuristic, until ending the phase
-scores best or nothing is left. Placement is the engine's and battles are fightAll, as in
+once per phase: one action at a time (phases.py, the actions every all-phase OEP agent uses),
+each the best one-ply choice scored with the forward model and TripleMind's heuristic, until
+ending the phase scores best or nothing is left. Placement is the engine's and battles are fightAll, as in
 TripleMind. Diagnostics go to stderr and to planning-agent-testbed/logs/agent-<faction>-game-<n>.txt;
 stdout carries protocol lines only.
 
@@ -136,20 +136,19 @@ class Agent:
     # --- Per-phase decisions. `sim` is the forward-model state of the observation. ---
 
     def purchase(self, sim) -> dict:
-        purchases = self.search.search(sim, "purchase")
-        self.log(f"round {sim.round} purchase: {self.search.last_stats}")
-        return self.encode("purchase", purchases) if purchases else {}
+        return self.searched("purchase", sim)
 
     def combat_move(self, sim) -> dict:
-        attacks = self.search.search(sim, "combatMove")
-        moves = [mv for attack in attacks for mv in attack.moves]
-        self.log(f"round {sim.round} combat move: {self.search.last_stats} {attacks}")
-        return self.encode("combatMove", moves) if moves else {}
+        return self.searched("combatMove", sim)
 
     def non_combat_move(self, sim) -> dict:
-        moves = self.search.search(sim, "nonCombatMove")
-        self.log(f"round {sim.round} non-combat move: {self.search.last_stats}")
-        return self.encode("nonCombatMove", moves) if moves else {}
+        return self.searched("nonCombatMove", sim)
+
+    def searched(self, phase, sim) -> dict:
+        """The search's chosen actions (phases.py's actions, as forward-model actions)."""
+        actions = self.search.search(sim, phase)
+        self.log(f"round {sim.round} {phase}: {self.search.last_stats} {self.search.last_sequence}")
+        return self.encode(phase, actions) if actions else {}
 
     def place(self, sim) -> dict:
         # As TripleMind: no placements field, so the engine places the purchased units.

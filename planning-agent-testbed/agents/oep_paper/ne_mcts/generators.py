@@ -3,6 +3,7 @@
 `ag` is the compiled Cython module (action_generators_cy, built by scripts/build_cython.sh) when it
 is available, otherwise the pure-Python reference action_generators. Both expose the same
 functions with the same results. Set TRIPLEMIND_PURE_PYTHON=1 to force the Python version.
+Shared by the all-phase OEP agents as identical copies (see phases.py).
 Diagnostics go to stderr only, and only when TRIPLEA_AGENT_LOG is 1: stdout carries the agent protocol.
 """
 
@@ -20,5 +21,6 @@ else:
         import action_generators as ag
         IMPLEMENTATION = "python (Cython module not built)"
         if os.environ.get("TRIPLEA_AGENT_LOG") == "1":
-            print(f"ne-mcts: action_generators_cy unavailable ({e}); using the pure-Python "
+            agent = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+            print(f"{agent}: action_generators_cy unavailable ({e}); using the pure-Python "
                   f"generators. Build it with scripts/build_cython.sh.", file=sys.stderr, flush=True)

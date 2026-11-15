@@ -5,7 +5,7 @@ combat move and non-combat move, with the actions and heuristic of the other OEP
 
   * genome: a sequence of up to GENOME_LENGTH = 3 actions of the phase (the paper's 5 action
     points, reduced to 3). A gene is one action of the phase, END included: an END gene ends the
-    genome early. Genes are kept as keys (Phase.gene) and replayed through the forward model from
+    genome early. Genes are kept as keys (Phase.action_key) and replayed through the forward model from
     the phase's start state, so a gene is legal when the state the genes before it reach still
     offers it;
   * population 100, survival rate 0.5: each generation the best half is kept and the rest is
@@ -17,8 +17,11 @@ combat move and non-combat move, with the actions and heuristic of the other OEP
     dice; placement at the home factory; my other phases ended at once), then ROLLOUT_LENGTH
     player turns played out with TripleMind's deterministic policy for every player (0, the
     default: static evaluation, as the paper found rollout-based fitness no better; 2 in a
-    two-player game: the opponent's turn, then mine), rated with evaluate_state. Deterministic, so
-    the value is cached per resulting state and survivors are never re-evaluated;
+    two-player game: the opponent's turn, then mine), rated with evaluate_state. With dice
+    battles this is done once per each of K fixed dice seeds drawn per search
+    (TRIPLEA_OEP_DICE_SEEDS, default 1) and averaged: every genome sees the same dice (common
+    random numbers). Deterministic, so the value is cached per resulting state and survivors are
+    never re-evaluated;
   * crossover, uniform: for each gene, a random parent's gene if it is legal in the child's
     simulated state, otherwise the other parent's, then the next genes of the parents' sequences,
     then a random legal action;
@@ -29,7 +32,8 @@ combat move and non-combat move, with the actions and heuristic of the other OEP
 The evolution runs until the time budget is used; the best genome found is played. A phase whose
 only action is END is answered without evolving.
 
-Actions per phase (as ../vanilla_mcts; their order does not matter here):
+Actions per phase (phases.py, shared by all the all-phase OEP agents; their order does not
+matter here):
 
   purchase      buy one unit of a candidate rule (land combat units bought with PUs). Gene: the rule.
   combat move   one attack per enemy territory: every unmoved unit of mine that can reach it.
@@ -53,7 +57,8 @@ from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 from generators import ag  # compiled Cython generators when built, else action_generators.py
 import fast_battle
 import map_graph
-import noncombat_generators as ncg
+from phases import (END_KEY, ROLLOUT_STRENGTH_MARGIN, CombatPhase, NoncombatPhase,
+                    PurchasePhase)
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, MetricLogger
 
 fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
@@ -68,29 +73,12 @@ POPULATION = 100
 SURVIVAL_RATE = 0.5
 MUTATION_RATE = 0.1
 ROLLOUT_LENGTH = 0  # player turns played out after mine in an evaluation (0: static evaluation)
-ROLLOUT_STRENGTH_MARGIN = 1.5  # TripleMind's first attack threshold (combat_actions)
 MAX_TURN_STEPS = 50  # guard for the walk through the rest of the turn
-END_GENE = "END"
 
 
 # =========================
 # Genomes
 # =========================
-
-class PhaseState:
-    """The forward-model state part-way through a phase, with the phase's own bookkeeping
-    (`info`, immutable: units bought, territories attacked, or territories decided + units
-    moved)."""
-    __slots__ = ("sim", "depth", "info")
-
-    def __init__(self, sim, depth, info):
-        self.sim = sim
-        self.depth = depth  # actions taken in the phase
-        self.info = info
-
-    def clone(self):
-        return PhaseState(self.sim.clone(), self.depth, self.info)
-
 
 
 class Genome:
@@ -107,254 +95,7 @@ class Genome:
 
     def gene_at(self, i):
         """Gene i; END past an early END."""
-        return self.genes[i] if i < len(self.genes) else END_GENE
-
-
-# =========================
-# Phases: actions, transitions, genes, keys
-# =========================
-
-class PurchaseUnit:
-    """One unit of production rule `rule_id`, or END."""
-    __slots__ = ("rule_id", "unit_type", "costs", "strength", "end_phase")
-
-    def __init__(self, rule_id=None, unit_type=None, costs=(), strength=0.0, end_phase=False):
-        self.rule_id = rule_id
-        self.unit_type = unit_type
-        self.costs = costs  # ((resource id, amount), ...)
-        self.strength = strength  # attack + defence per PU
-        self.end_phase = end_phase
-
-
-class Phase:
-    """One searched phase. `info` of a PhaseState is the phase's own, see the subclasses."""
-    name = None
-    step_kind = None
-    end = None  # the END action, when it does not depend on the state
-
-    def __init__(self, search):
-        self.search = search
-        self.d = search.d
-
-    def start(self, sim):
-        """PhaseState at the start of the phase, and the forced moves applied to reach it."""
-        raise NotImplementedError
-
-    def actions(self, state):
-        """Legal actions, END included (in the sorting heuristic's order, unused here)."""
-        raise NotImplementedError
-
-    def step(self, state, action, rng):
-        """Apply a non-END action to state in place; False if the forward model rejects it."""
-        raise NotImplementedError
-
-    def key(self, state):
-        raise NotImplementedError
-
-    def gene(self, action):
-        """The action's key in a genome: what makes it the same action in another state."""
-        raise NotImplementedError
-
-    def finish(self, state, end, rng):
-        """Play END (its moves, if any) and end the phase."""
-        return self.search.apply(state.sim, fm.EndPhaseAction(), rng)
-
-    def label(self, action):
-        raise NotImplementedError
-
-    def response_actions(self, sequence):
-        """The forward-model actions the chosen sequence sends to the engine."""
-        return [mv for a in sequence for mv in a.moves]
-
-
-class PurchasePhase(Phase):
-    """info: ((rule id, units bought), ...)."""
-    name = "purchase"
-    step_kind = PURCHASE
-    end = PurchaseUnit(end_phase=True)
-
-    def __init__(self, search):
-        super().__init__(search)
-        self._units = None
-
-    def units(self):
-        """Candidate rules, as purchase_actions picks them (land combat units for PUs only), most
-        attack + defence per PU first. Frontiers are fixed, so this is computed once."""
-        if self._units is None:
-            d, m = self.d, self.search.map
-            pus = d.resource_names.index("PUs")
-            units = []
-            for rid in d.frontier[self.search.me]:
-                rule = d.production_rules[rid]
-                if len(rule.results) != 1 or [r for r, _ in rule.costs] != [pus]:
-                    continue
-                type_id, qty = rule.results[0]
-                cost = rule.costs[0][1]
-                ut = m.unit_types.get(d.unit_types[type_id].name)
-                if (qty == 1 and cost > 0 and ut and ut.domain == "land"
-                        and not ut.is_infrastructure and not ut.is_aa):
-                    units.append(PurchaseUnit(rid, ut.name, rule.costs,
-                                              (ut.attack + ut.defense) / cost))
-            units.sort(key=lambda a: (-a.strength, a.rule_id))
-            self._units = units
-        return self._units
-
-    def start(self, sim):
-        return PhaseState(sim, 0, ()), []
-
-    def actions(self, state):
-        d, m, me = self.d, self.search.map, self.search.me
-        sim = state.sim
-        has_factory = any(
-            u.owner == me and u.loc >= 0 and sim.owner[u.loc] == me
-            and d.unit_types[u.type].name in m.unit_types
-            and m.unit_types[d.unit_types[u.type].name].can_produce
-            for u in sim.units.values())
-        if not has_factory:
-            return [self.end]
-        balance = sim.balances[me]
-        return [a for a in self.units()
-                if all(balance[r] >= amount for r, amount in a.costs)] + [self.end]
-
-    def step(self, state, action, rng):
-        if not self.search.apply(state.sim, fm.PurchaseAction(((action.rule_id, 1),)), rng):
-            return False
-        bought = dict(state.info)
-        bought[action.rule_id] = bought.get(action.rule_id, 0) + 1
-        state.info = tuple(sorted(bought.items()))
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        return state.info
-
-    def gene(self, action):
-        return END_GENE if action.end_phase else action.rule_id
-
-    def label(self, action):
-        return "END" if action.end_phase else f"buy {action.unit_type}"
-
-    def response_actions(self, sequence):
-        bought = {}
-        for a in sequence:
-            if not a.end_phase:
-                bought[a.rule_id] = bought.get(a.rule_id, 0) + 1
-        return [fm.PurchaseAction(tuple(sorted(bought.items())))] if bought else []
-
-
-class CombatPhase(Phase):
-    """info: frozenset of the territories attacked."""
-    name = "combatMove"
-    step_kind = COMBAT_MOVE
-    end = ag.CombatAction(end_phase=True, strength=0)
-
-    def start(self, sim):
-        return PhaseState(sim, 0, frozenset()), []
-
-    def actions(self, state):
-        """One attack per enemy target not attacked yet: all my unmoved units that can reach it.
-        Rated: attacks beating the defence by ROLLOUT_STRENGTH_MARGIN (TripleMind priority
-        order), END, then the other attacks."""
-        game = self.search.view(state.sim)
-        m = game.map
-        me = self.search.whoAmI
-        strong, weak = [], []
-        for target in ag.enemy_territories_by_priority(game, me):
-            if target in state.info:
-                continue
-            reachable = ag.get_reachable_units(game, target, me)
-            if not reachable:
-                continue
-            action = ag.CombatAction(
-                to_terr=target,
-                moves=ag._group_moves(self.d, [(u, route) for u, _, route in reachable]),
-                strength=ag.calculate_attack_strength(m, [u for u, _, _ in reachable]))
-            defence = ag.defender_strength(m, game.territories[target], me)
-            (strong if action.strength > ROLLOUT_STRENGTH_MARGIN * defence else weak).append(action)
-        return strong + [self.end] + weak
-
-    def step(self, state, action, rng):
-        if not all(self.search.apply(state.sim, mv, rng) for mv in action.moves):
-            return False
-        state.info = state.info | {action.to_terr}
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        me = self.search.me
-        return tuple(sorted((u.id, u.loc) for u in state.sim.units.values()
-                            if u.owner == me and u.moved))
-
-    def gene(self, action):
-        return END_GENE if action.end_phase else action.to_terr
-
-    def label(self, action):
-        return "END" if action.end_phase else f"{action.to_terr} | s={action.strength}"
-
-
-class NoncombatPhase(Phase):
-    """info: (frozenset of the territories decided, frozenset of the unit ids moved this phase)."""
-    name = "nonCombatMove"
-    step_kind = NONCOMBAT_MOVE
-
-    def start(self, sim):
-        """The air the engine would destroy lands first: forced, so not a tree ply."""
-        search = self.search
-        moves = ncg.land_air_moves(search.view(sim), self.d, search.whoAmI)
-        moved = set()
-        rng = search.move_rng
-        applied = []
-        for mv in moves:
-            if search.apply(sim, mv, rng):
-                moved.update(mv.units)
-                applied.append(mv)
-        return PhaseState(sim, 0, (frozenset(), frozenset(moved))), applied
-
-    def actions(self, state):
-        """Reinforcement sets for the most important territory short of cover, strongest first,
-        then its skip; END (with the positioning moves) once no territory is left."""
-        excluded, moved = state.info
-        actions, _ = ncg.noncombat_actions(self.search.view(state.sim), self.d, excluded, moved,
-                                           self.search.whoAmI)
-        return actions
-
-    def step(self, state, action, rng):
-        moved = set(state.info[1])
-        for mv in action.moves:
-            if not self.search.apply(state.sim, mv, rng):
-                return False
-            moved.update(mv.units)
-        state.info = (action.excluded, frozenset(moved))
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        excluded, moved = state.info
-        units = state.sim.units
-        return excluded, tuple(sorted((uid, units[uid].loc) for uid in moved if uid in units))
-
-    def gene(self, action):
-        """The territory and the units sent there (none for its skip)."""
-        if action.end_phase:
-            return END_GENE
-        return action.to_terr, tuple(sorted(u for mv in action.moves for u in mv.units))
-
-    def finish(self, state, end, rng):
-        sim = state.sim
-        for mv in end.moves:
-            self.search.apply(sim, mv, rng)  # a rejected positioning move is skipped, as live
-        return self.search.apply(sim, fm.EndPhaseAction(), rng)
-
-    def label(self, action):
-        if action.end_phase:
-            return f"END ({len(action.moves)} positioning moves)"
-        if not action.moves:
-            return f"skip {action.to_terr}"
-        return f"{action.to_terr} | s={action.strength:.1f}"
-
-
-def end_action(actions):
-    return next(a for a in actions if a.end_phase)
+        return self.genes[i] if i < len(self.genes) else END_KEY
 
 
 
@@ -365,7 +106,7 @@ def end_action(actions):
 class OEP:
     def __init__(self, definition, map_graph_, whoAmI, time_budget, population=POPULATION,
                  survival_rate=SURVIVAL_RATE, mutation_rate=MUTATION_RATE,
-                 genome_length=GENOME_LENGTH, rollout_length=ROLLOUT_LENGTH, seed=0,
+                 genome_length=GENOME_LENGTH, rollout_length=ROLLOUT_LENGTH, dice_seeds=1, seed=0,
                  metrics_dir="metrics"):
         self.d = definition
         self.map = map_graph_
@@ -379,7 +120,11 @@ class OEP:
         self.rollout_length = max(0, rollout_length)  # player turns played out after mine
         self.rnd = random.Random(seed)
         self.move_rng = self.new_rng()  # moves and purchases roll no dice
-        self.dice_seed = self.rnd.getrandbits(62)  # every evaluation's dice, redrawn per search
+        # K fixed dice seeds per search: every evaluation is played once per seed and averaged, so
+        # fitness stays deterministic (cached, survivors never re-scored). Fast battles roll no
+        # dice, so one seed is exact there.
+        self.k = 1 if fast_battle.DETERMINISTIC else max(1, dice_seeds)
+        self.dice_seeds = self.draw_dice_seeds()  # redrawn per search
         self.phases = {p.step_kind: p for p in (PurchasePhase(self), CombatPhase(self),
                                                 NoncombatPhase(self))}
         self.by_name = {p.name: p for p in self.phases.values()}
@@ -406,6 +151,9 @@ class OEP:
 
     def view(self, sim, player=None):
         return map_graph.GameState.from_sim(self.map, self.d, sim, player or self.whoAmI)
+
+    def draw_dice_seeds(self):
+        return [self.rnd.getrandbits(62) for _ in range(self.k)]
 
     def new_rng(self):
         return fm.SeededRng(self.rnd.getrandbits(62))
@@ -541,17 +289,17 @@ class OEP:
         genes, actions = [], []
         for i in range(self.genome_length):
             offered = phase.actions(state)
-            by_gene = {phase.gene(a): a for a in offered}
+            by_gene = {phase.action_key(a): a for a in offered}
             action = choose(i, by_gene)
             if action is None:
                 action = self.rnd.choice(offered)
             if not action.end_phase and not phase.step(state, action, self.move_rng):
-                action = end_action(offered)  # rejected by the forward model: end here
-            genes.append(phase.gene(action))
+                action = phase.end_of(state)  # rejected by the forward model: end here
+            genes.append(phase.action_key(action))
             actions.append(action)
             if action.end_phase:
                 return Genome(tuple(genes), actions, state)
-        actions.append(end_action(phase.actions(state)))  # actions used up: END
+        actions.append(phase.end_of(state))  # actions used up: END (offered or not)
         return Genome(tuple(genes), actions, state)
 
     def random_genome(self, phase, root):
@@ -595,28 +343,34 @@ class OEP:
     def evaluate(self, phase, genome, cache, stats, game_number, round_, generation):
         """The genome's actions (already on genome.state), END, the rest of my turn without
         decisions, then rollout_length player turns (play_turns; 0: static evaluation),
-        evaluate_state. Deterministic, so cached per resulting phase state."""
+        evaluate_state; once per fixed dice seed of the search, averaged. Deterministic, so
+        cached per resulting phase state; every genome sees the same seeds (common random
+        numbers)."""
         key = phase.key(genome.state)
         if key in cache:
             genome.fitness = cache[key]
             stats["cache_hits"] += 1
         else:
-            state = genome.state
-            rng = fm.SeededRng(self.dice_seed)
-            turns = 0
-            try:
-                if phase.finish(state, genome.actions[-1], rng):
-                    self.finish_turn(state.sim, rng)
-                    if self.rollout_length:
-                        turns = self.play_turns(state.sim, rng, self.rollout_length)
-                reward, terminal = evaluate_state(self, state.sim, self.whoAmI)
-            except Exception:
-                reward, terminal = -0.5, False
-            cache[key] = genome.fitness = reward
+            total = 0.0
+            for i, seed in enumerate(self.dice_seeds):
+                last = i == len(self.dice_seeds) - 1
+                state = genome.state if last else genome.state.clone()  # the last one in place
+                rng = fm.SeededRng(seed)
+                turns = 0
+                try:
+                    if phase.finish(state, genome.actions[-1], rng):
+                        self.finish_turn(state.sim, rng)
+                        if self.rollout_length:
+                            turns = self.play_turns(state.sim, rng, self.rollout_length)
+                    reward, terminal = evaluate_state(self, state.sim, self.whoAmI)
+                except Exception:
+                    reward, terminal = -0.5, False
+                total += reward
+                self.rollout_stats_metric.buffer(self.whoAmI, game_number, round_, generation,
+                                                 turns, reward, 1 if terminal else 0,
+                                                 len(genome.actions) - 1, phase.name)
+            cache[key] = genome.fitness = total / len(self.dice_seeds)
             stats["evaluations"] += 1
-            self.rollout_stats_metric.buffer(self.whoAmI, game_number, round_, generation, turns,
-                                             reward, 1 if terminal else 0, len(genome.actions) - 1,
-                                             phase.name)
         genome.state = None  # no longer needed: offspring are rebuilt from the root
 
     # ---- search --------------------------------------------------------------------------
@@ -629,7 +383,7 @@ class OEP:
         deadline = started + self.time_budget
         game_number, round_ = root_sim.game_number, root_sim.round
         self.move_rng = self.new_rng()
-        self.dice_seed = self.rnd.getrandbits(62)  # the same dice for every evaluation
+        self.dice_seeds = self.draw_dice_seeds()  # the same K seeds for every evaluation
 
         root, forced = phase.start(root_sim.clone())
         root_actions = phase.actions(root)

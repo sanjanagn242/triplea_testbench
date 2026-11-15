@@ -12,6 +12,8 @@ planning-agent-testbed/logs/agent-<faction>-game-<n>.txt; stdout carries protoco
 
 Environment:
   TRIPLEA_NE_SECONDS         search time per searched decision (default 1.0)
+  TRIPLEA_NE_DICE_SEEDS      dice battles: fixed seeds per search, every rollout averaged over
+                             them (default 1)
   TRIPLEA_NE_SEED            search seed: each search's dice (default 0)
   TRIPLEA_AGENT_LOG        1 enables logging, anything else disables it (set in run-agent.sh)
 """
@@ -46,7 +48,7 @@ GREEDY_GAME_RESULTS_HEADER = GAME_RESULTS_HEADER + ["winners"]
 
 
 class Agent:
-    def __init__(self, time_budget, seed=0):
+    def __init__(self, time_budget, dice_seeds=1, seed=0):
         self.player = None
         self.log_path = None
         self.definition = None
@@ -58,6 +60,7 @@ class Agent:
         self.game_started = None
         self.output_folder = "unknown-game/vs-unknown"
         self.time_budget = time_budget
+        self.dice_seeds = dice_seeds
         self.seed = seed
         self.phase_handlers = {
             "purchase": self.searched,
@@ -105,8 +108,8 @@ class Agent:
             return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
         self.definition = definition
         self.bridge = LiveBridge(definition, self.player, self.game_number)
-        self.search = NEMCTS(definition, self.map, self.player, self.time_budget, self.seed,
-                             metrics_dir=METRICS_DIR / self.output_folder)
+        self.search = NEMCTS(definition, self.map, self.player, self.time_budget, self.dice_seeds,
+                             self.seed, metrics_dir=METRICS_DIR / self.output_folder)
         self.log(f"ready as {self.player}")
         return {"ready": True, "protocolVersion": PROTOCOL_VERSION}
 
@@ -163,6 +166,7 @@ class Agent:
 
 def main():
     agent = Agent(float(os.environ.get("TRIPLEA_NE_SECONDS", "1.0")),
+                  int(os.environ.get("TRIPLEA_NE_DICE_SEEDS", "1")),
                   int(os.environ.get("TRIPLEA_NE_SEED", "0")))
     for line in sys.stdin:
         line = line.strip()

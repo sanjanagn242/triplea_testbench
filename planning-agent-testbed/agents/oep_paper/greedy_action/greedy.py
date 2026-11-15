@@ -3,29 +3,26 @@ Planning Versus Tree Search", IEEE ToG 2018, Sec. V) for the TripleA purchase, c
 non-combat move.
 
 The paper's Greedy Action does a one-ply search over every legal action, applies the best one,
-and repeats until the phase is over. It runs once per phase (3 times per turn); one action is:
+and repeats until the phase is over. It runs once per phase (3 times per turn), on the actions the
+other all-phase OEP agents use (phases.py: one unit bought, one attack, or one territory's
+reinforcement set or skip; END), listed in their sorting heuristic's order. Each level of the
+sequence:
 
-  purchase       one unit of one land combat rule TripleMind would buy (purchase_rules), ordered
-                 as TripleMind's round-robin would buy them;
-  combat move    one attack: (every unit of mine that can reach the target, target territory),
-                 for each enemy territory not attacked yet, ordered by TripleMind's priority;
-  non-combat     one move of TripleMind's noncombat_move plan not applied yet, in its order;
+  1. lists the actions offered by the plan built so far (END included where offered);
+  2. scores each one with the forward model and TripleMind's heuristic (evaluate_state): the
+     plan + the action, then END (the action's own END, or the END after it), and in the combat
+     move this turn's battles (default casualties, no retreat). With dice battles the candidates
+     are sampled round-robin until the level's share of the time budget is used (the remaining
+     time / Phase.levels_left), with the same dice seed for every candidate in one sweep (common
+     random numbers); purchase and non-combat roll no dice, and neither do fast battles, so one
+     sweep is exact there;
+  3. commits the candidate with the best mean value (the first in the sorting heuristic's order
+     of equal values); END ends the sequence. A level whose only action is END is no choice.
 
-plus END (stop). Each level of the sequence:
-
-  1. lists the candidate actions for the plan built so far (+ END);
-  2. scores each one with the forward model and TripleMind's heuristic (evaluate_state):
-     - combat move: the plan + candidate is played to the end of the battle phase (battles
-       fought with dice, default casualties, no retreat). Battles are random, so the candidates
-       are sampled round-robin until the level's share of the time budget is used, with the
-       same dice seed for every candidate in one sweep (common random numbers);
-     - purchase and non-combat: the state right after the atomic action (no dice: one sweep);
-  3. commits the candidate with the best mean value; END (or nothing left) ends the sequence.
-
-Ties: in the combat move END comes first, so an attack must beat ending the phase. In purchase
-and non-combat END comes last, so equal values go to the generator's order. evaluate_state
-counts neither purchased units in hand nor positions, so there every candidate usually ties and
-the sort order decides (comparing whole turns is greedy turn's job).
+If the time runs out before END, the sequence is completed with the sorting heuristic's
+highest-rated actions until END. evaluate_state counts neither purchased units in hand nor
+positions, so in the purchase and non-combat move the candidates usually tie and the sorting
+heuristic decides (comparing whole turns is greedy turn's job).
 """
 
 import math
@@ -39,9 +36,9 @@ from triplea_fm.actions import CONTINUE, RetreatAction, SelectBattleAction
 from triplea_fm.definition import BATTLE
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
-from generators import ag  # compiled Cython generators when built, else action_generators.py
 import fast_battle
 import map_graph
+from phases import complete_greedily, make_phases
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
 
 fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
@@ -58,9 +55,6 @@ GREEDY_ACTION_SEQ_HEADER = ACTION_SEQ_HEADER + ["value_gap", "end_phase_value", 
 # One row per candidate per level: every sibling's mean value and its gap to the best one.
 SIBLING_VALUES_HEADER = ["player", "game", "round", "tl", "action", "chosen", "samples",
                          "mean_value", "std_value", "diff_to_best", "phase"]
-
-PHASES = ("purchase", "combatMove", "nonCombatMove")
-END = ag.CombatAction(end_phase=True, strength=0)  # END of every phase
 
 
 class Candidate:
@@ -85,8 +79,10 @@ class GreedyActionSearch:
         self.time_budget = time_budget  # seconds per phase decision
         self.rnd = random.Random(seed)
         self.states_visited = 0
-        self.noncombat_plan = []
+        self.move_rng = fm.SeededRng(self.rnd.getrandbits(62))  # moves roll no dice
+        self.phases = make_phases(self)
         self.last_stats = None
+        self.last_sequence = []
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=GREEDY_EFFICIENCY_HEADER)
@@ -103,89 +99,31 @@ class GreedyActionSearch:
     def apply(self, sim, action, rng):
         return fm.apply_in_place(self.d, sim, action, rng) != fm.REJECTED
 
-    def apply_action(self, sim, action, rng):
-        """Apply a candidate (every move of an attack, or one purchase or move); False (sim partly
-        changed) if one is rejected."""
-        if isinstance(action, ag.CombatAction):
-            return all(self.apply(sim, mv, rng) for mv in action.moves)
-        return self.apply(sim, action, rng)
-
     def view(self, sim):
         return map_graph.GameState.from_sim(self.map, self.d, sim, self.whoAmI)
 
-    # ---- actions -------------------------------------------------------------------------
-
-    def candidate_actions(self, phase, sim, done):
-        """The candidates (END excluded) for the plan sim, after the actions `done` this phase."""
-        if phase == "purchase":
-            return self.purchase_candidates(sim, len(done))
-        if phase == "combatMove":
-            return self.combat_candidates(sim, {a.to_terr for a in done})
-        return [mv for mv in self.noncombat_plan if mv not in done]
-
-    def purchase_candidates(self, sim, bought):
-        """One unit of each affordable rule, in the order TripleMind's round-robin (purchase_actions)
-        would buy them after `bought` units: its next pick first."""
-        game = self.view(sim)
-        pu = game.players[self.whoAmI].PU
-        affordable = [name for name, cost, _ in ag.purchase_rules(game, self.whoAmI) if cost <= pu]
-        if not affordable:
-            return []
-        k = bought % len(affordable)
-        rule_id = self.d.production_rule_index
-        return [fm.PurchaseAction(((rule_id[name], 1),))
-                for name in dict.fromkeys(affordable[k:] + affordable[:k])]
-
-    def combat_candidates(self, sim, attacked):
-        """One attack per enemy target not attacked yet: all my unmoved units that can reach it."""
-        game = self.view(sim)
-        m = game.map
-        actions = []
-        for target in ag.enemy_territories_by_priority(game, self.whoAmI):
-            if target in attacked:
-                continue
-            reachable = ag.get_reachable_units(game, target, self.whoAmI)
-            if not reachable:
-                continue
-            actions.append(ag.CombatAction(
-                to_terr=target,
-                moves=ag._group_moves(self.d, [(u, route) for u, _, route in reachable]),
-                strength=ag.calculate_attack_strength(m, [u for u, _, _ in reachable])))
-        return actions
-
-    def label(self, a):
-        if a is END:
-            return "END"
-        if isinstance(a, ag.CombatAction):
-            return f"{a.to_terr} | s={a.strength}"
-        if a.kind == "purchase":
-            return " + ".join(f"{self.d.production_rules[rid].name} x{n}" for rid, n in a.quantities)
-        names = self.d.territory_names
-        return f"{len(a.units)} units {' > '.join(names[t] for t in a.route)}"
-
     # ---- evaluation ----------------------------------------------------------------------
 
-    def evaluate(self, phase, plan_sim, action, seed, game_number, tl):
-        """Value of plan_sim + action: in the combat move after this turn's battles, with dice from
-        seed, otherwise right after the action; None if the forward model rejects the action."""
-        sim = plan_sim.clone()
+    def evaluate(self, phase, state, action, seed, game_number, tl):
+        """Value of state + action, then END (the action's own, or the END after it), in the
+        combat move after this turn's battles with dice from seed; None if the forward model
+        rejects the action."""
+        state = state.clone()
         rng = fm.SeededRng(seed)
-        if action is not END and not self.apply_action(sim, action, rng):
+        if not action.end_phase and not phase.step(state, action, rng):
             return None
         self.states_visited += 1
-        if phase == "combatMove":
-            try:
-                self.apply(sim, fm.EndPhaseAction(), rng)  # end of combat move
-                self.fight_battles(sim, rng)
-            except Exception:
-                value, terminal = -0.5, False
-            else:
-                value, terminal = evaluate_state(self, sim, self.whoAmI)
+        try:
+            phase.finish(state, action if action.end_phase else phase.end_of(state), rng)
+            if phase.name == "combatMove":
+                self.fight_battles(state.sim, rng)
+        except Exception:
+            value, terminal = -0.5, False
         else:
-            value, terminal = evaluate_state(self, sim, self.whoAmI)
-        self.rollout_stats_metric.buffer(self.whoAmI, game_number, plan_sim.round,
+            value, terminal = evaluate_state(self, state.sim, self.whoAmI)
+        self.rollout_stats_metric.buffer(self.whoAmI, game_number, state.sim.round,
                                          self.states_visited, 0, value, 1 if terminal else 0, tl,
-                                         phase)
+                                         phase.name)
         return value
 
     def fight_battles(self, sim, rng, max_steps=2000):
@@ -212,18 +150,18 @@ class GreedyActionSearch:
 
     # ---- search --------------------------------------------------------------------------
 
-    def search(self, root_sim, phase):
-        """The greedy action sequence for root_sim's phase: CombatActions for the combat move,
-        fm.PurchaseActions / fm.MoveActions for purchase / non-combat."""
+    def search(self, root_sim, phase_name):
+        """The greedy action sequence for root_sim's phase, as forward-model actions for the
+        engine (forced ones first)."""
+        phase = self.phases[phase_name]
         started = time.time()
         deadline = started + self.time_budget
         game_number, round_ = root_sim.game_number, root_sim.round
         self.states_visited = 0
-        if phase == "nonCombatMove":
-            self.noncombat_plan = ag.noncombat_move(self.view(root_sim), self.d)
+        self.move_rng = fm.SeededRng(self.rnd.getrandbits(62))  # purchases and moves roll no dice
+        dice = phase.name == "combatMove" and not fast_battle.DETERMINISTIC
 
-        plan_sim = root_sim.clone()
-        plan_rng = fm.SeededRng(self.rnd.getrandbits(62))  # purchases and moves roll no dice
+        state, forced = phase.start(root_sim.clone())
         sequence = []
         levels = []  # per level: (number of actions, best value)
         reached_end = False
@@ -231,32 +169,26 @@ class GreedyActionSearch:
             tl = len(levels) + 1
             level_started = time.time()
             visited_before = self.states_visited
-            actions = self.candidate_actions(phase, plan_sim, sequence)
-            if not actions:
-                reached_end = True  # nothing left to do
+            actions = phase.actions(state)
+            if len(actions) == 1 and actions[0].end_phase:
+                sequence.append(actions[0])  # only END: no choice, not logged
+                reached_end = True
                 break
             if time.time() >= deadline:
-                break  # out of time before this level could be scored
-            end = Candidate(END)
-            if phase == "combatMove":
-                # Attack only when it beats ending the phase now (END first wins ties). Each pick
-                # removes at least one target, so at most len(actions) levels remain: give this one
-                # that share of the remaining time (and always at least one full sweep). Fast
-                # battles roll no dice, so one sweep is exact.
-                candidates = [end] + [Candidate(a) for a in actions]
-                level_deadline = (level_started if fast_battle.DETERMINISTIC else
-                                  level_started + (deadline - level_started) / len(actions))
-            else:
-                # No dice, so one sweep is exact. END last: ties go to the generator's order.
-                candidates = [Candidate(a) for a in actions] + [end]
-                level_deadline = level_started
+                break  # out of time before this level could be scored: completed below
+            candidates = [Candidate(a) for a in actions]  # the sorting heuristic's order
+            # Dice: this level's share of the remaining time (always at least one full sweep);
+            # otherwise one sweep is exact.
+            level_deadline = (level_started + (deadline - level_started)
+                              / max(1, phase.levels_left(state, actions)) if dice
+                              else level_started)
             base_seed = self.rnd.getrandbits(40)
             sweep = 0
             while sweep == 0 or time.time() < level_deadline:
                 for c in candidates:
                     if sweep > 0 and time.time() >= level_deadline:
                         break
-                    value = self.evaluate(phase, plan_sim, c.action, base_seed + sweep,
+                    value = self.evaluate(phase, state, c.action, base_seed + sweep,
                                           game_number, tl)
                     if value is not None:
                         c.values.append(value)
@@ -271,23 +203,31 @@ class GreedyActionSearch:
             if not scored:
                 break
             best = max(scored, key=lambda c: c.mean)  # the first of equal values
+            end = next((c for c in scored if c.action.end_phase), None)
             self.log_level(phase, game_number, round_, tl, scored, best, end,
                            self.states_visited - visited_before, time.time() - level_started)
             levels.append((len(candidates), best.mean))
-            if best.action is END:
+            sequence.append(best.action)
+            if best.action.end_phase:
                 reached_end = True
                 break
-            if not self.apply_action(plan_sim, best.action, plan_rng):
-                break  # cannot happen for a scored candidate; stop rather than loop
-            sequence.append(best.action)
+            following = state.clone()
+            if not phase.step(following, best.action, self.move_rng):
+                sequence.pop()  # cannot happen for a scored candidate; stop rather than loop
+                break
+            state = following
+        if not reached_end:
+            sequence += complete_greedily(phase, state, self.move_rng)
 
         search_time = time.time() - started
         self.rollout_stats_metric.flush()
         self.action_seq_stats_metric.flush()
         self.sibling_metric.flush()
-        self.last_stats = {"phase": phase, "states_visited": self.states_visited,
+        chosen = [a for a in sequence if not a.end_phase]
+        self.last_stats = {"phase": phase.name, "states_visited": self.states_visited,
                            "levels": len(levels), "reached_end_of_turn": reached_end,
                            "seconds": search_time}
+        self.last_sequence = [phase.label(a) for a in sequence]
         self.efficiency_metric.log(
             self.whoAmI,
             game_number,
@@ -298,13 +238,13 @@ class GreedyActionSearch:
             levels[0][0] if levels else 0,  # num_children_at_root
             float("nan"),  # max_rollout: no rollouts in greedy
             sum(n for n, _ in levels),  # num_action_sequences: plan prefixes scored
-            len(sequence),  # num_of_terr_attacked: sequence length (units bought, moves made)
+            len(chosen),  # num_of_terr_attacked: actions chosen (attacks, units, reinforcements)
             float("nan"),  # max_tree_depth: no search tree; level count is in last_stats
             1 if reached_end else 0,
             ";".join(str(n) for n, _ in levels),
             ";".join(f"{v:.4f}" for _, v in levels),
-            phase)
-        return sequence
+            phase.name)
+        return forced + phase.response_actions(sequence)
 
     def log_level(self, phase, game_number, round_, tl, scored, best, end, states, seconds):
         """One action_seq_stats row for the level and one sibling_values row per candidate."""
@@ -318,19 +258,19 @@ class GreedyActionSearch:
         mean_a, var_a = _mean_var(means)
         z = lambda x, m, var: (x - m) / math.sqrt(var) if var > 1e-12 else ""  # blank if all equal
         self.action_seq_stats_metric.buffer(
-            self.whoAmI, game_number, round_, tl, self.whoAmI, self.label(best.action), len(scored),
+            self.whoAmI, game_number, round_, tl, self.whoAmI, phase.label(best.action), len(scored),
             len(best.values), len(best.values) / sum(visits),
             len(second.values) if second else "", mean_v, var_v, math.sqrt(var_v),
             z(len(best.values), mean_v, var_v),
             best.mean, second.mean if second else "", mean_a, math.sqrt(var_a),
             z(best.mean, mean_a, var_a),
             best.mean - second.mean if second else "",
-            end.mean if end.values else "", states, seconds, phase)
+            end.mean if end else "", states, seconds, phase.name)
         for c in ranked:
             _, var_c = _mean_var(c.values)
-            self.sibling_metric.buffer(self.whoAmI, game_number, round_, tl, self.label(c.action),
+            self.sibling_metric.buffer(self.whoAmI, game_number, round_, tl, phase.label(c.action),
                                        1 if c is best else 0, len(c.values), c.mean,
-                                       math.sqrt(var_c), best.mean - c.mean, phase)
+                                       math.sqrt(var_c), best.mean - c.mean, phase.name)
 
 
 def _mean_var(xs):

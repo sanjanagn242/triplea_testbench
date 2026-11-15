@@ -23,7 +23,8 @@ After the time budget the tree is followed from the root along the most visited 
 mean) until END; a path that stops at a node the search never expanded is completed with the
 sorting heuristic's highest-rated actions.
 
-Actions per phase (each phase's sorting heuristic lists them highest-rated first):
+Actions per phase (phases.py, shared by all the all-phase OEP agents; each phase's sorting
+heuristic lists them highest-rated first):
 
   purchase      buy one unit of a candidate rule (land combat units bought with PUs, as
                 TripleMind's purchase_actions); rated by attack + defence per PU, END last. A node
@@ -45,14 +46,13 @@ import time
 import triplea_fm as fm
 from triplea_fm import toolkit
 from triplea_fm.actions import CONTINUE, RetreatAction, SelectBattleAction
-from triplea_fm.definition import (BATTLE, COMBAT_MOVE, END_ROUND, END_TURN, NONCOMBAT_MOVE,
-                                   PLACE, PURCHASE)
+from triplea_fm.definition import BATTLE, END_ROUND, END_TURN, PLACE
 from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
 from generators import ag  # compiled Cython generators when built, else action_generators.py
 import fast_battle
 import map_graph
-import noncombat_generators as ncg
+from phases import CombatPhase, NoncombatPhase, PurchasePhase, complete_greedily
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
 
 fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
@@ -69,28 +69,12 @@ SIBLING_VALUES_HEADER = ["player", "game", "round", "tl", "action", "chosen", "s
                          "mean_value", "std_value", "diff_to_best", "phase"]
 
 C = 1 / math.sqrt(2)  # the paper's UCT constant
-ROLLOUT_STRENGTH_MARGIN = 1.5  # TripleMind's first attack threshold (combat_actions)
 MAX_TURN_STEPS = 50  # guard for the rollout's walk through the rest of the turn
 
 
 # =========================
 # Tree
 # =========================
-
-class PhaseState:
-    """The forward-model state part-way through a phase, with the phase's own bookkeeping
-    (`info`, immutable: units bought, territories attacked, or territories decided + units
-    moved)."""
-    __slots__ = ("sim", "depth", "info")
-
-    def __init__(self, sim, depth, info):
-        self.sim = sim
-        self.depth = depth  # actions taken in the phase
-        self.info = info
-
-    def clone(self):
-        return PhaseState(self.sim.clone(), self.depth, self.info)
-
 
 class Node:
     """A state of the phase, shared by every order of actions that reaches it."""
@@ -129,237 +113,6 @@ class Edge:
             return 0.0
         m = self.value / self.visits
         return math.sqrt(max(self.value_sq / self.visits - m * m, 0.0))
-
-
-# =========================
-# Phases: actions (sorting heuristic order), transitions, keys
-# =========================
-
-class PurchaseUnit:
-    """One unit of production rule `rule_id`, or END."""
-    __slots__ = ("rule_id", "unit_type", "costs", "strength", "end_phase")
-
-    def __init__(self, rule_id=None, unit_type=None, costs=(), strength=0.0, end_phase=False):
-        self.rule_id = rule_id
-        self.unit_type = unit_type
-        self.costs = costs  # ((resource id, amount), ...)
-        self.strength = strength  # attack + defence per PU
-        self.end_phase = end_phase
-
-
-class Phase:
-    """One searched phase. `info` of a PhaseState is the phase's own, see the subclasses."""
-    name = None
-    step_kind = None
-    end = None  # the END action, when it does not depend on the state
-
-    def __init__(self, search):
-        self.search = search
-        self.d = search.d
-
-    def start(self, sim):
-        """PhaseState at the start of the phase, and the forced moves applied to reach it."""
-        raise NotImplementedError
-
-    def actions(self, state):
-        """Legal actions, END included, highest-rated first."""
-        raise NotImplementedError
-
-    def step(self, state, action, rng):
-        """Apply a non-END action to state in place; False if the forward model rejects it."""
-        raise NotImplementedError
-
-    def key(self, state):
-        raise NotImplementedError
-
-    def finish(self, state, end, rng):
-        """Play END (its moves, if any) and end the phase."""
-        return self.search.apply(state.sim, fm.EndPhaseAction(), rng)
-
-    def label(self, action):
-        raise NotImplementedError
-
-    def response_actions(self, sequence):
-        """The forward-model actions the chosen sequence sends to the engine."""
-        return [mv for a in sequence for mv in a.moves]
-
-
-class PurchasePhase(Phase):
-    """info: ((rule id, units bought), ...)."""
-    name = "purchase"
-    step_kind = PURCHASE
-    end = PurchaseUnit(end_phase=True)
-
-    def __init__(self, search):
-        super().__init__(search)
-        self._units = None
-
-    def units(self):
-        """Candidate rules, as purchase_actions picks them (land combat units for PUs only), most
-        attack + defence per PU first. Frontiers are fixed, so this is computed once."""
-        if self._units is None:
-            d, m = self.d, self.search.map
-            pus = d.resource_names.index("PUs")
-            units = []
-            for rid in d.frontier[self.search.me]:
-                rule = d.production_rules[rid]
-                if len(rule.results) != 1 or [r for r, _ in rule.costs] != [pus]:
-                    continue
-                type_id, qty = rule.results[0]
-                cost = rule.costs[0][1]
-                ut = m.unit_types.get(d.unit_types[type_id].name)
-                if (qty == 1 and cost > 0 and ut and ut.domain == "land"
-                        and not ut.is_infrastructure and not ut.is_aa):
-                    units.append(PurchaseUnit(rid, ut.name, rule.costs,
-                                              (ut.attack + ut.defense) / cost))
-            units.sort(key=lambda a: (-a.strength, a.rule_id))
-            self._units = units
-        return self._units
-
-    def start(self, sim):
-        return PhaseState(sim, 0, ()), []
-
-    def actions(self, state):
-        d, m, me = self.d, self.search.map, self.search.me
-        sim = state.sim
-        has_factory = any(
-            u.owner == me and u.loc >= 0 and sim.owner[u.loc] == me
-            and d.unit_types[u.type].name in m.unit_types
-            and m.unit_types[d.unit_types[u.type].name].can_produce
-            for u in sim.units.values())
-        if not has_factory:
-            return [self.end]
-        balance = sim.balances[me]
-        return [a for a in self.units()
-                if all(balance[r] >= amount for r, amount in a.costs)] + [self.end]
-
-    def step(self, state, action, rng):
-        if not self.search.apply(state.sim, fm.PurchaseAction(((action.rule_id, 1),)), rng):
-            return False
-        bought = dict(state.info)
-        bought[action.rule_id] = bought.get(action.rule_id, 0) + 1
-        state.info = tuple(sorted(bought.items()))
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        return state.info
-
-    def label(self, action):
-        return "END" if action.end_phase else f"buy {action.unit_type}"
-
-    def response_actions(self, sequence):
-        bought = {}
-        for a in sequence:
-            if not a.end_phase:
-                bought[a.rule_id] = bought.get(a.rule_id, 0) + 1
-        return [fm.PurchaseAction(tuple(sorted(bought.items())))] if bought else []
-
-
-class CombatPhase(Phase):
-    """info: frozenset of the territories attacked."""
-    name = "combatMove"
-    step_kind = COMBAT_MOVE
-    end = ag.CombatAction(end_phase=True, strength=0)
-
-    def start(self, sim):
-        return PhaseState(sim, 0, frozenset()), []
-
-    def actions(self, state):
-        """One attack per enemy target not attacked yet: all my unmoved units that can reach it.
-        Rated: attacks beating the defence by ROLLOUT_STRENGTH_MARGIN (TripleMind priority
-        order), END, then the other attacks."""
-        game = self.search.view(state.sim)
-        m = game.map
-        me = self.search.whoAmI
-        strong, weak = [], []
-        for target in ag.enemy_territories_by_priority(game, me):
-            if target in state.info:
-                continue
-            reachable = ag.get_reachable_units(game, target, me)
-            if not reachable:
-                continue
-            action = ag.CombatAction(
-                to_terr=target,
-                moves=ag._group_moves(self.d, [(u, route) for u, _, route in reachable]),
-                strength=ag.calculate_attack_strength(m, [u for u, _, _ in reachable]))
-            defence = ag.defender_strength(m, game.territories[target], me)
-            (strong if action.strength > ROLLOUT_STRENGTH_MARGIN * defence else weak).append(action)
-        return strong + [self.end] + weak
-
-    def step(self, state, action, rng):
-        if not all(self.search.apply(state.sim, mv, rng) for mv in action.moves):
-            return False
-        state.info = state.info | {action.to_terr}
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        me = self.search.me
-        return tuple(sorted((u.id, u.loc) for u in state.sim.units.values()
-                            if u.owner == me and u.moved))
-
-    def label(self, action):
-        return "END" if action.end_phase else f"{action.to_terr} | s={action.strength}"
-
-
-class NoncombatPhase(Phase):
-    """info: (frozenset of the territories decided, frozenset of the unit ids moved this phase)."""
-    name = "nonCombatMove"
-    step_kind = NONCOMBAT_MOVE
-
-    def start(self, sim):
-        """The air the engine would destroy lands first: forced, so not a tree ply."""
-        search = self.search
-        moves = ncg.land_air_moves(search.view(sim), self.d, search.whoAmI)
-        moved = set()
-        rng = search.move_rng
-        applied = []
-        for mv in moves:
-            if search.apply(sim, mv, rng):
-                moved.update(mv.units)
-                applied.append(mv)
-        return PhaseState(sim, 0, (frozenset(), frozenset(moved))), applied
-
-    def actions(self, state):
-        """Reinforcement sets for the most important territory short of cover, strongest first,
-        then its skip; END (with the positioning moves) once no territory is left."""
-        excluded, moved = state.info
-        actions, _ = ncg.noncombat_actions(self.search.view(state.sim), self.d, excluded, moved,
-                                           self.search.whoAmI)
-        return actions
-
-    def step(self, state, action, rng):
-        moved = set(state.info[1])
-        for mv in action.moves:
-            if not self.search.apply(state.sim, mv, rng):
-                return False
-            moved.update(mv.units)
-        state.info = (action.excluded, frozenset(moved))
-        state.depth += 1
-        return True
-
-    def key(self, state):
-        excluded, moved = state.info
-        units = state.sim.units
-        return excluded, tuple(sorted((uid, units[uid].loc) for uid in moved if uid in units))
-
-    def finish(self, state, end, rng):
-        sim = state.sim
-        for mv in end.moves:
-            self.search.apply(sim, mv, rng)  # a rejected positioning move is skipped, as live
-        return self.search.apply(sim, fm.EndPhaseAction(), rng)
-
-    def label(self, action):
-        if action.end_phase:
-            return f"END ({len(action.moves)} positioning moves)"
-        if not action.moves:
-            return f"skip {action.to_terr}"
-        return f"{action.to_terr} | s={action.strength:.1f}"
-
-
-def end_action(actions):
-    return next(a for a in actions if a.end_phase)
 
 
 # =========================
@@ -432,7 +185,7 @@ class VanillaMCTS:
                 return played, phase.finish(state, action, rng)
             if not phase.step(state, action, rng):
                 # rejected: stop the phase here
-                return played, phase.finish(state, end_action(phase.actions(state)), rng)
+                return played, phase.finish(state, phase.end_of(state), rng)
             played += 1
 
     def play_rest_of_turn(self, sim, rng):
@@ -615,15 +368,7 @@ class VanillaMCTS:
                 node = best.child
                 continue
             # never expanded: the sorting heuristic from here on, on a copy of the state
-            state = node.state.clone()
-            for _ in range(1000):
-                actions = phase.actions(state)
-                if actions[0].end_phase:
-                    sequence.append(actions[0])
-                    break
-                if not phase.step(state, actions[0], self.move_rng):
-                    break
-                sequence.append(actions[0])
+            sequence += complete_greedily(phase, node.state.clone(), self.move_rng)
             break
 
         for tl, (n, best) in enumerate(levels, 1):

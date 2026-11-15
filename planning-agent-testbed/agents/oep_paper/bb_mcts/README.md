@@ -6,11 +6,15 @@ Adversarial Games: Online Evolutionary Planning Versus Tree Search* (IEEE Transa
 **plus the bridge burning step**. Unlike [bb_mcts_combat](../bb_mcts_combat/README.md) (combat move
 only), this agent searches every phase request it gets: **purchase, combat move and non-combat
 move**. Placement is the engine's and battles are `fightAll`, as TripleMind.
-Action generators, map graph and metric helpers are copies of TripleMind's, with the Cython
-build of the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`): `run-agent.sh`
-rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build falls back to the Python
-generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1` forces Python.
-`noncombat_generators.py` is all-phases-mcts's.
+The actions are those of every all-phase OEP agent (greedy_action, greedy_turn, vanilla_mcts,
+ne_mcts, bb_mcts, oep), which differ only in how they select among them: `phases.py` holds them,
+and it and the generators it uses (`action_generators.py`, its Cython build
+`action_generators_cy.pyx` / `scripts/build_cython.sh`, `generators.py`,
+`noncombat_generators.py`, `map_graph.py`, `helper.py`, `fast_battle.py`) are byte-identical
+copies in each agent; [`../check-shared-files.sh`](../check-shared-files.sh) fails when they
+drift. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build
+falls back to the Python generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1`
+forces Python.
 
 ## Algorithm
 

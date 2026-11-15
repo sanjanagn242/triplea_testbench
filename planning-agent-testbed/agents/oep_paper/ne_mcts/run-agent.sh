@@ -8,6 +8,10 @@ export TRIPLEA_AGENT_LOG="${TRIPLEA_AGENT_LOG:-0}"
 # Search: time per searched decision (purchase, combat move, non-combat move) in seconds, and seed
 # (it draws each search's fixed dice). C = 0 and epsilon = 1 are the algorithm, not settings.
 export TRIPLEA_NE_SECONDS="${TRIPLEA_NE_SECONDS:-1.0}"
+# Dice battles: K fixed dice seeds drawn per search; every rollout is played once per seed and
+# the rewards averaged (deterministic, as C = 0 needs; common random numbers across nodes).
+# Ignored with TRIPLEA_BATTLE_RESOLUTION=fast (no dice).
+export TRIPLEA_NE_DICE_SEEDS="${TRIPLEA_NE_DICE_SEEDS:-1}"
 export TRIPLEA_NE_SEED="${TRIPLEA_NE_SEED:-0}"
 # Battles in the search's simulations: dice (the forward model's dice-rolling battles, default
 # casualties, never retreat) or fast (the Fast AI's most likely outcome, no dice).

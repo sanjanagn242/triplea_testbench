@@ -7,33 +7,24 @@ sequence) is rated with the same heuristic as Greedy Action and the sequence lea
 highest rated state is played. A transposition table skips states already visited, and because
 the search is usually not exhaustive the order actions are tried in (action sorting) matters.
 
-It runs once per phase (3 times per turn), with the same atomic actions as Greedy Action, each
-list in its action-sorting order:
+It runs once per phase (3 times per turn), on the actions the other all-phase OEP agents use
+(phases.py: one unit bought, one attack, or one territory's reinforcement set or skip; END), in
+their sorting heuristic's order. A node is a plan (the actions so far this phase); a node where
+END is offered is also a leaf: ending the phase there. So:
 
-  purchase       one unit of one land combat rule TripleMind would buy (purchase_rules), its
-                 round-robin's next pick first;
-  combat move    one attack: (every unit of mine that can reach the target, target territory),
-                 for each enemy territory not attacked yet, in TripleMind's territory priority;
-  non-combat     one move of TripleMind's noncombat_move plan not applied yet, in its order.
-
-A node is a plan (the actions so far this phase) and every node is also a leaf: ending the phase
-there. The number of actions in a phase differs (PUs, targets, plan moves), so the depth is
-variable: a branch ends when nothing is left to do. So:
-
-  1. depth-first, children in the action-sorting order: at each node score its leaf (plan + END,
-     rated by evaluate_state: in the combat move after the plan is played to the end of the battle
-     phase with the forward model, otherwise right after the plan), then expand its actions. A
-     child whose state was already reached by another order of the same actions is skipped
-     (transposition table: where my moved units stand, and which unit types I hold purchased);
-  2. the DFS runs until the time budget is used or every plan was scored. In the combat move a
-     finished DFS hands the remaining time to resampling every leaf (battles are random), with
-     the same dice seed for every leaf in one sweep; purchase and non-combat roll no dice, so a
-     finished DFS is exact;
+  1. depth-first, children in the sorting heuristic's order: at each node score its leaf (plan +
+     END, then in the combat move this turn's battles, rated by evaluate_state), then expand its
+     actions. A child whose state was already reached by another order of the same actions is
+     skipped (transposition table: Phase.key);
+  2. the DFS runs until the time budget is used or every plan was scored. In the combat move
+     with dice battles a finished DFS hands the remaining time to resampling every leaf, with
+     the same dice seed for every leaf in one sweep; purchase and non-combat roll no dice, and
+     neither do fast battles, so a finished DFS is exact there;
   3. a node's value is the best mean value of a leaf below it; the chosen sequence follows the
-     best child from the root while it beats ending the phase there. In the combat move END wins
-     ties (an attack must beat stopping); in purchase and non-combat the child does, so equal
-     values go to the action-sorting order. evaluate_state counts neither purchased units in
-     hand nor positions, so there the leaves usually tie and the sort order decides.
+     best sibling (END or a child) from the root, the first in the sorting heuristic's order of
+     equal values, until END. A path that stops at a node the DFS did not score is completed
+     with the highest-rated actions until END. evaluate_state counts neither purchased units in
+     hand nor positions, so there the leaves usually tie and the sorting heuristic decides.
 
 The combat move is scored after the battle phase, not after place: non-combat moves and placement
 change neither the TUV nor the territory owners evaluate_state counts, so the ranking is the same
@@ -49,11 +40,11 @@ import triplea_fm as fm
 from triplea_fm import toolkit
 from triplea_fm.actions import CONTINUE, RetreatAction, SelectBattleAction
 from triplea_fm.definition import BATTLE
-from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, HELD, RETREAT_D
+from triplea_fm.state import BATTLE_SELECTION_D, CASUALTIES_D, RETREAT_D
 
-from generators import ag  # compiled Cython generators when built, else action_generators.py
 import fast_battle
 import map_graph
+from phases import complete_greedily, make_phases
 from helper import EFFICIENCY_HEADER, ROLLOUT_STATS_HEADER, ACTION_SEQ_HEADER, MetricLogger
 
 fast_battle.install()  # the search's battles: dice, or the Fast AI's most likely outcome
@@ -74,20 +65,18 @@ GREEDY_ACTION_SEQ_HEADER = ACTION_SEQ_HEADER + ["value_gap", "end_phase_value", 
 SIBLING_VALUES_HEADER = ["player", "game", "round", "tl", "action", "chosen", "samples",
                          "mean_value", "std_value", "diff_to_best", "phase"]
 
-PHASES = ("purchase", "combatMove", "nonCombatMove")
-END = ag.CombatAction(end_phase=True, strength=0)  # END of every phase
-
 
 class Node:
     """A plan (actions so far this phase) in the phase tree; `values` are the samples of its END
-    leaf."""
-    __slots__ = ("sim", "action", "depth", "done", "values", "children")
+    leaf (none where END is not offered)."""
+    __slots__ = ("state", "action", "depth", "actions", "end", "values", "children")
 
-    def __init__(self, sim, action, depth, done):
-        self.sim = sim
+    def __init__(self, state, action, depth):
+        self.state = state  # PhaseState after the plan
         self.action = action  # the action leading here (None at the root)
         self.depth = depth  # actions in the plan
-        self.done = done  # those actions, in order
+        self.actions = None  # actions offered here, in the sorting heuristic's order
+        self.end = None  # the END offered here, if any
         self.values = []
         self.children = []
 
@@ -114,8 +103,10 @@ class GreedyTurnSearch:
         self.time_budget = time_budget  # seconds per phase decision
         self.rnd = random.Random(seed)
         self.states_visited = 0
-        self.noncombat_plan = []
+        self.move_rng = fm.SeededRng(self.rnd.getrandbits(62))  # moves roll no dice
+        self.phases = make_phases(self)
         self.last_stats = None
+        self.last_sequence = []
 
         self.efficiency_metric = MetricLogger(
             os.path.join(metrics_dir, "efficiency.csv"), header=GREEDY_EFFICIENCY_HEADER)
@@ -132,101 +123,28 @@ class GreedyTurnSearch:
     def apply(self, sim, action, rng):
         return fm.apply_in_place(self.d, sim, action, rng) != fm.REJECTED
 
-    def apply_action(self, sim, action, rng):
-        """Apply an action (every move of an attack, or one purchase or move); False (sim partly
-        changed) if one is rejected."""
-        if isinstance(action, ag.CombatAction):
-            return all(self.apply(sim, mv, rng) for mv in action.moves)
-        return self.apply(sim, action, rng)
-
     def view(self, sim):
         return map_graph.GameState.from_sim(self.map, self.d, sim, self.whoAmI)
 
-    def state_key(self, sim):
-        """Transposition key of a plan: where each of my moved units stands, and the types of the
-        units I hold purchased (their ids follow the purchase order, their types do not)."""
-        moved, held = [], []
-        for u in sim.units.values():
-            if u.owner == self.me:
-                if u.loc == HELD:
-                    held.append(u.type)
-                elif u.moved:
-                    moved.append((u.id, u.loc))
-        return tuple(sorted(moved)), tuple(sorted(held))
-
-    # ---- actions -------------------------------------------------------------------------
-
-    def candidate_actions(self, phase, sim, done):
-        """The actions (END excluded) for the plan sim after the actions `done` this phase, in the
-        search's action-sorting order."""
-        if phase == "purchase":
-            return self.purchase_candidates(sim, len(done))
-        if phase == "combatMove":
-            return self.combat_candidates(sim, {a.to_terr for a in done})
-        return [mv for mv in self.noncombat_plan if mv not in done]
-
-    def purchase_candidates(self, sim, bought):
-        """One unit of each affordable rule, in the order TripleMind's round-robin (purchase_actions)
-        would buy them after `bought` units: its next pick first."""
-        game = self.view(sim)
-        pu = game.players[self.whoAmI].PU
-        affordable = [name for name, cost, _ in ag.purchase_rules(game, self.whoAmI) if cost <= pu]
-        if not affordable:
-            return []
-        k = bought % len(affordable)
-        rule_id = self.d.production_rule_index
-        return [fm.PurchaseAction(((rule_id[name], 1),))
-                for name in dict.fromkeys(affordable[k:] + affordable[:k])]
-
-    def combat_candidates(self, sim, attacked):
-        """One attack per enemy target not attacked yet: all my unmoved units that can reach it,
-        in TripleMind's territory priority order (the search's action sorting)."""
-        game = self.view(sim)
-        m = game.map
-        actions = []
-        for target in ag.enemy_territories_by_priority(game, self.whoAmI):
-            if target in attacked:
-                continue
-            reachable = ag.get_reachable_units(game, target, self.whoAmI)
-            if not reachable:
-                continue
-            actions.append(ag.CombatAction(
-                to_terr=target,
-                moves=ag._group_moves(self.d, [(u, route) for u, _, route in reachable]),
-                strength=ag.calculate_attack_strength(m, [u for u, _, _ in reachable])))
-        return actions
-
-    def label(self, a):
-        if a is None:
-            return "END"
-        if isinstance(a, ag.CombatAction):
-            return f"{a.to_terr} | s={a.strength}"
-        if a.kind == "purchase":
-            return " + ".join(f"{self.d.production_rules[rid].name} x{n}" for rid, n in a.quantities)
-        names = self.d.territory_names
-        return f"{len(a.units)} units {' > '.join(names[t] for t in a.route)}"
-
     # ---- evaluation ----------------------------------------------------------------------
 
-    def evaluate(self, phase, plan_sim, seed, game_number, tl):
-        """Value of ending the phase after plan_sim's actions: in the combat move after this
-        turn's battles, with dice from seed, otherwise right after the plan."""
+    def evaluate(self, phase, node, seed, game_number):
+        """Value of ending the phase after node's plan (its END), in the combat move after this
+        turn's battles with dice from seed."""
         self.states_visited += 1
-        if phase == "combatMove":
-            sim = plan_sim.clone()
-            rng = fm.SeededRng(seed)
-            try:
-                self.apply(sim, fm.EndPhaseAction(), rng)  # end of combat move
-                self.fight_battles(sim, rng)
-            except Exception:
-                value, terminal = -0.5, False
-            else:
-                value, terminal = evaluate_state(self, sim, self.whoAmI)
+        state = node.state.clone()
+        rng = fm.SeededRng(seed)
+        try:
+            phase.finish(state, node.end, rng)
+            if phase.name == "combatMove":
+                self.fight_battles(state.sim, rng)
+        except Exception:
+            value, terminal = -0.5, False
         else:
-            value, terminal = evaluate_state(self, plan_sim, self.whoAmI)
-        self.rollout_stats_metric.buffer(self.whoAmI, game_number, plan_sim.round,
-                                         self.states_visited, 0, value, 1 if terminal else 0, tl,
-                                         phase)
+            value, terminal = evaluate_state(self, state.sim, self.whoAmI)
+        self.rollout_stats_metric.buffer(self.whoAmI, game_number, state.sim.round,
+                                         self.states_visited, 0, value, 1 if terminal else 0,
+                                         node.depth + 1, phase.name)
         return value
 
     def fight_battles(self, sim, rng, max_steps=2000):
@@ -253,40 +171,44 @@ class GreedyTurnSearch:
 
     # ---- search --------------------------------------------------------------------------
 
-    def search(self, root_sim, phase):
-        """The best action sequence for root_sim's phase: CombatActions for the combat move,
-        fm.PurchaseActions / fm.MoveActions for purchase / non-combat."""
+    def search(self, root_sim, phase_name):
+        """The best action sequence for root_sim's phase, as forward-model actions for the engine
+        (forced ones first)."""
+        phase = self.phases[phase_name]
         started = time.time()
         deadline = started + self.time_budget
         game_number, round_ = root_sim.game_number, root_sim.round
         self.states_visited = 0
-        if phase == "nonCombatMove":
-            self.noncombat_plan = ag.noncombat_move(self.view(root_sim), self.d)
-        move_rng = fm.SeededRng(self.rnd.getrandbits(62))  # purchases and moves roll no dice
+        self.move_rng = fm.SeededRng(self.rnd.getrandbits(62))  # purchases and moves roll no dice
         base_seed = self.rnd.getrandbits(40)
 
         # --- depth-first search over the phase, one sample per leaf ---
-        root = Node(root_sim.clone(), None, 0, ())
-        seen = {self.state_key(root.sim)}
+        root_state, forced = phase.start(root_sim.clone())
+        root = Node(root_state, None, 0)
+        seen = {phase.key(root.state)}
         leaves = []
         stack = [root]
         transpositions = 0
         max_depth = 0
         while stack and time.time() < deadline:
             node = stack.pop()
-            node.values.append(self.evaluate(phase, node.sim, base_seed, game_number,
-                                             node.depth + 1))
-            leaves.append(node)
-            for a in self.candidate_actions(phase, node.sim, node.done):
-                sim = node.sim.clone()
-                if not self.apply_action(sim, a, move_rng):
+            node.actions = phase.actions(node.state)
+            node.end = next((a for a in node.actions if a.end_phase), None)
+            if node.end is not None:  # ending the phase here is offered: a leaf
+                node.values.append(self.evaluate(phase, node, base_seed, game_number))
+                leaves.append(node)
+            for a in node.actions:
+                if a.end_phase:
                     continue
-                key = self.state_key(sim)
+                state = node.state.clone()
+                if not phase.step(state, a, self.move_rng):
+                    continue
+                key = phase.key(state)
                 if key in seen:
                     transpositions += 1
                     continue
                 seen.add(key)
-                node.children.append(Node(sim, a, node.depth + 1, node.done + (a,)))
+                node.children.append(Node(state, a, node.depth + 1))
                 max_depth = max(max_depth, node.depth + 1)
             stack.extend(reversed(node.children))  # first in the action sorting is searched first
         complete = not stack
@@ -294,43 +216,55 @@ class GreedyTurnSearch:
         # --- combat move, remaining time: resample every leaf (common dice seed per sweep);
         # fast battles roll no dice, so the one sample is exact ---
         sweeps = 1
-        while (complete and phase == "combatMove" and not fast_battle.DETERMINISTIC
+        while (complete and phase.name == "combatMove" and not fast_battle.DETERMINISTIC
                and time.time() < deadline):
             for leaf in leaves:
                 if time.time() >= deadline:
                     break
-                leaf.values.append(self.evaluate(phase, leaf.sim, base_seed + sweeps, game_number,
-                                                 leaf.depth + 1))
+                leaf.values.append(self.evaluate(phase, leaf, base_seed + sweeps, game_number))
             sweeps += 1
 
-        # --- the chosen sequence: best child while it beats ending the phase there ---
+        # --- the chosen sequence: the best sibling (END or a child) until END ---
         values = {}
         backup(root, values)
         sequence, levels = [], []
         node = root
-        while True:
-            siblings = self.siblings(node, values)
-            if len(siblings) == 1:
-                break  # nothing left to do: not a choice, not logged (as in Greedy Action)
-            # The first of equal values: END in the combat move (an attack must beat stopping),
-            # the first child in the action sorting otherwise.
-            ranked = siblings if phase == "combatMove" else siblings[1:] + siblings[:1]
-            best = max(ranked, key=lambda s: s.mean)
+        while node.actions is not None:
+            if len(node.actions) == 1:  # no choice: not logged (as in Greedy Action)
+                only = node.actions[0]
+                child = node.children[0] if node.children else None
+                if only.end_phase:
+                    sequence.append(only)
+                    break
+                if child is None:
+                    break  # its state was reached by another order: completed below
+                sequence.append(only)
+                node = child
+                continue
+            siblings = self.siblings(phase, node, values)
+            if not siblings:
+                break
+            best = max(siblings, key=lambda s: s.mean)  # the first of equal values
             levels.append((node, siblings, best))
             if best.is_end:
+                sequence.append(node.end)
                 break
             sequence.append(best.node.action)
             node = best.node
+        if not sequence or not sequence[-1].end_phase:
+            sequence += complete_greedily(phase, node.state.clone(), self.move_rng)
         for node, siblings, best in levels:
-            self.log_level(phase, game_number, round_, node.depth + 1, siblings, best)
+            self.log_level(phase.name, game_number, round_, node.depth + 1, siblings, best)
 
         search_time = time.time() - started
         self.rollout_stats_metric.flush()
         self.action_seq_stats_metric.flush()
         self.sibling_metric.flush()
-        self.last_stats = {"phase": phase, "states_visited": self.states_visited, "leaves": len(leaves),
-                           "transpositions": transpositions, "sweeps": sweeps,
-                           "complete": complete, "seconds": search_time}
+        chosen = [a for a in sequence if not a.end_phase]
+        self.last_stats = {"phase": phase.name, "states_visited": self.states_visited,
+                           "leaves": len(leaves), "transpositions": transpositions,
+                           "sweeps": sweeps, "complete": complete, "seconds": search_time}
+        self.last_sequence = [phase.label(a) for a in sequence]
         self.efficiency_metric.log(
             self.whoAmI,
             game_number,
@@ -338,10 +272,10 @@ class GreedyTurnSearch:
             search_time,
             float("nan"),  # num_iterations: no MCTS loop; states_visited is its own column
             values[id(root)][0],  # root_value: value of the chosen sequence
-            len(levels[0][1]) if levels else 0,  # num_children_at_root: actions at the root + END
+            len(levels[0][1]) if levels else 0,  # num_children_at_root: scored siblings at the root
             float("nan"),  # max_rollout: no rollouts in greedy
             len(leaves),  # num_action_sequences: distinct sequences scored
-            len(sequence),  # num_of_terr_attacked: sequence length (attacks, units bought, moves)
+            len(chosen),  # num_of_terr_attacked: actions chosen (attacks, units, reinforcements)
             max_depth,  # max_tree_depth: deepest plan generated
             1 if complete else 0,  # reached_end_of_turn: every sequence of the phase was searched
             ";".join(str(len(s)) for _, s, _ in levels),
@@ -350,16 +284,26 @@ class GreedyTurnSearch:
             self.states_visited,
             transpositions,
             sweeps,
-            phase)
-        return sequence
+            phase.name)
+        return forced + phase.response_actions(sequence)
 
-    def siblings(self, node, values):
-        """END (the node's own leaf) and every scored child, with their values."""
-        out = [Sibling("END", node, True, node.end_mean, len(node.values), _std(node.values))]
-        for c in node.children:
+    def siblings(self, phase, node, values):
+        """The node's choices in the sorting heuristic's order: its END leaf (when offered and
+        scored) and every scored child, with their values."""
+        children = {id(c.action): c for c in node.children}
+        out = []
+        for a in node.actions:
+            if a.end_phase:
+                if node.values:
+                    out.append(Sibling(phase.label(a), node, True, node.end_mean,
+                                       len(node.values), _std(node.values)))
+                continue
+            c = children.get(id(a))
+            if c is None:
+                continue
             mean, samples, best_leaf = values[id(c)]
             if samples:
-                out.append(Sibling(self.label(c.action), c, False, mean, samples,
+                out.append(Sibling(phase.label(a), c, False, mean, samples,
                                    _std(best_leaf.values)))
         return out
 
@@ -369,7 +313,7 @@ class GreedyTurnSearch:
         ranked.remove(best)
         ranked.insert(0, best)
         second = ranked[1] if len(ranked) > 1 else None
-        end = siblings[0]
+        end = next((s for s in siblings if s.is_end), None)  # not offered at every level
         visits = [s.samples for s in siblings]
         means = [s.mean for s in siblings]
         mean_v, var_v = _mean_var(visits)
@@ -383,7 +327,7 @@ class GreedyTurnSearch:
             best.mean, second.mean if second else "", mean_a, math.sqrt(var_a),
             z(best.mean, mean_a, var_a),
             best.mean - second.mean if second else "",
-            end.mean, sum(visits), float("nan"),  # level_seconds: the DFS is not split by level
+            end.mean if end else "", sum(visits), float("nan"),  # level_seconds: the DFS is not split by level
             phase)
         for s in ranked:
             self.sibling_metric.buffer(self.whoAmI, game_number, round_, tl, s.label,

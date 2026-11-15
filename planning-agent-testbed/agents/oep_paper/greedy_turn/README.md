@@ -4,13 +4,16 @@ Agent ID `greedy-turn`. The Greedy Turn baseline of Justesen, Mahlmann, Risi and
 *Playing Multiaction Adversarial Games: Online Evolutionary Planning Versus Tree Search* (IEEE
 Transactions on Games, 2018, Section V), applied to the TripleA purchase, combat move and
 non-combat move. It is [greedy_turn_combat](../greedy_turn_combat/README.md) extended to the
-other two phases, with the same atomic actions as [greedy_action](../greedy_action/README.md).
-The action generators, map graph and metric helpers are copies of TripleMind's
-(`action_generators.py`, `generators.py`, `map_graph.py`, `helper.py`), plus the Cython build of
-the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`), both with the added
-`purchase_rules`. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed
-build falls back to Python); `TRIPLEMIND_PURE_PYTHON=1` forces the Python generators. Both give
-the same results.
+other two phases.
+The actions are those of every all-phase OEP agent (greedy_action, greedy_turn, vanilla_mcts,
+ne_mcts, bb_mcts, oep), which differ only in how they select among them: `phases.py` holds them,
+and it and the generators it uses (`action_generators.py`, its Cython build
+`action_generators_cy.pyx` / `scripts/build_cython.sh`, `generators.py`,
+`noncombat_generators.py`, `map_graph.py`, `helper.py`, `fast_battle.py`) are byte-identical
+copies in each agent; [`../check-shared-files.sh`](../check-shared-files.sh) fails when they
+drift. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build
+falls back to Python); `TRIPLEMIND_PURE_PYTHON=1` forces the Python generators. Both give the
+same results.
 
 ## Algorithm
 
@@ -19,41 +22,41 @@ node states and selects the action sequence that leads to the highest rated stat
 table keeps track of already visited game states … Because this search is usually not exhaustive,
 choosing which actions to try first (i.e., action sorting) is critical."
 
-It runs once per phase, so 3 times per turn. A node is a plan (the actions so far this phase) and
-every node is also a leaf: ending the phase there. The number of atomic actions differs per phase
-(PUs, targets, plan moves), so the depth is variable: a branch ends when nothing is left to do.
+It runs once per phase, so 3 times per turn. A node is a plan (the actions so far this phase); a
+node where END is offered is also a leaf: ending the phase there (the non-combat move offers END
+only once every territory short of cover is decided). The number of actions differs per phase,
+so the depth is variable.
 
-| Phase | One action | Action sorting | Leaf scored | Transposition key |
+| Phase | One action (`phases.py`) | Action sorting (highest-rated first) | Leaf scored | Transposition key |
 |---|---|---|---|---|
-| purchase | one unit of one land combat rule (`purchase_rules`) | TripleMind's round-robin: its next pick first | right after the purchases | types of my units in hand |
-| combat move | one attack: (all my unmoved units that can reach the target, target), per enemy territory not attacked yet | `enemy_territories_by_priority` | after this turn's battles (dice, default casualties, no retreat) | where my moved units stand |
-| non-combat | one move of TripleMind's `noncombat_move` plan not made yet | the plan's order | right after the moves | where my moved units stand |
+| purchase | buy 1 unit of a candidate rule (land combat units for PUs) | attack + defence per PU; END last | after END | units bought |
+| combat move | attack one enemy territory with every unmoved unit that can reach it | attacks with strength > 1.5 × defence in TripleMind priority order, END, the other attacks | after this turn's battles (default casualties, no retreat) | where my moved units stand |
+| non-combat move | for the most important territory short of cover: a reinforcement set (strongest first) or its skip; END (with the positioning moves) once none is left | generation order | after END | territories decided + where this phase's moved units stand |
 
 ```
 DFS from the root plan (stack, children pushed in action-sorting order):
     node = pop
-    leaf value = evaluate_state(node + END) in [-1, 1]
+    if END is offered: leaf value = evaluate_state(node + END) in [-1, 1]
     for each action available after node's plan:
         child = node + action
         skip if child's state was already reached by another order (transposition table)
     push children
 until the stack is empty (reached_end_of_turn = 1) or the time budget runs out (0)
 
-combat move, if the DFS finished: resample every leaf until the budget is used (same dice seed
-for every leaf in a sweep)
+combat move with dice battles, if the DFS finished: resample every leaf until the budget is used
+(same dice seed for every leaf in a sweep)
 
 value(node) = best mean leaf value in node's subtree
-chosen sequence: from the root, go to the best child while it beats END there
-    ties: END wins in the combat move (an attack must beat stopping),
-          the first child in the action sorting wins in purchase and non-combat
+chosen sequence: from the root, the best sibling (END or a child) until END
+    ties: the first in the action sorting wins
+    a path stopping at a node the DFS did not score: the highest-rated actions until END
 ```
 
 - **Heuristic**: TripleMind's `evaluate_state` unchanged (1 / -1 won / lost, else
   2 * (0.5 TUV share + 0.5 income share) - 1). It counts neither units in hand nor positions,
-  so purchase and non-combat leaves almost always tie and the action sorting decides: the agent
-  then plays TripleMind's purchase and non-combat.
+  so purchase and non-combat leaves almost always tie and the action sorting decides.
 - **Time budget**: `TRIPLEA_GREEDY_SECONDS` per phase decision (default 1.0). The combat move
-  always uses all of it (DFS, then resampling). Purchase and non-combat roll no dice, so they
+  with dice always uses all of it (DFS, then resampling). Purchase and non-combat roll no dice, so they
   stop early only when the DFS has scored every plan (the result is then exact); otherwise
   the DFS runs until the budget is used.
 - **Battle resolution**: `TRIPLEA_BATTLE_RESOLUTION` (`run-agent.sh`) picks how the search's battles are fought: `dice` (default: the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). With `fast` one sample is exact, so the combat move skips the resampling after the DFS. The real game always rolls dice.

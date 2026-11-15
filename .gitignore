@@ -43,3 +43,5 @@ planning-agent-testbed/logs/**
 planning-agent-testbed/tournaments/*.zip
 planning-agent-testbed/tournaments/sensitivity_of_win_rate/*
 planning-agent-testbed/evaluate-reward/*
+planning-agent-testbed/tournaments/specs/*
+planning-agent-testbed/tools/*

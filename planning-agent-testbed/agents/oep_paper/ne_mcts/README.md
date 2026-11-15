@@ -7,11 +7,15 @@ on Games, 2018, Sections V and VI): exactly [Vanilla MCTS](../vanilla_mcts/READM
 child of a node is visited at least once before any of them is expanded further. Unlike
 [ne_mcts_combat](../ne_mcts_combat/README.md) (combat move only), this agent searches every phase
 request it gets: **purchase, combat move and non-combat move**. Placement is the engine's and battles are `fightAll`, as TripleMind.
-Action generators, map graph and metric helpers are copies of TripleMind's, with the Cython
-build of the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`): `run-agent.sh`
-rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build falls back to the Python
-generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1` forces Python.
-`noncombat_generators.py` is all-phases-mcts's.
+The actions are those of every all-phase OEP agent (greedy_action, greedy_turn, vanilla_mcts,
+ne_mcts, bb_mcts, oep), which differ only in how they select among them: `phases.py` holds them,
+and it and the generators it uses (`action_generators.py`, its Cython build
+`action_generators_cy.pyx` / `scripts/build_cython.sh`, `generators.py`,
+`noncombat_generators.py`, `map_graph.py`, `helper.py`, `fast_battle.py`) are byte-identical
+copies in each agent; [`../check-shared-files.sh`](../check-shared-files.sh) fails when they
+drift. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build
+falls back to the Python generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1`
+forces Python.
 
 ## Algorithm
 
@@ -28,8 +32,8 @@ until the time budget is used:
                 in the table is shared (transposition)
     rollout:    unless END: rest of the phase with the default policy, then END; then my remaining
                 phases until my turn ends (searched phases: same default policy; battles: default
-                casualties, no retreat; place: everything at the home factory), the search's
-                fixed dice; Δ = evaluate_state in [-1, 1]
+                casualties, no retreat; place: everything at the home factory), once per each of
+                the search's K fixed dice seeds; Δ = the mean evaluate_state in [-1, 1]
                 default policy, ε-greedy with ε = 1: always the highest-rated action by the
                 sorting heuristic
                 deterministic, so computed once per (node, END taken) and reused
@@ -42,9 +46,13 @@ chosen sequence: from the root, the most visited edge (ties: best mean) until EN
 Since the selection only descends from a node whose actions all have an edge, and expansion adds
 one edge (one rollout) at a time in sorting-heuristic order, every child is valued by one visit
 before any of them is expanded further; with deterministic rollouts one visit is enough. Battles
-roll dice, so each search draws one dice seed (from `TRIPLEA_NE_SEED`) and every rollout of that
-search replays it: the same plan always gets the same reward. On small trees the search is
-exhausted early and the remaining time re-walks the best path with cached rewards.
+roll dice, so each search draws K dice seeds (`TRIPLEA_NE_DICE_SEEDS`, default 1; from
+`TRIPLEA_NE_SEED`), every rollout is played once per seed and Δ is the mean of the K rewards: the
+same plan always gets the same reward, and every node faces the same dice (common random numbers,
+as greedy's sweeps). More seeds average out a single lucky or unlucky dice draw at K times the
+cost per rollout. With `TRIPLEA_BATTLE_RESOLUTION=fast` there are no dice and K is 1. On small
+trees the search is exhausted early and the remaining time re-walks the best path with cached
+rewards.
 
 Inside one phase every edge is mine, so the negamax backup always adds Δ; the sign rule is kept
 as the paper writes it. Rewards are [-1, 1] (the testbed's `evaluate_state`), and C is applied as
@@ -66,6 +74,7 @@ cover) is answered without searching.
 | Variable | Default | Meaning |
 |---|---|---|
 | `TRIPLEA_NE_SECONDS` | 1.0 | search time per phase request |
+| `TRIPLEA_NE_DICE_SEEDS` | 1 | dice battles: K fixed dice seeds per search, every rollout averaged over them |
 | `TRIPLEA_NE_SEED` | 0 | search seed (draws each search's fixed dice) |
 | `TRIPLEA_BATTLE_RESOLUTION` | dice | battles in the search's simulations: `dice` (the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). The real game always rolls dice |
 
@@ -78,9 +87,9 @@ Same column names as the other OEP agents (TripleMind's columns first), plus a `
 | File | Row | Notes |
 |---|---|---|
 | `game_results.csv` | per game | TripleMind's + `winners` |
-| `efficiency.csv` | per **combat-move** search | kept combat-only so it compares row for row with the combat-only OEP agents; `states_visited` counts computed (not cached) rollouts; `num_of_terr_attacked` is the actions chosen |
+| `efficiency.csv` | per **combat-move** search | kept combat-only so it compares row for row with the combat-only OEP agents; `states_visited` counts computed (not cached) rollouts × K; `num_of_terr_attacked` is the actions chosen |
 | `efficiency_purchase.csv`, `efficiency_noncombat.csv` | per purchase / non-combat search | same columns |
-| `rollout_stats.csv` | per computed (not cached) rollout | `tl` actions in the node's state + 1, `rollout_actions` actions the default policy played, `phase` |
+| `rollout_stats.csv` | per computed (not cached) rollout and dice seed | `tl` actions in the node's state + 1, `rollout_actions` actions the default policy played, `phase` |
 | `action_seq_stats.csv` | per level of the chosen sequence with more than one edge | `states_visited` is the node's visits; `phase` |
 | `sibling_values.csv` | per edge per such level | `phase` |
 

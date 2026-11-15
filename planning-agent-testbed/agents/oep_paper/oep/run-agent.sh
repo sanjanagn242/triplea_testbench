@@ -16,6 +16,10 @@ export TRIPLEA_OEP_GENOME_LENGTH="${TRIPLEA_OEP_GENOME_LENGTH:-100}"
 # Evaluation: player turns played out after mine with TripleMind's deterministic policy (0: static
 # evaluation, the paper's; 2 in a two-player game: the opponent's turn, then mine).
 export TRIPLEA_OEP_ROLLOUT_LENGTH="${TRIPLEA_OEP_ROLLOUT_LENGTH:-0}"
+# Dice battles: K fixed dice seeds drawn per search; every evaluation is played once per seed and
+# averaged (deterministic, so cached; common random numbers across genomes). Ignored with
+# TRIPLEA_BATTLE_RESOLUTION=fast (no dice).
+export TRIPLEA_OEP_DICE_SEEDS="${TRIPLEA_OEP_DICE_SEEDS:-1}"
 export TRIPLEA_OEP_SEED="${TRIPLEA_OEP_SEED:-0}"
 # Battles in the search's simulations: dice (the forward model's dice-rolling battles, default
 # casualties, never retreat) or fast (the Fast AI's most likely outcome, no dice).

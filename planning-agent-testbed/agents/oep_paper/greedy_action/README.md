@@ -4,12 +4,16 @@ Agent ID `greedy-action`. The Greedy Action baseline of Justesen, Mahlmann, Risi
 *Playing Multiaction Adversarial Games: Online Evolutionary Planning Versus Tree Search* (IEEE
 Transactions on Games, 2018, Section V), applied to the TripleA purchase, combat move and
 non-combat move. It is [greedy_action_combat](../greedy_action_combat/README.md) extended to the
-other two phases. The action generators, map graph and metric helpers are copies of TripleMind's
-(`action_generators.py`, `generators.py`, `map_graph.py`, `helper.py`), plus the Cython build of
-the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`), both with the added
-`purchase_rules`. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed
-build falls back to Python); `TRIPLEMIND_PURE_PYTHON=1` forces the Python generators. Both give
-the same results.
+other two phases.
+The actions are those of every all-phase OEP agent (greedy_action, greedy_turn, vanilla_mcts,
+ne_mcts, bb_mcts, oep), which differ only in how they select among them: `phases.py` holds them,
+and it and the generators it uses (`action_generators.py`, its Cython build
+`action_generators_cy.pyx` / `scripts/build_cython.sh`, `generators.py`,
+`noncombat_generators.py`, `map_graph.py`, `helper.py`, `fast_battle.py`) are byte-identical
+copies in each agent; [`../check-shared-files.sh`](../check-shared-files.sh) fails when they
+drift. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build
+falls back to Python); `TRIPLEMIND_PURE_PYTHON=1` forces the Python generators. Both give the
+same results.
 
 ## Algorithm
 
@@ -17,36 +21,34 @@ A one-ply search over the phase's actions, picking the one whose resulting state
 under the heuristic, repeated until ending the phase scores best. It runs once per phase, so 3
 times per turn. One action is:
 
-| Phase | One action | Candidate order | Scored |
-|---|---|---|---|
-| purchase | one unit of one land combat rule (`purchase_rules`) | TripleMind's round-robin: its next pick first | right after the purchase |
-| combat move | one attack: (all my unmoved units that can reach the target, target), per enemy territory not attacked yet | `enemy_territories_by_priority` | after this turn's battles (dice, default casualties, no retreat) |
-| non-combat | one move of TripleMind's `noncombat_move` plan not made yet | the plan's order | right after the move |
+| Phase | One action (`phases.py`) | Sorting heuristic (highest-rated first) |
+|---|---|---|
+| purchase | buy 1 unit of a candidate rule (land combat units for PUs) | attack + defence per PU; END last |
+| combat move | attack one enemy territory with every unmoved unit that can reach it | attacks with strength > 1.5 × defence in TripleMind priority order, END, the other attacks |
+| non-combat move | for the most important territory short of cover: a reinforcement set (strongest first) or its skip; END (with the positioning moves) once none is left | generation order |
 
 ```
-plan = root state, done = []
+plan = state at the phase's start (non-combat: after the forced air landing)
 repeat:
-    actions = candidates for the phase given plan and done
-    if none: stop                                    (reached_end_of_turn = 1)
-    candidates = [END] + actions   in the combat move (an attack must beat END)
-                 actions + [END]   otherwise          (ties go to the generator's order)
-    score every candidate: value = evaluate_state(plan + candidate [+ battles]) in [-1, 1]
-        combat move: sampled round-robin until the level's time share is used (same dice seed
-        for all candidates in a sweep); purchase / non-combat: no dice, one sweep
-    best = first candidate with the highest mean value
-    if best is END: stop                             (reached_end_of_turn = 1)
-    apply best to plan, append it to done
+    candidates = the actions offered after plan, in the sorting heuristic's order (END included
+                 where offered); only END: play it, stop          (reached_end_of_turn = 1)
+    score every candidate: value = evaluate_state(plan + candidate, then END [+ this turn's
+        battles in the combat move]) in [-1, 1]
+        combat move with dice: sampled round-robin until the level's time share is used (same
+        dice seed for all candidates in a sweep); otherwise one sweep is exact
+    best = the first candidate (sorting heuristic's order) with the highest mean value
+    play best; if best is END: stop                                (reached_end_of_turn = 1)
+out of time before END: the highest-rated actions until END
 ```
 
 - **Heuristic**: TripleMind's `evaluate_state` unchanged (1 / -1 won / lost, else
   2 * (0.5 TUV share + 0.5 income share) - 1). It counts neither units in hand (just purchased)
-  nor positions, so purchase and non-combat candidates almost always tie and the candidate
-  order decides: the agent then plays TripleMind's purchase and non-combat. Scoring a whole turn
-  instead is greedy turn's job.
+  nor positions, so purchase and non-combat candidates almost always tie and the sorting
+  heuristic decides. Scoring a whole turn instead is greedy turn's job.
 - **Time budget**: `TRIPLEA_GREEDY_SECONDS` per phase decision (default 1.0). In the combat move
-  each level gets `remaining time / number of attacks at that level`; purchase and non-combat
-  levels take one sweep each. If the budget runs out before a level is scored, the plan stops
-  there (`reached_end_of_turn = 0`).
+  with dice each level gets `remaining time / Phase.levels_left` (the attacks still offered);
+  the other levels take one sweep each. If the budget runs out before END, the plan is completed
+  with the highest-rated actions (`reached_end_of_turn = 0`).
 - **Battle resolution**: `TRIPLEA_BATTLE_RESOLUTION` (`run-agent.sh`) picks how the search's battles are fought: `dice` (default: the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). With `fast` one sample is exact, so the combat move scores each candidate once (no resampling sweeps). The real game always rolls dice.
 - **Placement** is the engine's (`{}`), battles `fightAll`, as in TripleMind.
 

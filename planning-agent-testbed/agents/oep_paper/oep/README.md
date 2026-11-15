@@ -6,11 +6,15 @@ Transactions on Games, 2018, Section IV), on the same actions, heuristic and pha
 agents in [oep_paper](..) ([Vanilla MCTS](../vanilla_mcts/README.md), [NE-MCTS](../ne_mcts/README.md),
 [BB-MCTS](../bb_mcts/README.md)): one evolution per phase request, **purchase, combat move and
 non-combat move**. Placement is the engine's and battles are `fightAll`, as TripleMind.
-Action generators, map graph and metric helpers are copies of TripleMind's, with the Cython
-build of the generators (`action_generators_cy.pyx`, `scripts/build_cython.sh`): `run-agent.sh`
-rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build falls back to the Python
-generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1` forces Python.
-`noncombat_generators.py` is all-phases-mcts's. Not to be confused with [roxo-oep](../../roxo-oep/README.md),
+The actions are those of every all-phase OEP agent (greedy_action, greedy_turn, vanilla_mcts,
+ne_mcts, bb_mcts, oep), which differ only in how they select among them: `phases.py` holds them,
+and it and the generators it uses (`action_generators.py`, its Cython build
+`action_generators_cy.pyx` / `scripts/build_cython.sh`, `generators.py`,
+`noncombat_generators.py`, `map_graph.py`, `helper.py`, `fast_battle.py`) are byte-identical
+copies in each agent; [`../check-shared-files.sh`](../check-shared-files.sh) fails when they
+drift. `run-agent.sh` rebuilds the `.so` when the `.pyx` is newer (or missing; a failed build
+falls back to the Python generators, which give the same results), and `TRIPLEMIND_PURE_PYTHON=1`
+forces Python. Not to be confused with [roxo-oep](../../roxo-oep/README.md),
 Roxo's thesis version (territory genomes, Weak AI playouts).
 
 ## Algorithm
@@ -21,9 +25,10 @@ population = 100 random genomes: random legal actions until 3 are used up or END
 until the time budget is used:
     evaluate every genome not evaluated yet (survivors keep their value):
         its actions on a clone of root, END, the rest of my turn without decisions
-        (battles: default casualties, no retreat, the search's fixed dice; place: everything at
-        the home factory; other phases ended), then TRIPLEA_OEP_ROLLOUT_LENGTH player turns
-        with TripleMind's policy (0: none), evaluate_state in [-1, 1]; cached per state
+        (battles: default casualties, no retreat; place: everything at the home factory;
+        other phases ended), then TRIPLEA_OEP_ROLLOUT_LENGTH player turns with TripleMind's
+        policy (0: none), evaluate_state in [-1, 1]; once per each of the search's K fixed dice
+        seeds, averaged; cached per state
     survivors = the best 50 (survival rate 0.5)
     offspring until the population is 100 again:
         crossover of two random survivors; mutated with probability 0.1
@@ -44,9 +49,13 @@ play the best genome found
   randomly but legally.
 - **Fitness** is static evaluation by default (`TRIPLEA_OEP_ROLLOUT_LENGTH=0`): the paper found
   rollout-based fitness no better. The battles of the turn are still fought (otherwise an attack
-  changes nothing the heuristic sees), with the same dice for every genome of a search, so
-  evaluation is deterministic and cached by the resulting phase state (the transposition key of
-  the MCTS agents): survivors and repeated genomes are never re-evaluated.
+  changes nothing the heuristic sees). With dice battles each search draws K dice seeds
+  (`TRIPLEA_OEP_DICE_SEEDS`, default 1), every evaluation is played once per seed and the fitness
+  is the mean: every genome faces the same dice (common random numbers, as greedy's sweeps), and
+  more seeds average out a single lucky or unlucky dice draw at K times the cost per evaluation.
+  With `TRIPLEA_BATTLE_RESOLUTION=fast` there are no dice and K is 1. Either way evaluation is
+  deterministic and cached by the resulting phase state (the transposition key of the MCTS
+  agents): survivors and repeated genomes are never re-evaluated.
 - **Rollouts**: `TRIPLEA_OEP_ROLLOUT_LENGTH=N` plays out the next N *player* turns after mine
   before rating the state: 1 is the next player's turn, 2 in a two-player game is the opponent's
   turn and then mine (with more players, the next N in turn order). Every player, me included,
@@ -77,6 +86,7 @@ With 3 actions per genome, a purchase buys at most 3 units per turn; raise
 | `TRIPLEA_OEP_MUTATION` | 0.1 | probability that an offspring is mutated |
 | `TRIPLEA_OEP_GENOME_LENGTH` | 3 | actions per genome |
 | `TRIPLEA_OEP_ROLLOUT_LENGTH` | 0 | player turns played out after mine in an evaluation (0: static evaluation) |
+| `TRIPLEA_OEP_DICE_SEEDS` | 1 | dice battles: K fixed dice seeds per search, every evaluation averaged over them |
 | `TRIPLEA_OEP_SEED` | 0 | search seed (also draws each search's fixed dice) |
 | `TRIPLEA_BATTLE_RESOLUTION` | dice | battles in the search's simulations: `dice` (the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). The real game always rolls dice |
 
@@ -89,7 +99,7 @@ Same column names as the other OEP agents (TripleMind's columns first), plus a `
 | `game_results.csv` | per game | TripleMind's + `winners` |
 | `efficiency.csv` | per **combat-move** evolution | kept combat-only so it compares row for row with the combat-only OEP agents. `num_iterations` generations; `root_value` best genome's value; `num_children_at_root` legal first actions incl. END; `max_rollout` `TRIPLEA_OEP_ROLLOUT_LENGTH`; `num_action_sequences` distinct genomes evaluated; `num_of_terr_attacked` actions chosen; `max_tree_depth` genome length; then `evaluations`, `cache_hits`, `best_value_per_generation` (`;`-separated), `best_genome`, `phase` |
 | `efficiency_purchase.csv`, `efficiency_noncombat.csv` | per purchase / non-combat evolution | same columns |
-| `rollout_stats.csv` | per computed (not cached) evaluation | `iteration` the generation, `rollout_depth_reached` player turns played out, `tl` actions in the genome, `phase` |
+| `rollout_stats.csv` | per computed (not cached) evaluation and dice seed | `iteration` the generation, `rollout_depth_reached` player turns played out, `tl` actions in the genome, `phase` |
 
 ## Running it
 

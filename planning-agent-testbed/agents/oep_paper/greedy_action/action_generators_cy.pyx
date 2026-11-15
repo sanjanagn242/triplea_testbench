@@ -142,38 +142,10 @@ def purchase_actions(game, definition, player=None):
 
     Returns [fm.PurchaseAction], or [] when the player has no factory or cannot afford anything.
     """
-    player = player or game.whoAmI
-    cdef long long remaining = game.players[player].PU
-    cdef list rules = purchase_rules(game, player)
-    if not rules:
-        return []
-
-    cdef dict purchase_dict = {}
-    cdef Py_ssize_t i = 0
-    cdef list affordable
-    while True:
-        affordable = [(name, cost) for name, cost, _ in rules if cost <= remaining]
-        if not affordable:
-            break
-        name, cost = affordable[i % len(affordable)]
-        purchase_dict[name] = purchase_dict.get(name, 0) + 1
-        remaining -= cost
-        i += 1
-
-    if not purchase_dict:
-        return []
-
-    rule_id = definition.production_rule_index
-    return [fm.PurchaseAction(tuple(sorted((rule_id[name], count)
-                                           for name, count in purchase_dict.items())))]
-
-
-def purchase_rules(game, player):
-    """The round-robin rotation of purchase_actions: [(rule name, cost, unit type)] of the land
-    combat units the player can buy, the round's biased roles repeated, cheapest first. [] when
-    the player has no factory."""
     m = game.map
     cdef _MapFacts f = _facts(m)
+    player = player or game.whoAmI
+    cdef long long remaining = game.players[player].PU
 
     cdef bint has_factory = False
     for terr in game.owned_by(player):
@@ -202,7 +174,25 @@ def purchase_rules(game, player):
             rules = rules + [r for r in rules if _roles(r[2]) & set(roles)]
             break
     rules.sort(key=lambda r: r[1])
-    return rules
+
+    cdef dict purchase_dict = {}
+    cdef Py_ssize_t i = 0
+    cdef list affordable
+    while True:
+        affordable = [(name, cost) for name, cost, _ in rules if cost <= remaining]
+        if not affordable:
+            break
+        name, cost = affordable[i % len(affordable)]
+        purchase_dict[name] = purchase_dict.get(name, 0) + 1
+        remaining -= cost
+        i += 1
+
+    if not purchase_dict:
+        return []
+
+    rule_id = definition.production_rule_index
+    return [fm.PurchaseAction(tuple(sorted((rule_id[name], count)
+                                           for name, count in purchase_dict.items())))]
 
 
 def _home_factory(game, player):
