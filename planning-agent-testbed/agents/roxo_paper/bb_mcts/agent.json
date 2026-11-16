@@ -1,0 +1,9 @@
+{
+  "id": "roxo-paper-bb-mcts",
+  "name": "Roxo-paper BB-MCTS (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Bridge Burning MCTS as Roxo's thesis applies it to TripleA, on the oep_paper framework: one tree ply per territory (or unit rule) decision with Roxo's pruned options, UCT X + C sqrt(ln n / n_j) with C = 1/sqrt 2, 10-round playouts whose phases are random with probability 0.5 and otherwise Roxo's Weak AI, Roxo's reward, deterministic Fast AI battles, burn phases keeping the most promising root child.",
+  "outputDirectories": ["metrics", "logs"]
+}

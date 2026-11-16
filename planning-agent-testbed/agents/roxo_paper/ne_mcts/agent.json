@@ -1,0 +1,9 @@
+{
+  "id": "roxo-paper-ne-mcts",
+  "name": "Roxo-paper NE-MCTS (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Non-exploring MCTS as Roxo's thesis applies it to TripleA, on the oep_paper framework: one tree ply per territory (or unit rule) decision with Roxo's pruned options, best-mean selection with every child visited once, deterministic 10-round Weak AI playouts rated with Roxo's reward, deterministic Fast AI battles, transposition table.",
+  "outputDirectories": ["metrics", "logs"]
+}

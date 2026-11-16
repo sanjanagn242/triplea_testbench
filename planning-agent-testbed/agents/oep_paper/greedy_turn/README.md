@@ -62,6 +62,23 @@ chosen sequence: from the root, the best sibling (END or a child) until END
 - **Battle resolution**: `TRIPLEA_BATTLE_RESOLUTION` (`run-agent.sh`) picks how the search's battles are fought: `dice` (default: the forward model's dice, default casualties, no retreat) or `fast` (the Fast AI's most likely outcome, no dice; `fast_battle.py`). With `fast` one sample is exact, so the combat move skips the resampling after the DFS. The real game always rolls dice.
 - **Placement** is the engine's (`{}`), battles `fightAll`, as in TripleMind.
 
+## Docs
+
+UML (open in draw.io): [docs/greedy-turn-action-generators.drawio](docs/greedy-turn-action-generators.drawio),
+how the action sequences are generated:
+
+1. Modules and classes. The shared modules (`phases.py`, `action_generators.py`,
+   `noncombat_generators.py`, `generators.py`) are drawn as one block, identical in every all-phase
+   OEP agent. greedy_turn's `GreedyTurnSearch` and greedy_action's `GreedyActionSearch` use them.
+   A table gives each phase's `start` / `actions` / `step` / `key` / `action_key` / END /
+   `levels_left` / `response_actions`.
+2. to 4. Activity diagrams for `PurchasePhase`, `CombatPhase` and `NoncombatPhase`, with notes on
+   how they differ from heterogeneous-mcts's generation.
+5. The Greedy Turn DFS over those actions (transpositions, leaves, backup, chosen sequence), with
+   a note on Greedy Action's one-level-at-a-time use of the same calls.
+
+Rebuild it with `python3 scripts/build_action_generators_drawio.py docs/greedy-turn-action-generators.drawio`.
+
 ## Metrics
 
 Under `metrics/<game>/vs-<opponent>/` (or `$TRIPLEA_TESTBENCH_OUTPUT_DIR/metrics/...` in a

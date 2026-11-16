@@ -1,0 +1,9 @@
+{
+  "id": "roxo-paper-oep",
+  "name": "Roxo-paper OEP (purchase, combat move, non-combat move)",
+  "language": "Python 3.10+",
+  "entrypoint": "agent.py",
+  "command": ["bash", "${agentDir}/run-agent.sh"],
+  "description": "Online Evolutionary Planning as Roxo's thesis adapts it to TripleA, on the oep_paper framework: one gene per territory (or unit rule) in random order with Roxo's pruned options (combat: getUnitsUpToStrengthSet above 1.1x; non-combat: none/half/all per source territory; purchase: all/half/none per rule), population 50, survival 0.5, mutation 0.1, 10-round Weak AI playouts rated with Roxo's reward, deterministic Fast AI battles.",
+  "outputDirectories": ["metrics", "logs"]
+}

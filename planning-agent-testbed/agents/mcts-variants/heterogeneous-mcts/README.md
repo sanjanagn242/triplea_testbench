@@ -37,6 +37,12 @@ Open the `.drawio` files with [diagrams.net](https://app.diagrams.net) or the VS
 - `docs/heterogeneous-mcts-uml.drawio`: class diagram, modules and dependencies.
 - `docs/heterogeneous-mcts-flowchart.drawio`: turn request, `mcts_search`, `expand` / `pass_phase`,
   `simulate`, `legal_moves` / `play_phase`, `evaluate_state`.
+- `docs/heterogeneous-mcts-action-generators.drawio`: how `legal_moves` generates each phase's
+  edges, in UML. Page 1 is a class diagram of the action types and generator modules, with a summary
+  table for each phase. Pages 2–4 are activity diagrams for purchase (`affordable_units`), combat
+  move (`ag.combat_actions`) and non-combat move (`land_air_moves` → `noncombat_actions` →
+  `positioning_moves`). Rebuild it with `python3 scripts/build_action_generators_drawio.py
+  docs/heterogeneous-mcts-action-generators.drawio`.
 - `docs/heterogeneous-mcts-sample-tree.drawio`: the most-visited path of a real 1 s search from
   Russians' round-1 purchase on capture-the-flag-diag. It runs through Russians' purchase and
   combat move, then Germans' purchase and combat move, into round 2. `docs/sample-tree.html` is
